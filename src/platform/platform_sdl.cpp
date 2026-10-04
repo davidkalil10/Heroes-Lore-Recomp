@@ -7,6 +7,9 @@
 #include <SDL_mixer.h>
 #include <cstdio>
 #include <algorithm>
+#include <vector>
+#include <cmath>
+#include <cstdlib>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -21,6 +24,10 @@ static SDL_Renderer* s_renderer = nullptr;
 static SDL_Texture* s_screenTexture = nullptr;
 static bool s_quit = false;
 
+static std::vector<SDL_GameController*> s_controllers;
+static bool s_ltHeld = false;
+static bool s_rtHeld = false;
+
 static int mapKey(SDL_Keycode k) {
   switch (k) {
     case SDLK_UP: case SDLK_w: return -1;
@@ -32,10 +39,14 @@ static int mapKey(SDL_Keycode k) {
     case SDLK_l: case SDLK_c: return 57; // '9'
     case SDLK_u: case SDLK_q: return 49; // '1'
     case SDLK_i: case SDLK_e: return 51; // '3'
-    case SDLK_o: case SDLK_r: return 48; // '0'
-    case SDLK_ESCAPE: case SDLK_BACKSPACE: case SDLK_m: return -8; // CLR
+    case SDLK_m: case SDLK_o: case SDLK_r: return 48; // '0' / Mapa
+    case SDLK_ESCAPE: case SDLK_BACKSPACE: return -8; // CLR
     case SDLK_F1: case SDLK_TAB: return -6; // LSK
     case SDLK_F2: return -7; // RSK
+
+    // Alternância de Poção / Item Rápido
+    case SDLK_LEFTBRACKET: case SDLK_COMMA: return -101; // Poção Anterior (Esquerda)
+    case SDLK_RIGHTBRACKET: case SDLK_PERIOD: return 35; // Próxima Poção (Direita)
 
     // Teclado numérico
     case SDLK_KP_0: case SDLK_0: return 48;
@@ -54,8 +65,38 @@ static int mapKey(SDL_Keycode k) {
   }
 }
 
+static int mapControllerButton(Uint8 btn) {
+  switch (btn) {
+    // D-Pad
+    case SDL_CONTROLLER_BUTTON_DPAD_UP: return -1;
+    case SDL_CONTROLLER_BUTTON_DPAD_DOWN: return -2;
+    case SDL_CONTROLLER_BUTTON_DPAD_LEFT: return -3;
+    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return -4;
+
+    // Botões de Ação Frontais
+    case SDL_CONTROLLER_BUTTON_A: return 53; // A (Xbox) / X (PS) -> Atacar com Arma / Interagir / Confirmar ('5')
+    case SDL_CONTROLLER_BUTTON_B: return -7; // B (Xbox) / O (PS) -> Status / Cancelar (RSK)
+    case SDL_CONTROLLER_BUTTON_X: return 49; // X (Xbox) / Quad (PS) -> Ataque 1 do Guardião ('1')
+    case SDL_CONTROLLER_BUTTON_Y: return 51; // Y (Xbox) / Tri (PS) -> Ataque 2 do Guardião ('3')
+
+    // Botões de Ombro (Shoulders)
+    case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: return 55;  // L1 -> Ataque Secundário / Habilidade ('7')
+    case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return 57; // R1 -> Usar Poção / Item Rápido ('9')
+
+    // Menus de Sistema e Mapa
+    case SDL_CONTROLLER_BUTTON_START: return -6; // Start -> Menu Principal / Inventário (LSK)
+    case SDL_CONTROLLER_BUTTON_BACK: return 48;  // Back / Select / Touchpad / - -> Abrir/Fechar Minimapa ('0')
+
+    // Cliques dos Analógicos
+    case SDL_CONTROLLER_BUTTON_LEFTSTICK: return 48;  // L3 -> Abrir Minimapa da Região ('0')
+    case SDL_CONTROLLER_BUTTON_RIGHTSTICK: return 35; // R3 -> Próxima Poção ('#')
+
+    default: return 0;
+  }
+}
+
 bool Platform::init(int scale) {
-  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS) < 0) {
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC) < 0) {
     fprintf(stderr, "Erro ao inicializar SDL: %s\n", SDL_GetError());
     return false;
   }
@@ -136,6 +177,19 @@ bool Platform::init(int scale) {
     printf("[SDL] Renderer: %s (flags: 0x%X)\n", rinfo.name, rinfo.flags);
   }
 
+  // Inicializa controles conectados no momento do boot
+  int numJoysticks = SDL_NumJoysticks();
+  for (int i = 0; i < numJoysticks; i++) {
+    if (SDL_IsGameController(i)) {
+      SDL_GameController* pad = SDL_GameControllerOpen(i);
+      if (pad) {
+        s_controllers.push_back(pad);
+        printf("[Gamepad] Controle detectado na inicializacao: %s\n", SDL_GameControllerName(pad));
+        SDL_GameControllerRumble(pad, 0x3000, 0x3000, 120);
+      }
+    }
+  }
+
   return true;
 }
 
@@ -148,6 +202,30 @@ static bool isDirectionKey(int key) {
          key == 50 || key == 52 || key == 54 || key == 56;
 }
 
+static int getGamepadHeldDirection() {
+  for (auto* pad : s_controllers) {
+    if (!pad) continue;
+    // D-Pad
+    if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_UP)) return -1;
+    if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_DOWN)) return -2;
+    if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_LEFT)) return -3;
+    if (SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) return -4;
+
+    // Analog Stick Esquerdo (Left X & Y)
+    int16_t ax = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX);
+    int16_t ay = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTY);
+    const int16_t DEADZONE = 12000;
+    if (std::abs(ax) > DEADZONE || std::abs(ay) > DEADZONE) {
+      if (std::abs(ax) > std::abs(ay)) {
+        return (ax < 0) ? -3 : -4; // Left / Right
+      } else {
+        return (ay < 0) ? -1 : -2; // Up / Down
+      }
+    }
+  }
+  return 0;
+}
+
 static int getHeldDirection() {
   const Uint8* k = SDL_GetKeyboardState(nullptr);
   if (k[SDL_SCANCODE_W] || k[SDL_SCANCODE_UP]) return -1;
@@ -158,7 +236,35 @@ static int getHeldDirection() {
   if (k[SDL_SCANCODE_KP_8]) return 56;
   if (k[SDL_SCANCODE_KP_4]) return 52;
   if (k[SDL_SCANCODE_KP_6]) return 54;
-  return 0;
+
+  return getGamepadHeldDirection();
+}
+
+static void cyclePotionPrev(VM& vm) {
+  if (g_display && g_display->current) {
+    vm.gilLock();
+    try {
+      Value args[1]; args[0].i = 35; Value ret[2];
+      // '#' invocado 3 vezes avança 3 slots, equivalente a recuar 1 slot (4 - 1 = 3)
+      for (int rep = 0; rep < 3; ++rep) {
+        vm.invokeVirtual(g_display->current, "keyPressed:(I)V", args, 1, ret);
+        vm.invokeVirtual(g_display->current, "keyReleased:(I)V", args, 1, ret);
+      }
+    } catch (...) {}
+    vm.gilUnlock();
+  }
+}
+
+static void cyclePotionNext(VM& vm) {
+  if (g_display && g_display->current) {
+    vm.gilLock();
+    try {
+      Value args[1]; args[0].i = 35; Value ret[2];
+      vm.invokeVirtual(g_display->current, "keyPressed:(I)V", args, 1, ret);
+      vm.invokeVirtual(g_display->current, "keyReleased:(I)V", args, 1, ret);
+    } catch (...) {}
+    vm.gilUnlock();
+  }
 }
 
 bool Platform::pollEvents(VM& vm) {
@@ -168,11 +274,150 @@ bool Platform::pollEvents(VM& vm) {
       s_quit = true;
       return false;
     }
-    if (ev.type == SDL_KEYDOWN) {
-      int key = mapKey(ev.key.keysym.sym);
+
+    // Gerenciamento de conexão quente de Gamepads (Hotplug)
+    if (ev.type == SDL_CONTROLLERDEVICEADDED) {
+      int idx = ev.cdevice.which;
+      if (SDL_IsGameController(idx)) {
+        SDL_GameController* pad = SDL_GameControllerOpen(idx);
+        if (pad) {
+          s_controllers.push_back(pad);
+          printf("[Gamepad] Controle conectado: %s (slot %d)\n", SDL_GameControllerName(pad), idx);
+          SDL_GameControllerRumble(pad, 0x4000, 0x4000, 150);
+        }
+      }
+    } else if (ev.type == SDL_CONTROLLERDEVICEREMOVED) {
+      SDL_JoystickID jid = ev.cdevice.which;
+      for (auto it = s_controllers.begin(); it != s_controllers.end(); ) {
+        SDL_Joystick* j = SDL_GameControllerGetJoystick(*it);
+        if (j && SDL_JoystickInstanceID(j) == jid) {
+          printf("[Gamepad] Controle desconectado: %s\n", SDL_GameControllerName(*it));
+          SDL_GameControllerClose(*it);
+          it = s_controllers.erase(it);
+        } else {
+          ++it;
+        }
+      }
+    }
+
+    // Botões do Gamepad
+    else if (ev.type == SDL_CONTROLLERBUTTONDOWN) {
+      int key = mapControllerButton(ev.cbutton.button);
       if (key != 0 && g_display && g_display->current) {
         if (isDirectionKey(key)) {
-          // Se for uma nova direção ou a primeira pressão
+          if (s_activeDirection != key) {
+            s_activeDirection = key;
+            s_directionPressTime = SDL_GetTicks();
+            s_directionLastRepeatTime = s_directionPressTime;
+            vm.gilLock();
+            try {
+              Value args[1]; args[0].i = key; Value ret[2];
+              vm.invokeVirtual(g_display->current, "keyPressed:(I)V", args, 1, ret);
+            } catch (...) {}
+            vm.gilUnlock();
+          }
+        } else {
+          vm.gilLock();
+          try {
+            Value args[1]; args[0].i = key; Value ret[2];
+            vm.invokeVirtual(g_display->current, "keyPressed:(I)V", args, 1, ret);
+          } catch (...) {}
+          vm.gilUnlock();
+        }
+      }
+    } else if (ev.type == SDL_CONTROLLERBUTTONUP) {
+      int key = mapControllerButton(ev.cbutton.button);
+      if (key != 0 && g_display && g_display->current) {
+        if (isDirectionKey(key)) {
+          int held = getHeldDirection();
+          if (held != 0) {
+            s_activeDirection = held;
+            s_directionPressTime = SDL_GetTicks();
+            s_directionLastRepeatTime = s_directionPressTime;
+            vm.gilLock();
+            try {
+              Value args[1]; args[0].i = held; Value ret[2];
+              vm.invokeVirtual(g_display->current, "keyPressed:(I)V", args, 1, ret);
+            } catch (...) {}
+            vm.gilUnlock();
+          } else {
+            s_activeDirection = 0;
+            vm.gilLock();
+            try {
+              Value args[1]; args[0].i = key; Value ret[2];
+              vm.invokeVirtual(g_display->current, "keyReleased:(I)V", args, 1, ret);
+            } catch (...) {}
+            vm.gilUnlock();
+          }
+        } else {
+          vm.gilLock();
+          try {
+            Value args[1]; args[0].i = key; Value ret[2];
+            vm.invokeVirtual(g_display->current, "keyReleased:(I)V", args, 1, ret);
+          } catch (...) {}
+          vm.gilUnlock();
+        }
+      }
+    }
+
+    // Eixos Analógicos do Gamepad (Gatilhos L2/R2 e Analógico Esquerdo)
+    else if (ev.type == SDL_CONTROLLERAXISMOTION) {
+      if (ev.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT) {
+        bool down = ev.caxis.value > 16000;
+        if (down != s_ltHeld) {
+          s_ltHeld = down;
+          if (down) {
+            cyclePotionPrev(vm); // LT -> Alternar Poção / Item para a ESQUERDA (slot anterior)
+          }
+        }
+      } else if (ev.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT) {
+        bool down = ev.caxis.value > 16000;
+        if (down != s_rtHeld) {
+          s_rtHeld = down;
+          if (down) {
+            cyclePotionNext(vm); // RT -> Alternar Poção / Item para a DIREITA (slot seguinte)
+          }
+        }
+      } else if (ev.caxis.axis == SDL_CONTROLLER_AXIS_LEFTX || ev.caxis.axis == SDL_CONTROLLER_AXIS_LEFTY) {
+        int held = getGamepadHeldDirection();
+        if (held != s_activeDirection) {
+          if (held != 0) {
+            s_activeDirection = held;
+            s_directionPressTime = SDL_GetTicks();
+            s_directionLastRepeatTime = s_directionPressTime;
+            if (g_display && g_display->current) {
+              vm.gilLock();
+              try {
+                Value args[1]; args[0].i = held; Value ret[2];
+                vm.invokeVirtual(g_display->current, "keyPressed:(I)V", args, 1, ret);
+              } catch (...) {}
+              vm.gilUnlock();
+            }
+          } else if (s_activeDirection != 0 && getHeldDirection() == 0) {
+            int oldKey = s_activeDirection;
+            s_activeDirection = 0;
+            if (g_display && g_display->current) {
+              vm.gilLock();
+              try {
+                Value args[1]; args[0].i = oldKey; Value ret[2];
+                vm.invokeVirtual(g_display->current, "keyReleased:(I)V", args, 1, ret);
+              } catch (...) {}
+              vm.gilUnlock();
+            }
+          }
+        }
+      }
+    }
+
+    // Teclado
+    else if (ev.type == SDL_KEYDOWN) {
+      int key = mapKey(ev.key.keysym.sym);
+      if (key == -101) {
+        if (!ev.key.repeat) {
+          cyclePotionPrev(vm);
+        }
+      } else if (key != 0 && g_display && g_display->current) {
+        if (isDirectionKey(key)) {
           if (!ev.key.repeat || s_activeDirection != key) {
             s_activeDirection = key;
             s_directionPressTime = SDL_GetTicks();
@@ -187,7 +432,6 @@ bool Platform::pollEvents(VM& vm) {
             vm.gilUnlock();
           }
         } else if (!ev.key.repeat) {
-          // Teclas que não são de direção disparam apenas uma vez por toque físico
           vm.gilLock();
           try {
             Value args[1];
@@ -204,7 +448,6 @@ bool Platform::pollEvents(VM& vm) {
         if (isDirectionKey(key)) {
           int held = getHeldDirection();
           if (held != 0) {
-            // Outra direção ainda está pressionada, muda para ela imediatamente
             s_activeDirection = held;
             s_directionPressTime = SDL_GetTicks();
             s_directionLastRepeatTime = s_directionPressTime;
@@ -217,7 +460,6 @@ bool Platform::pollEvents(VM& vm) {
             } catch (...) {}
             vm.gilUnlock();
           } else {
-            // Nenhuma direção está mais pressionada
             s_activeDirection = 0;
             vm.gilLock();
             try {
@@ -242,7 +484,7 @@ bool Platform::pollEvents(VM& vm) {
     }
   }
 
-  // Movimentação contínua fluida: enquanto uma direção for mantida pressionada,
+  // Movimentação contínua fluida: enquanto uma direção for mantida pressionada (seja por teclado ou gamepad),
   // alimenta o loop do jogo com repetições suaves no ritmo exato da taxa de passos
   if (s_activeDirection != 0 && g_display && g_display->current) {
     int held = getHeldDirection();
@@ -313,11 +555,25 @@ void Platform::present() {
 }
 
 void Platform::shutdown() {
+  for (auto* pad : s_controllers) {
+    if (pad) SDL_GameControllerClose(pad);
+  }
+  s_controllers.clear();
   if (s_screenTexture) { SDL_DestroyTexture(s_screenTexture); s_screenTexture = nullptr; }
   if (s_renderer) { SDL_DestroyRenderer(s_renderer); s_renderer = nullptr; }
   if (s_window) { SDL_DestroyWindow(s_window); s_window = nullptr; }
   Mix_CloseAudio();
   SDL_Quit();
+}
+
+void Platform::rumble(float strength, int durationMs) {
+  uint16_t low = (uint16_t)(std::min(1.0f, std::max(0.0f, strength)) * 0xFFFF);
+  uint16_t high = (uint16_t)(std::min(1.0f, std::max(0.0f, strength)) * 0x7FFF);
+  for (auto* pad : s_controllers) {
+    if (pad) {
+      SDL_GameControllerRumble(pad, low, high, durationMs);
+    }
+  }
 }
 
 bool Platform::shouldQuit() {

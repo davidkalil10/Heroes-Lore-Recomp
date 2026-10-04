@@ -27,9 +27,13 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
 - [x] Passo 1 do Roadmap — Movimentação Contínua Fluida:
   - Fim das paradas ao andar: implementado rastreamento de estado contínuo de teclas (`SDL_GetKeyboardState`) e repetição typematic suave (delay inicial de 160ms para toques simples e repetição a 40ms / ~25Hz enquanto a tecla for mantida).
   - Transições suaves entre direções e parada imediata ao soltar a tecla.
+- [x] Passo 2 do Roadmap — Suporte Completo a Gamepads:
+  - Plug-and-play e hotplug automático para controles de Xbox, PlayStation, Switch Pro e 8BitDo via `SDL_GameController`.
+  - Movimentação analógica e D-Pad integrados ao sistema contínuo sem engasgos.
+  - Ergonomia refinada: Mapa no botão Select/Back (<kbd>0</kbd>), alternância bidirecional de poções nos gatilhos analógicos LT/RT (esq/dir via `#`), uso de poção em R1, ataque secundário em L1 e ataques do Guardião em X/Y.
+  - Suporte a feedback tátil de vibração (rumble).
 
 ## Próximos passos (Roadmap)
-- [ ] Passo 2: Suporte completo a Gamepads (Xbox, PS4/PS5, Switch Pro, 8BitDo via `SDL_GameController`).
 - [ ] Passo 3: Port Nativo para Android (Geração do APK com touch controls virtuais e suporte a gamepad Bluetooth).
 - [ ] Passo 4: Port Homebrew para Nintendo Switch (Arquivo `.nro` via devkitPro / libnx).
 - [ ] Passo 5: Aspect Ratio & Taxa de Quadros (Widescreen, Molduras e seletor 30 FPS Clássico vs 60 FPS Fluido).

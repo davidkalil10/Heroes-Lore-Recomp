@@ -23,9 +23,11 @@ Diferente de remakes feitos "no olhômetro", este projeto executa o **bytecode o
 
 ---
 
-## 🎮 Controles no Teclado
+## 🎮 Controles no Teclado e Gamepad
 
-O mapeamento foi planejado tanto para jogadores que preferem a ergonomia de teclado moderno de PC quanto para quem está habituado ao layout do teclado numérico dos celulares antigos:
+O mapeamento foi planejado com ergonomia moderna para PC (teclado e controles USB/Bluetooth) e também suporte clássico ao teclado numérico dos celulares:
+
+### ⌨️ Teclado
 
 | Ação no Jogo | Teclas Modernas (PC) | Teclado Numérico (J2ME) | Tecla Original |
 | :--- | :--- | :--- | :--- |
@@ -33,16 +35,34 @@ O mapeamento foi planejado tanto para jogadores que preferem a ergonomia de tecl
 | **Mover para Baixo** | <kbd>S</kbd> ou <kbd>↓</kbd> (Seta Baixo) | <kbd>Num 8</kbd> | `DOWN` / `8` |
 | **Mover para a Esquerda** | <kbd>A</kbd> ou <kbd>←</kbd> (Seta Esquerda) | <kbd>Num 4</kbd> | `LEFT` / `4` |
 | **Mover para a Direita** | <kbd>D</kbd> ou <kbd>→</kbd> (Seta Direita) | <kbd>Num 6</kbd> | `RIGHT` / `6` |
-| **Ação / Confirmar / Atacar** | <kbd>Espaço</kbd>, <kbd>Enter</kbd>, <kbd>J</kbd>, <kbd>Z</kbd> | <kbd>Num 5</kbd> | `FIRE` / `5` |
-| **Menu Principal (Softkey Esquerda)** | <kbd>F1</kbd> ou <kbd>Tab</kbd> | — | `LSK` (-6) |
-| **Status / Cancelar (Softkey Direita)**| <kbd>F2</kbd> | — | `RSK` (-7) |
-| **Limpar / Fechar Menu** | <kbd>Esc</kbd>, <kbd>Backspace</kbd>, <kbd>M</kbd> | — | `CLR` (-8) |
-| **Atalho Habilidade / Magia 1** | <kbd>Q</kbd> | <kbd>Num 1</kbd> | `1` |
-| **Atalho Habilidade / Magia 2** | <kbd>E</kbd> | <kbd>Num 3</kbd> | `3` |
-| **Atalho Habilidade / Magia 3** | <kbd>K</kbd> ou <kbd>X</kbd> | <kbd>Num 7</kbd> | `7` |
-| **Atalho Habilidade / Magia 4** | <kbd>L</kbd> ou <kbd>C</kbd> | <kbd>Num 9</kbd> | `9` |
-| **Usar Poção / Item Rápido** | <kbd>R</kbd> | <kbd>Num 0</kbd> | `0` |
-| **Menu Rápido / Alternar** | — | <kbd>*</kbd> / <kbd>#</kbd> | `*` / `#` |
+| **Atacar (Arma) / Confirmar / Interagir** | <kbd>Espaço</kbd>, <kbd>Enter</kbd>, <kbd>J</kbd>, <kbd>Z</kbd> | <kbd>Num 5</kbd> | `FIRE` / `5` |
+| **Menu Principal / Inventário (LSK)** | <kbd>F1</kbd> ou <kbd>Tab</kbd> | — | `LSK` (-6) |
+| **Status / Cancelar / Fechar (RSK)**| <kbd>F2</kbd>, <kbd>Esc</kbd>, <kbd>Backspace</kbd> | — | `RSK` (-7) / `CLR` (-8) |
+| **Ataque 1 do Guardião** | <kbd>Q</kbd> ou <kbd>U</kbd> | <kbd>Num 1</kbd> | `1` |
+| **Ataque 2 do Guardião** | <kbd>E</kbd> ou <kbd>I</kbd> | <kbd>Num 3</kbd> | `3` |
+| **Ataque Secundário / Habilidade** | <kbd>K</kbd> ou <kbd>X</kbd> | <kbd>Num 7</kbd> | `7` |
+| **Usar Poção / Item Rápido** | <kbd>L</kbd> ou <kbd>C</kbd> | <kbd>Num 9</kbd> | `9` |
+| **Poção Anterior (Esquerda)** | <kbd>[</kbd> ou <kbd>,</kbd> | — | `35` (3×) |
+| **Próxima Poção (Direita)** | <kbd>]</kbd>, <kbd>.</kbd> ou <kbd>#</kbd> | <kbd>#</kbd> (Numpad) | `#` |
+| **Abrir/Fechar Minimapa** | <kbd>M</kbd>, <kbd>R</kbd>, <kbd>O</kbd> ou <kbd>0</kbd> | <kbd>Num 0</kbd> | `0` |
+| **Atalhos Rápidos** | <kbd>*</kbd> | <kbd>*</kbd> (Numpad) | `*` |
+
+### 🕹️ Gamepad (Xbox, PlayStation, Switch Pro, 8BitDo)
+
+| Ação no Jogo | Controle Xbox / Genérico | Controle PlayStation | Controle Switch Pro |
+| :--- | :--- | :--- | :--- |
+| **Movimentação (360° Contínua)** | <kbd>D-Pad</kbd> ou <kbd>Analógico Esquerdo</kbd> | <kbd>D-Pad</kbd> ou <kbd>Analógico Esquerdo</kbd> | <kbd>D-Pad</kbd> ou <kbd>Analógico Esquerdo</kbd> |
+| **Atacar (Arma) / Confirmar ('5')** | <kbd>A</kbd> | <kbd>✕</kbd> | <kbd>B</kbd> |
+| **Status / Cancelar (RSK)** | <kbd>B</kbd> | <kbd>○</kbd> | <kbd>A</kbd> |
+| **Menu Principal / Inventário (LSK)**| <kbd>Start</kbd> | <kbd>Options</kbd> | <kbd>+</kbd> |
+| **Abrir / Fechar Minimapa ('0')** | <kbd>Select</kbd> / <kbd>Back</kbd> / <kbd>L3</kbd> | <kbd>Share</kbd> / <kbd>Touchpad</kbd> / <kbd>L3</kbd> | <kbd>-</kbd> / <kbd>L3</kbd> |
+| **Ataque 1 do Guardião ('1')** | <kbd>X</kbd> | <kbd>□</kbd> | <kbd>Y</kbd> |
+| **Ataque 2 do Guardião ('3')** | <kbd>Y</kbd> | <kbd>△</kbd> | <kbd>X</kbd> |
+| **Ataque Secundário / Habilidade ('7')**| <kbd>LB</kbd> (L1) | <kbd>L1</kbd> | <kbd>L</kbd> |
+| **Usar Poção / Item Rápido ('9')** | <kbd>RB</kbd> (R1) | <kbd>R1</kbd> | <kbd>R</kbd> |
+| **Alternar Poção $\leftarrow$ Anterior**| <kbd>LT</kbd> (Gatilho Esquerdo) | <kbd>L2</kbd> | <kbd>ZL</kbd> |
+| **Alternar Poção $\rightarrow$ Seguinte**| <kbd>RT</kbd> (Gatilho Direito) / <kbd>R3</kbd> | <kbd>R2</kbd> / <kbd>R3</kbd> | <kbd>ZR</kbd> / <kbd>R3</kbd> |
+| **Vibração / Haptics** | Suporte a rumble em combate | Suporte a rumble em combate | Suporte a rumble em combate |
 
 ---
 

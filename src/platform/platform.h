@@ -13,6 +13,7 @@ public:
   static void present();
   static void shutdown();
   static bool shouldQuit();
+  static void rumble(float strength = 0.5f, int durationMs = 150);
 };
 
 } // namespace hl

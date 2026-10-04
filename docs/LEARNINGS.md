@@ -57,4 +57,18 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - **Solução implementada:** Criado em `src/platform/platform_sdl.cpp` um sistema de rastreamento físico contínuo via `SDL_GetKeyboardState`. Aplicado um delay inicial de 160ms (para que toques rápidos no menu não disparem múltiplos eventos acidentais) seguido de repetição suave a cada 40ms (~25 Hz).
   - Ao soltar a tecla, `keyReleased` é disparado imediatamente, garantindo paradas precisas nas bordas dos tiles. Transições entre direções funcionam instantaneamente.
 
+## Sessão 5 (Suporte Completo a Gamepads / SDL_GameController)
+- **Integração Plug-and-Play:**
+  - Inicialização do subsistema `SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC` com varredura automática no boot e listeners para `SDL_CONTROLLERDEVICEADDED` e `SDL_CONTROLLERDEVICEREMOVED`.
+  - Mapeamento universal compatível com controles XInput (Xbox 360 / One / Series), DirectInput, DualShock 4 / DualSense e Nintendo Switch Pro.
+- **Unificação de Movimento (D-Pad + Analógico Esquerdo):**
+  - O estado contínuo de direção consulta simultaneamente o teclado e os gamepads conectados (`getGamepadHeldDirection()`).
+  - O analógico esquerdo com deadzone de 12.000 unidades alimenta o mesmo loop typematic suave (160ms inicial / 40ms repetição), permitindo navegar no analógico sem solavancos.
+- **Gatilhos Analógicos e Atalhos:**
+  - Gatilho Direito (RT/R2): Dispara ataque/ação ('5').
+  - Gatilho Esquerdo (LT/L2) e L3: Uso rápido de poções ('0').
+  - Botões de Face e Ombro (A, B, X, Y, L1, R1, R3, Start, Back) cobrem 100% dos botões originais do J2ME.
+  - Implementado `Platform::rumble(...)` para suporte a vibração háptica.
+
+
 
