@@ -40,8 +40,7 @@ static int mapKey(SDL_Keycode k) {
     case SDLK_u: case SDLK_q: return 49; // '1'
     case SDLK_i: case SDLK_e: return 51; // '3'
     case SDLK_m: case SDLK_o: case SDLK_r: return 48; // '0' / Mapa
-    case SDLK_ESCAPE: case SDLK_BACKSPACE: return -8; // CLR
-    case SDLK_F1: case SDLK_TAB: return -6; // LSK
+    case SDLK_ESCAPE: case SDLK_BACKSPACE: case SDLK_TAB: case SDLK_F1: return -8; // Menu Principal / Cancelar / Fechar (CLR)
     case SDLK_F2: return -7; // RSK
 
     // Alternância de Poção / Item Rápido
@@ -84,7 +83,7 @@ static int mapControllerButton(Uint8 btn) {
     case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return 57; // R1 -> Usar Poção / Item Rápido ('9')
 
     // Menus de Sistema e Mapa
-    case SDL_CONTROLLER_BUTTON_START: return -6; // Start -> Menu Principal / Inventário (LSK)
+    case SDL_CONTROLLER_BUTTON_START: return -8; // Start / + -> Menu Principal / Inventário (CLR)
     case SDL_CONTROLLER_BUTTON_BACK: return 48;  // Back / Select / Touchpad / - -> Abrir/Fechar Minimapa ('0')
 
     // Cliques dos Analógicos

@@ -36,8 +36,8 @@ O mapeamento foi planejado com ergonomia moderna para PC (teclado e controles US
 | **Mover para a Esquerda** | <kbd>A</kbd> ou <kbd>←</kbd> (Seta Esquerda) | <kbd>Num 4</kbd> | `LEFT` / `4` |
 | **Mover para a Direita** | <kbd>D</kbd> ou <kbd>→</kbd> (Seta Direita) | <kbd>Num 6</kbd> | `RIGHT` / `6` |
 | **Atacar (Arma) / Confirmar / Interagir** | <kbd>Espaço</kbd>, <kbd>Enter</kbd>, <kbd>J</kbd>, <kbd>Z</kbd> | <kbd>Num 5</kbd> | `FIRE` / `5` |
-| **Menu Principal / Inventário (LSK)** | <kbd>F1</kbd> ou <kbd>Tab</kbd> | — | `LSK` (-6) |
-| **Status / Cancelar / Fechar (RSK)**| <kbd>F2</kbd>, <kbd>Esc</kbd>, <kbd>Backspace</kbd> | — | `RSK` (-7) / `CLR` (-8) |
+| **Menu Principal / Inventário** | <kbd>Tab</kbd>, <kbd>Esc</kbd>, <kbd>F1</kbd> | — | `CLR` (-8) |
+| **Status / Cancelar / Fechar** | <kbd>F2</kbd>, <kbd>Backspace</kbd> | — | `RSK` (-7) |
 | **Ataque 1 do Guardião** | <kbd>Q</kbd> ou <kbd>U</kbd> | <kbd>Num 1</kbd> | `1` |
 | **Ataque 2 do Guardião** | <kbd>E</kbd> ou <kbd>I</kbd> | <kbd>Num 3</kbd> | `3` |
 | **Ataque Secundário / Habilidade** | <kbd>K</kbd> ou <kbd>X</kbd> | <kbd>Num 7</kbd> | `7` |
@@ -54,7 +54,7 @@ O mapeamento foi planejado com ergonomia moderna para PC (teclado e controles US
 | **Movimentação (360° Contínua)** | <kbd>D-Pad</kbd> ou <kbd>Analógico Esquerdo</kbd> | <kbd>D-Pad</kbd> ou <kbd>Analógico Esquerdo</kbd> | <kbd>D-Pad</kbd> ou <kbd>Analógico Esquerdo</kbd> |
 | **Atacar (Arma) / Confirmar ('5')** | <kbd>A</kbd> | <kbd>✕</kbd> | <kbd>B</kbd> |
 | **Status / Cancelar (RSK)** | <kbd>B</kbd> | <kbd>○</kbd> | <kbd>A</kbd> |
-| **Menu Principal / Inventário (LSK)**| <kbd>Start</kbd> | <kbd>Options</kbd> | <kbd>+</kbd> |
+| **Menu Principal / Inventário** | <kbd>Start</kbd> | <kbd>Options</kbd> | <kbd>+</kbd> |
 | **Abrir / Fechar Minimapa ('0')** | <kbd>Select</kbd> / <kbd>Back</kbd> / <kbd>L3</kbd> | <kbd>Share</kbd> / <kbd>Touchpad</kbd> / <kbd>L3</kbd> | <kbd>-</kbd> / <kbd>L3</kbd> |
 | **Ataque 1 do Guardião ('1')** | <kbd>X</kbd> | <kbd>□</kbd> | <kbd>Y</kbd> |
 | **Ataque 2 do Guardião ('3')** | <kbd>Y</kbd> | <kbd>△</kbd> | <kbd>X</kbd> |
