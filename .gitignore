@@ -1,0 +1,33 @@
+# Build artifacts
+build/
+bin/
+obj/
+*.exe
+*.dll
+*.so
+*.a
+*.o
+*.obj
+*.bmp
+*.log
+
+# Third-party cloned repositories
+third_party/SDL2/
+third_party/SDL2_mixer/
+
+# Android build outputs
+.gradle/
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/.cxx/
+android/app/.cxx/
+*.apk
+*.aab
+
+# Consultas e IDE
+.idea/
+.vscode/
+*.user
+"dados de consulta/heroes_lore_modern"

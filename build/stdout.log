@@ -1,6 +1,0 @@
-==================================================
- Heroes Lore: Wind of Soltia — Native Recomp
- C++17 + SDL2 Pixel-Perfect Native Port
-==================================================
-[Init] Carregando MIDlet principal rpg/GameMIDlet...
-[Init] Chamando startApp()...

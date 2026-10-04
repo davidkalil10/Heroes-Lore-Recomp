@@ -26,17 +26,21 @@ int main(int argc, char** argv) {
   if (argc > 1) {
     dataDir = argv[1];
   } else {
+#ifdef __ANDROID__
+    dataDir = ""; // No Android APK, os assets ficam na raiz do AssetManager
+#else
     const char* candidates[] = {
       "reference/extracted",
       "../reference/extracted",
       "../../reference/extracted",
-      "assets"
+      "assets",
+      "../assets"
     };
     for (const char* c : candidates) {
-      std::string manifestPath = std::string(c) + "/META-INF/MANIFEST.MF";
-      FILE* fp = fopen(manifestPath.c_str(), "rb");
-      if (fp) { fclose(fp); dataDir = c; break; }
+      auto testBuf = Platform::readAsset(std::string(c) + "/META-INF/MANIFEST.MF");
+      if (!testBuf.empty()) { dataDir = c; break; }
     }
+#endif
   }
   printf("[Init] Usando pasta de dados: %s\n", dataDir.c_str());
 

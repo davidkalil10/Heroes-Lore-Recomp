@@ -1,5 +1,6 @@
 // natives.cpp — implementação de métodos nativos da biblioteca padrão Java (java.lang, java.util, java.io)
 #include "vm.h"
+#include "../platform/platform.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -56,18 +57,16 @@ static void Class_getResourceAsStream(VM& vm, Value* args, Value* ret) {
   if (relPath[0] == '/' || relPath[0] == '\\') relPath = relPath.substr(1);
 
   // Procura no diretório de dados
-  std::string fullPath = vm.dataDir + "/" + relPath;
-  std::ifstream f(fullPath, std::ios::binary);
-  if (!f) {
-    // Tenta caminho direto
-    f.open(vm.dataDir + "/" + path, std::ios::binary);
+  std::string fullPath = vm.dataDir.empty() ? relPath : (vm.dataDir + "/" + relPath);
+  std::vector<uint8_t> buf = Platform::readAsset(fullPath);
+  if (buf.empty()) {
+    buf = Platform::readAsset(relPath);
   }
-  if (!f) {
+  if (buf.empty()) {
     ret[0].o = nullptr;
     return;
   }
 
-  std::vector<uint8_t> buf((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   ClassInfo* cbais = vm.mustClass("java/io/ByteArrayInputStream");
   Bais* bais = vm.alloc<Bais>(cbais, K_BAIS);
   bais->data = std::move(buf);

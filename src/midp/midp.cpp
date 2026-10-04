@@ -1,5 +1,6 @@
 // midp.cpp — implementação das APIs J2ME MIDP 2.0 (LCDUI, RecordStore, Audio)
 #include "midp.h"
+#include "../platform/platform.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../third_party/stb_image.h"
 
@@ -365,16 +366,20 @@ static void Image_createImage_str(VM& vm, Value* args, Value* ret) {
   std::string rel = name;
   if (rel[0] == '/' || rel[0] == '\\') rel = rel.substr(1);
 
-  std::ifstream f(vm.dataDir + "/" + rel, std::ios::binary);
-  if (!f) f.open(vm.dataDir + "/" + name, std::ios::binary);
-  if (!f) {
+  std::string fullPath = vm.dataDir.empty() ? rel : (vm.dataDir + "/" + rel);
+  std::vector<uint8_t> buf = Platform::readAsset(fullPath);
+  if (buf.empty()) {
+    buf = Platform::readAsset(rel);
+  }
+  if (buf.empty()) {
     vm.throwNew("java/io/IOException", "Image not found: " + name);
+    return;
   }
 
-  std::vector<uint8_t> buf((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
   ImageObj* img = decodeImageBytes(vm, buf.data(), (int)buf.size());
   if (!img) {
     vm.throwNew("java/io/IOException", "Failed to decode image: " + name);
+    return;
   }
   ret[0].o = img;
 }
@@ -461,7 +466,8 @@ static void MIDlet_platformRequest(VM&, Value*, Value* ret) {
 // javax/microedition/rms/RecordStore
 // -------------------------------------------------------------
 static std::string rmsDir(VM& vm) {
-  std::string d = vm.dataDir + "/rms";
+  std::string base = Platform::getStorageDir();
+  std::string d = (base == "." ? vm.dataDir : base) + "/rms";
   std::error_code ec;
   std::filesystem::create_directories(d, ec);
   return d;

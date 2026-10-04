@@ -33,8 +33,16 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
   - Ergonomia refinada: Mapa no botão Select/Back (<kbd>0</kbd>), alternância bidirecional de poções nos gatilhos analógicos LT/RT (esq/dir via `#`), uso de poção em R1, ataque secundário em L1 e ataques do Guardião em X/Y.
   - Suporte a feedback tátil de vibração (rumble).
 
+- [x] Passo 3 do Roadmap — Port Nativo para Android:
+  - Projeto Android nativo completo em `android/` com Gradle 8.1.1, NDK 26 (`26.1.10909125`), CMake 3.22.1 e Java 17.
+  - Compilação multi-arquitetura (`arm64-v8a` para smartphones modernos e `armeabi-v7a` para compatibilidade total).
+  - Bibliotecas nativas compiladas: `libSDL2.so`, `libSDL2_mixer.so` (MIDI Timidity integrado, Vorbis STB, WAV) e `libmain.so` (C++17, VM CLDC 1.1, MIDP 2.0).
+  - I/O unificado e transparente: `Platform::readAsset` acessa diretamente o `AAssetManager` do APK via `SDL_RWFromFile`; `Platform::getStorageDir` persiste saves RMS no armazenamento interno do app (`SDL_AndroidGetInternalStoragePath`).
+  - Controles virtuais na tela (Touchscreen Overlay): D-Pad virtual com suporte a movimento contínuo a 60 FPS, botões de ação (Ataque 5, Habilidades 1 e 3, Poção 7, Item 9), botões de sistema (MENU, MAPA, RSK) e alternância de poções (< e >). Suporte a multi-touch (andar e atacar simultaneamente) e toques nos pilares laterais de telas ultrawide (letterbox).
+  - Suporte nativo a gamepads Bluetooth/USB (Xbox, PlayStation, Gamesir, Razer Kishi) com rumble.
+  - APK standalone compacto (~3.68 MB) gerado e pronto para instalação direta em `bin/heroes_lore.apk` e `android/heroes_lore.apk`.
+
 ## Próximos passos (Roadmap)
-- [ ] Passo 3: Port Nativo para Android (Geração do APK com touch controls virtuais e suporte a gamepad Bluetooth).
 - [ ] Passo 4: Port Homebrew para Nintendo Switch (Arquivo `.nro` via devkitPro / libnx).
 - [ ] Passo 5: Aspect Ratio & Taxa de Quadros (Widescreen, Molduras e seletor 30 FPS Clássico vs 60 FPS Fluido).
 - [ ] Passo 6: Cloud Save & Sincronização Cruzada (PC <-> Celular <-> Switch).

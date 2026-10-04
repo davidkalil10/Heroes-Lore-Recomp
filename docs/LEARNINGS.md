@@ -70,5 +70,22 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - Botões de Face e Ombro (A, B, X, Y, L1, R1, R3, Start, Back) cobrem 100% dos botões originais do J2ME.
   - Implementado `Platform::rumble(...)` para suporte a vibração háptica.
 
+## Sessão 6 (Port Nativo para Android / Standalone APK)
+- **Acesso a Recursos dentro do APK (AAssetManager vs Arquivos Tradicionais):**
+  - No Android, os assets empacotados dentro do APK não existem como arquivos descompactados no sistema de arquivos comum do Linux. Chamadas como `fopen("META-INF/MANIFEST.MF")` ou `std::ifstream` falham silenciosamente.
+  - A solução arquitetural ideal foi unificar todo o acesso de assets através de `Platform::readAsset(path)` utilizando `SDL_RWFromFile()`. O SDL2 possui integração nativa com o `AAssetManager` do NDK, permitindo ler classes `.class`, manifestos, imagens `.png` e músicas `.mid` diretamente de dentro do APK compactado sem descompactação prévia.
+  - Para persistência de `RecordStore` (saves RMS), `Platform::getStorageDir()` utiliza `SDL_AndroidGetInternalStoragePath()`, gravando os dados no diretório privado seguro do app (`/data/data/org.libsdl.app/files/rms/`).
+- **Configuração do `SDL2_mixer` para Android via CMake:**
+  - O `SDL2_mixer` depende de bibliotecas externas caso ativadas cegamente. No Android, para evitar dependências de terceiros não instaladas (WavPack, GME, Fluidsynth, Opus), configurou-se `SDL2MIXER_VENDORED=ON`, ativando o sintetizador MIDI Timidity embutido (`SDL2MIXER_MIDI_TIMIDITY=ON`), decodificador STB Vorbis (`SDL2MIXER_VORBIS_STB=ON`) e suporte nativo a WAV (`SDL2MIXER_WAVE=ON`).
+- **Ciclo de Vida do Entry Point no Android (`libmain.so`):**
+  - O `SDLActivity.java` carrega `libSDL2.so`, `libSDL2_mixer.so` e `libmain.so`.
+  - A função `nativeRunMain` do SDL localiza dinamicamente a função `SDL_main` via `dlsym`. Com a inclusão de `<SDL_main.h>`, `main` é automaticamente exportado com linkage `extern "C"` sem mangling de C++.
+- **Controles Virtuais Touchscreen (Multi-touch):**
+  - Dispositivos móveis sem gamepad físico necessitam de controles na tela. Foi implementado em `src/platform/platform_sdl.cpp` um sistema de overlay translúcido minimalista renderizado diretamente no canvas com `SDL_BLENDMODE_BLEND`.
+  - Eventos `SDL_FINGERDOWN`, `SDL_FINGERMOTION` e `SDL_FINGERUP` fornecem suporte a multi-touch verdadeiro (o jogador pode manter o polegar esquerdo no D-Pad virtual enquanto pressiona ataques e habilidades com o polegar direito).
+  - Em telas ultrawide com barras pretas nas laterais (letterbox no modo paisagem), toques nos pilares pretos são detectados e mapeados ergonomicamente (D-pad na coluna esquerda e botões na coluna direita).
+- **Tamanho e Eficiência:**
+  - O APK final gerado (`bin/heroes_lore.apk`) possui apenas ~3.68 MB e inclui todas as 996 classes e assets do jogo, além das bibliotecas nativas completas compiladas para 64-bit (`arm64-v8a`) e 32-bit (`armeabi-v7a`).
+
 
 

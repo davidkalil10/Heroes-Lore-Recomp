@@ -129,6 +129,35 @@ cmake --build build --config Release
 
 ---
 
+## 📱 Versão Nativa Android (APK Standalone)
+
+O jogo conta com port nativo standalone em **C++17 + SDL2** compilado para Android, sem necessidade de emuladores ou Winlator!
+
+### 📥 Instalação Direta
+Os APKs compilados com **Split per ABI** encontram-se em `bin/`:
+- **`bin/heroes_lore-arm64-v8a.apk`** (ou `bin/heroes_lore.apk`): **~2.35 MB** — Versão nativa pura de 64-bit (`arm64-v8a`), recomendada para todos os smartphones modernos!
+- **`bin/heroes_lore-armeabi-v7a.apk`**: **~2.18 MB** — Versão de 32-bit para aparelhos legados.
+- **`bin/heroes_lore-universal.apk`**: **~3.49 MB** — Versão universal (contém ambas as arquiteturas).
+
+### 🕹️ Controles no Android
+- **Controles por Toque (Touchscreen Multi-touch):**
+  - D-Pad virtual translúcido no canto inferior esquerdo (suporta movimentação contínua a 60 FPS).
+  - Botão de Ataque/Confirmar (<kbd>5</kbd>) e botões de Habilidade (<kbd>1</kbd>, <kbd>3</kbd>), Poção (<kbd>7</kbd>) e Item (<kbd>9</kbd>) no canto inferior direito.
+  - Botões superiores de acesso rápido: <kbd>MENU</kbd> (Menu in-game), <kbd>MAP</kbd> (Mapa mundi) e <kbd>RSK</kbd>.
+  - Alternância rápida de poções: botões <kbd>&lt;</kbd> e <kbd>&gt;</kbd>.
+  - Em telas widescreen no modo paisagem, as barras pretas laterais (letterbox) funcionam como painéis de toque adicionais para os polegares.
+- **Controles Físicos (Bluetooth / USB-C):**
+  - Plug-and-play imediato com controles de Xbox, PlayStation, Gamesir, Razer Kishi, etc., com vibração háptica (rumble).
+
+### 🛠️ Como recompilar o APK (opcional):
+```powershell
+cd android
+.\gradlew.bat assembleDebug
+```
+O APK gerado ficará em `android/app/build/outputs/apk/debug/app-debug.apk`.
+
+---
+
 ## 🧪 Verificação e Testes Automatizados
 
 O projeto inclui suíte de testes de estresse para validar operações críticas como fluxos de stream polimórficos e persistência binária do RMS:

@@ -1,0 +1,13 @@
+Manifest-Version: 1.0
+MIDlet-Name: Heroes Lore: Wind Of Soltia
+MIDlet-Version: 0.0.2
+MIDlet-Vendor: Hands-On Mobile
+MIDlet-1: Heroes Lore, icon.png, rpg.GameMIDlet
+MicroEdition-Profile: MIDP-2.0
+MicroEdition-Configuration: CLDC-1.1
+MIDlet-Icon: icon.png
+MIDlet-Data-Size: 16000
+Created-By: Metaflow
+HO-Demo: BEJ8K52N7A
+
+

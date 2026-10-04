@@ -1,5 +1,6 @@
 // vm.cpp — carregador de classes, objetos, GC, exceções, threads
 #include "vm.h"
+#include "../platform/platform.h"
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -167,12 +168,16 @@ void VM::init(const std::string& dir) {
   sys->statics.resize(1); sys->staticRef.assign(1, 1);
   sys->statics[0].o = newInstance(classes["java/io/PrintStream"]);
   // manifest
-  std::ifstream mf(dataDir + "/META-INF/MANIFEST.MF");
-  std::string line;
-  while (std::getline(mf, line)) {
-    while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) line.pop_back();
-    size_t c = line.find(": ");
-    if (c != std::string::npos) props[line.substr(0, c)] = line.substr(c + 2);
+  auto mfBytes = Platform::readAsset(dataDir.empty() ? "META-INF/MANIFEST.MF" : (dataDir + "/META-INF/MANIFEST.MF"));
+  if (!mfBytes.empty()) {
+    std::string mfStr((const char*)mfBytes.data(), mfBytes.size());
+    std::istringstream mf(mfStr);
+    std::string line;
+    while (std::getline(mf, line)) {
+      while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) line.pop_back();
+      size_t c = line.find(": ");
+      if (c != std::string::npos) props[line.substr(0, c)] = line.substr(c + 2);
+    }
   }
   registerNatives(); registerMidp();
 }
@@ -191,9 +196,9 @@ ClassInfo* VM::findClass(const std::string& name) {
   auto it = classes.find(name);
   if (it != classes.end()) return it->second;
   if (!name.empty() && name[0] == '[') return cArray;
-  std::ifstream f(dataDir + "/" + name + ".class", std::ios::binary);
-  if (!f) return nullptr;
-  std::vector<uint8_t> buf((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+  std::string classPath = dataDir.empty() ? (name + ".class") : (dataDir + "/" + name + ".class");
+  std::vector<uint8_t> buf = Platform::readAsset(classPath);
+  if (buf.empty()) return nullptr;
   Rd r{buf};
   if (r.u4() != 0xCAFEBABE) fatal("classe inválida: " + name);
   r.u2(); r.u2();
