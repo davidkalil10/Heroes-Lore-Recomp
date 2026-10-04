@@ -23,8 +23,17 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
   - Suporte completo a `RecordStore` (open, addRecord, setRecord, getRecord, delete, close) com persistência em disco em arquivos binários `.rms`.
   - Validado via teste unitário automatizado (`tests/test_stream_rms.cpp`) com 100% de sucesso.
 - [x] Jogabilidade confirmada pelo usuário no Windows ("abriu, consegui jogar e está redondinho").
+- [x] README completo e caprichado com instruções de compilação, arquitetura, controles e documentação técnica.
+- [x] Passo 1 do Roadmap — Movimentação Contínua Fluida:
+  - Fim das paradas ao andar: implementado rastreamento de estado contínuo de teclas (`SDL_GetKeyboardState`) e repetição typematic suave (delay inicial de 160ms para toques simples e repetição a 40ms / ~25Hz enquanto a tecla for mantida).
+  - Transições suaves entre direções e parada imediata ao soltar a tecla.
 
-## Próximo passo
-- README completo e caprichado com instruções de compilação, arquitetura, controles e documentação técnica.
+## Próximos passos (Roadmap)
+- [ ] Passo 2: Suporte completo a Gamepads (Xbox, PS4/PS5, Switch Pro, 8BitDo via `SDL_GameController`).
+- [ ] Passo 3: Port Nativo para Android (Geração do APK com touch controls virtuais e suporte a gamepad Bluetooth).
+- [ ] Passo 4: Port Homebrew para Nintendo Switch (Arquivo `.nro` via devkitPro / libnx).
+- [ ] Passo 5: Aspect Ratio & Taxa de Quadros (Widescreen, Molduras e seletor 30 FPS Clássico vs 60 FPS Fluido).
+- [ ] Passo 6: Cloud Save & Sincronização Cruzada (PC <-> Celular <-> Switch).
+- [ ] Passo 7: Seletor de Idiomas / Localização (PT-BR, EN, KO, ES).
 
 

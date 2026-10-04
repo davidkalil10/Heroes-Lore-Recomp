@@ -12,3 +12,5 @@
 8	2969	8128394934444067	CMakeFiles/heroes_lore.dir/src/vm/natives.cpp.obj	7d43904ad1b8786c
 16	8181	8128394934527829	CMakeFiles/heroes_lore.dir/src/midp/midp.cpp.obj	d0d879d1675f35ae
 8181	8846	8128395016173998	heroes_lore.exe	f68f5e4596cc627d
+8	1415	8128487188969824	CMakeFiles/heroes_lore.dir/src/platform/platform_sdl.cpp.obj	f97806f5ae35717c
+1416	1969	8128487203050120	heroes_lore.exe	f68f5e4596cc627d

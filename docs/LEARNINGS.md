@@ -49,3 +49,12 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - A rotina de salvamento do jogo abre os RecordStores `_k`, `_s`, `_w` e `_o`, deleta cópias antigas e reinsere os buffers comprimidos/criptografados via `au.void_a()`.
   - Tratamento defensivo de registros de tamanho zero (`len == 0`) e suporte a `setRecord` garantem integridade total do ciclo de vida dos arquivos salvos na pasta `data/rms/`.
 
+## Sessão 4 (Movimentação Contínua Fluida / Typematic Delay)
+- **Mecânica de Caminhada J2ME (`as.java`, `r.java`, `n.java`):**
+  - Nos celulares J2ME originais com teclado físico, manter uma tecla direcional pressionada gerava uma torrente contínua de eventos `keyPressed` pelo firmware do aparelho.
+  - No código do jogo (`n.java`), o primeiro `keyPressed` inicia a caminhada (`n.c(2)`). Cada passo leva um certo número de ticks (16 pixels). Se novos eventos `keyPressed` chegam enquanto o herói caminha, `n.b()` seta `var_byte_h = 2` (indicador de "manter caminhada"). Ao atingir a borda do tile, `n.q()` verifica `var_byte_h`: se for 2, continua andando imediatamente; se for 0, o herói para no lugar!
+  - Anteriormente, o SDL descartava teclas repetidas com `&& !ev.key.repeat`. Isso fazia com que, ao segurar uma tecla, apenas 1 evento fosse entregue: o herói dava um passo e parava.
+  - **Solução implementada:** Criado em `src/platform/platform_sdl.cpp` um sistema de rastreamento físico contínuo via `SDL_GetKeyboardState`. Aplicado um delay inicial de 160ms (para que toques rápidos no menu não disparem múltiplos eventos acidentais) seguido de repetição suave a cada 40ms (~25 Hz).
+  - Ao soltar a tecla, `keyReleased` é disparado imediatamente, garantindo paradas precisas nas bordas dos tiles. Transições entre direções funcionam instantaneamente.
+
+

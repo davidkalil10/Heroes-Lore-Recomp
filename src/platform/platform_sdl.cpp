@@ -139,6 +139,28 @@ bool Platform::init(int scale) {
   return true;
 }
 
+static int s_activeDirection = 0;
+static uint32_t s_directionPressTime = 0;
+static uint32_t s_directionLastRepeatTime = 0;
+
+static bool isDirectionKey(int key) {
+  return key == -1 || key == -2 || key == -3 || key == -4 ||
+         key == 50 || key == 52 || key == 54 || key == 56;
+}
+
+static int getHeldDirection() {
+  const Uint8* k = SDL_GetKeyboardState(nullptr);
+  if (k[SDL_SCANCODE_W] || k[SDL_SCANCODE_UP]) return -1;
+  if (k[SDL_SCANCODE_S] || k[SDL_SCANCODE_DOWN]) return -2;
+  if (k[SDL_SCANCODE_A] || k[SDL_SCANCODE_LEFT]) return -3;
+  if (k[SDL_SCANCODE_D] || k[SDL_SCANCODE_RIGHT]) return -4;
+  if (k[SDL_SCANCODE_KP_2]) return 50;
+  if (k[SDL_SCANCODE_KP_8]) return 56;
+  if (k[SDL_SCANCODE_KP_4]) return 52;
+  if (k[SDL_SCANCODE_KP_6]) return 54;
+  return 0;
+}
+
 bool Platform::pollEvents(VM& vm) {
   SDL_Event ev;
   while (SDL_PollEvent(&ev)) {
@@ -146,32 +168,127 @@ bool Platform::pollEvents(VM& vm) {
       s_quit = true;
       return false;
     }
-    if (ev.type == SDL_KEYDOWN && !ev.key.repeat) {
+    if (ev.type == SDL_KEYDOWN) {
       int key = mapKey(ev.key.keysym.sym);
       if (key != 0 && g_display && g_display->current) {
-        vm.gilLock();
-        try {
-          Value args[1];
-          args[0].i = key;
-          Value ret[2];
-          vm.invokeVirtual(g_display->current, "keyPressed:(I)V", args, 1, ret);
-        } catch (...) {}
-        vm.gilUnlock();
+        if (isDirectionKey(key)) {
+          // Se for uma nova direção ou a primeira pressão
+          if (!ev.key.repeat || s_activeDirection != key) {
+            s_activeDirection = key;
+            s_directionPressTime = SDL_GetTicks();
+            s_directionLastRepeatTime = s_directionPressTime;
+            vm.gilLock();
+            try {
+              Value args[1];
+              args[0].i = key;
+              Value ret[2];
+              vm.invokeVirtual(g_display->current, "keyPressed:(I)V", args, 1, ret);
+            } catch (...) {}
+            vm.gilUnlock();
+          }
+        } else if (!ev.key.repeat) {
+          // Teclas que não são de direção disparam apenas uma vez por toque físico
+          vm.gilLock();
+          try {
+            Value args[1];
+            args[0].i = key;
+            Value ret[2];
+            vm.invokeVirtual(g_display->current, "keyPressed:(I)V", args, 1, ret);
+          } catch (...) {}
+          vm.gilUnlock();
+        }
       }
     } else if (ev.type == SDL_KEYUP) {
       int key = mapKey(ev.key.keysym.sym);
       if (key != 0 && g_display && g_display->current) {
-        vm.gilLock();
-        try {
-          Value args[1];
-          args[0].i = key;
-          Value ret[2];
-          vm.invokeVirtual(g_display->current, "keyReleased:(I)V", args, 1, ret);
-        } catch (...) {}
-        vm.gilUnlock();
+        if (isDirectionKey(key)) {
+          int held = getHeldDirection();
+          if (held != 0) {
+            // Outra direção ainda está pressionada, muda para ela imediatamente
+            s_activeDirection = held;
+            s_directionPressTime = SDL_GetTicks();
+            s_directionLastRepeatTime = s_directionPressTime;
+            vm.gilLock();
+            try {
+              Value args[1];
+              args[0].i = held;
+              Value ret[2];
+              vm.invokeVirtual(g_display->current, "keyPressed:(I)V", args, 1, ret);
+            } catch (...) {}
+            vm.gilUnlock();
+          } else {
+            // Nenhuma direção está mais pressionada
+            s_activeDirection = 0;
+            vm.gilLock();
+            try {
+              Value args[1];
+              args[0].i = key;
+              Value ret[2];
+              vm.invokeVirtual(g_display->current, "keyReleased:(I)V", args, 1, ret);
+            } catch (...) {}
+            vm.gilUnlock();
+          }
+        } else {
+          vm.gilLock();
+          try {
+            Value args[1];
+            args[0].i = key;
+            Value ret[2];
+            vm.invokeVirtual(g_display->current, "keyReleased:(I)V", args, 1, ret);
+          } catch (...) {}
+          vm.gilUnlock();
+        }
       }
     }
   }
+
+  // Movimentação contínua fluida: enquanto uma direção for mantida pressionada,
+  // alimenta o loop do jogo com repetições suaves no ritmo exato da taxa de passos
+  if (s_activeDirection != 0 && g_display && g_display->current) {
+    int held = getHeldDirection();
+    if (held == 0) {
+      int oldKey = s_activeDirection;
+      s_activeDirection = 0;
+      vm.gilLock();
+      try {
+        Value args[1];
+        args[0].i = oldKey;
+        Value ret[2];
+        vm.invokeVirtual(g_display->current, "keyReleased:(I)V", args, 1, ret);
+      } catch (...) {}
+      vm.gilUnlock();
+    } else {
+      if (held != s_activeDirection) {
+        s_activeDirection = held;
+        s_directionPressTime = SDL_GetTicks();
+        s_directionLastRepeatTime = s_directionPressTime;
+        vm.gilLock();
+        try {
+          Value args[1];
+          args[0].i = held;
+          Value ret[2];
+          vm.invokeVirtual(g_display->current, "keyPressed:(I)V", args, 1, ret);
+        } catch (...) {}
+        vm.gilUnlock();
+      } else {
+        uint32_t now = SDL_GetTicks();
+        const uint32_t INITIAL_DELAY_MS = 160;
+        const uint32_t REPEAT_INTERVAL_MS = 40;
+        if (now - s_directionPressTime >= INITIAL_DELAY_MS && now - s_directionLastRepeatTime >= REPEAT_INTERVAL_MS) {
+          s_directionLastRepeatTime = now;
+          vm.gilLock();
+          try {
+            Value args[1];
+            args[0].i = s_activeDirection;
+            Value ret[2];
+            vm.invokeVirtual(g_display->current, "keyPressed:(I)V", args, 1, ret);
+          } catch (...) {}
+          vm.gilUnlock();
+        }
+      }
+    }
+  }
+
   return !s_quit;
 }
 
