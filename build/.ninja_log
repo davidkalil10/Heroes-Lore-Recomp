@@ -1,0 +1,14 @@
+# ninja log v7
+31	1312	8128336391370533	CMakeFiles/heroes_lore.dir/src/vm/interp.cpp.obj	a2ed7c31a6cd0758
+30	1650	8128341761169636	CMakeFiles/heroes_lore.dir/src/platform/platform_sdl.cpp.obj	f97806f5ae35717c
+28	1595	8128343559032210	CMakeFiles/heroes_lore.dir/src/main.cpp.obj	724a12834c6f111d
+23	3364	8128336391289322	CMakeFiles/heroes_lore.dir/src/vm/vm.cpp.obj	26fd1bc0ea2f4558
+33	2557	8128333466945105	CMakeFiles/heroes_lore.dir/src/vm/natives.cpp.obj	7d43904ad1b8786c
+40	7096	8128333467019432	CMakeFiles/heroes_lore.dir/src/midp/midp.cpp.obj	d0d879d1675f35ae
+1596	1773	8128343574714423	heroes_lore.exe	edb7043aeb69e7d3
+26	662	8128367865377193	heroes_lore.exe	f68f5e4596cc627d
+15	1470	8128371684048300	CMakeFiles/heroes_lore.dir/src/platform/platform_sdl.cpp.obj	f97806f5ae35717c
+23	667	8128371890893457	heroes_lore.exe	f68f5e4596cc627d
+8	2969	8128394934444067	CMakeFiles/heroes_lore.dir/src/vm/natives.cpp.obj	7d43904ad1b8786c
+16	8181	8128394934527829	CMakeFiles/heroes_lore.dir/src/midp/midp.cpp.obj	d0d879d1675f35ae
+8181	8846	8128395016173998	heroes_lore.exe	f68f5e4596cc627d

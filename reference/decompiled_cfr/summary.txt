@@ -1,0 +1,29 @@
+Summary for reference\heroes.jar
+Decompiled with CFR 0.152
+
+
+ao
+----------------------------
+
+a()
+  Loose catch block
+a(byte[] )
+  Loose catch block
+
+
+g
+----------------------------
+
+c()
+  Loose catch block
+a(byte[] )
+  Loose catch block
+
+
+n
+----------------------------
+
+a()
+  Loose catch block
+a(byte[] )
+  Loose catch block
