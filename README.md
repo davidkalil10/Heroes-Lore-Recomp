@@ -1,40 +1,74 @@
 # ⚔️ Heroes Lore: Wind of Soltia — Native Recompilation (C++17 + SDL2)
 
-[![C++17](https://img.shields.io/badge/Language-C%2B%2B17-blue.svg)](https://en.cppreference.com/w/cpp/17)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Android%20%7C%20Switch-informational.svg)]()
-[![Rendering](https://img.shields.io/badge/Renderer-Direct3D%2011%20%2F%20SDL2-success.svg)](https://www.libsdl.org/)
+[![Build & Release](https://github.com/davidkalil10/Heroes-Lore-Recomp/actions/workflows/build.yml/badge.svg)](https://github.com/davidkalil10/Heroes-Lore-Recomp/actions/workflows/build.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/davidkalil10/Heroes-Lore-Recomp?color=blue&label=Latest%20Release)](https://github.com/davidkalil10/Heroes-Lore-Recomp/releases)
+[![Language](https://img.shields.io/badge/Language-C%2B%2B17-blue.svg)](https://en.cppreference.com/w/cpp/17)
+[![Game Lang](https://img.shields.io/badge/Game%20Lang-Portugu%C3%AAs--BR%20(Open%20Mind%20v0.0.2)-yellow.svg)]()
 [![Status](https://img.shields.io/badge/Status-100%25%20Playable%20%26%20Save%20Working-brightgreen.svg)]()
-[![Language](https://img.shields.io/badge/Game%20Lang-Portugu%C3%AAs--BR-yellow.svg)]()
 
 Port nativo, determinístico e de alta performance do lendário RPG J2ME **Heroes Lore: Wind of Soltia** (*Hands-On Mobile / EA Mobile*), baseado na versão oficial brasileira de resolução 240x320.
 
-Diferente de remakes feitos "no olhômetro", este projeto executa o **bytecode original decompilado e reinterpretado diretamente em C++17** com uma camada de abstração fina para MIDP 2.0 / LCDUI / RMS sobre SDL2, preservando com precisão absoluta cada fórmula de dano, status, comportamento de IA, diálogos, tabelas de eventos e taxas de drop.
+Diferente de remakes feitos "no olhômetro", este projeto executa o **bytecode original decompilado e reinterpretado diretamente em C++17** com uma camada de abstração fina para MIDP 2.0 / LCDUI / RMS sobre SDL2, preservando com precisão matemática absoluta cada fórmula de dano, atributos, comportamento de IA, diálogos, tabelas de eventos e taxas de drop.
 
 ---
 
-## 🌟 Destaques
+## 📥 Downloads & Plataformas Suportadas
 
-- **Fidelidade Matemática e Lógica 1:1:** O jogo roda a partir dos binários `.class` originais do JAR, garantindo que a física, colisões, progressão de nível e IA de chefes sejam idênticos ao hardware original.
-- **Renderização Pixel-Perfect com Direct3D 11:** Resolução nativa de 240x320 renderizada via hardware com integer scaling, preservando a estética pixel-art original sem borrões ou distorções de aspecto.
-- **Persistência Completa (Save & Load):** Suporte nativo ao subsistema de RMS (*Record Management System*) com gravação e leitura em tempo real dos 3 slots de personagens (`_k`, `_s`, `_w`) e estado global (`_o`) na pasta `data/rms/`.
-- **Áudio de Baixa Latência:** Efeitos sonoros e trilha musical executados nativamente via SDL2_mixer / WASAPI.
-- **Controles de PC Modernizados:** Mapeamento ergonômico no teclado com suporte tanto ao padrão WASD/Espaço quanto ao teclado numérico clássico dos celulares J2ME.
-- **Portabilidade Standalone:** O executável `heroes_lore.exe` é totalmente autônomo com todas as dependências de DLLs incluídas no diretório de build.
+Os binários compilados oficiais e prontos para jogar de cada plataforma estão disponíveis na aba **[Releases](https://github.com/davidkalil10/Heroes-Lore-Recomp/releases)**:
+
+| Plataforma | Formato | Tamanho | Como Jogar |
+| :--- | :--- | :--- | :--- |
+| 🎮 **Nintendo Switch** | `.nro` | ~7 MB | Copie `heroes_lore.nro` para `/switch/heroes_lore/` no cartão SD e abra via Homebrew Menu. |
+| 🪟 **Windows x64** | `.zip` | ~12 MB | Baixe `heroes_lore_windows_x64.zip`, extraia e dê dois cliques em `heroes_lore.exe` (portátil, com DLLs e assets inclusos). |
+| 🐧 **Linux / Steam Deck** | `.AppImage` | ~14 MB | Dê permissão com `chmod +x heroes_lore_linux_x86_64.AppImage` e execute com dois cliques ou terminal. |
+| 📱 **Android** | `.apk` | ~2.5 MB | Instale `heroes_lore_android_arm64.apk` (smartphones modernos) ou `heroes_lore_android_universal.apk`. |
+
+---
+
+## 🌟 Destaques do Projeto
+
+- **Fidelidade Matemática e Lógica 1:1:** O jogo executa a partir dos binários `.class` originais do JAR, garantindo que a física, colisões, progressão de nível e IA de chefes sejam idênticos ao jogo original de celular.
+- **Renderização Pixel-Perfect com Integer Scaling:** Resolução clássica de 240x320 apresentada de forma nítida em qualquer monitor ou tela de alta resolução (Full HD, 4K, 720p), preservando o pixel-art original sem borrões.
+- **Sintetizador MIDI Nativo de Alta Fidelidade:** Trilhas sonoras e efeitos MIDI executados em tempo real utilizando TinySoundFont (`tsf`) com o banco orquestrado SoundFont TimGM6mb embutido.
+- **Persistência Completa (Save & Load):** Suporte nativo ao subsistema J2ME RMS (*Record Management System*) com gravação e leitura em tempo real dos 3 slots de personagens (`_k`, `_s`, `_w`) e estado global (`_o`).
+- **Controles Modernizados:** Suporte plug-and-play para controles de Xbox, PlayStation, Switch Pro Controller, teclado de PC (WASD + Espaço ou Teclado Numérico) e touchscreen capacitivo.
+- **Vibração Háptica (Rumble):** Feedback de impacto nos ataques e habilidades em controles compatíveis (Joy-Cons, DualSense, Xbox Controller).
 
 ---
 
 ## 🎮 Controles no Teclado e Gamepad
 
-O mapeamento foi planejado com ergonomia moderna para PC (teclado e controles USB/Bluetooth) e também suporte clássico ao teclado numérico dos celulares:
+O mapeamento foi planejado com ergonomia moderna para controles USB/Bluetooth e teclado, mantendo também atalhos para os números clássicos do teclado do celular:
 
-### ⌨️ Teclado
+### 🕹️ Gamepad (Xbox, PlayStation, Switch Pro, 8BitDo, Steam Deck)
+
+| Ação no Jogo | Controle Xbox / Steam Deck | Controle PlayStation | Controle Switch Pro / Joy-Con |
+| :--- | :--- | :--- | :--- |
+| **Movimentação (360° Contínua)** | <kbd>D-Pad</kbd> ou <kbd>Analógico Esquerdo</kbd> | <kbd>D-Pad</kbd> ou <kbd>Analógico Esquerdo</kbd> | <kbd>D-Pad</kbd> ou <kbd>Analógico Esquerdo</kbd> |
+| **Atacar (Arma) / Confirmar ('5')** | <kbd>A</kbd> | <kbd>✕</kbd> | <kbd>A</kbd> |
+| **Status / Cancelar (RSK)** | <kbd>B</kbd> | <kbd>○</kbd> | <kbd>B</kbd> |
+| **Menu Principal / Inventário (CLR)** | <kbd>Start</kbd> | <kbd>Options</kbd> | <kbd>+</kbd> |
+| **Abrir / Fechar Minimapa ('0')** | <kbd>Select</kbd> / <kbd>Back</kbd> / <kbd>L3</kbd> | <kbd>Share</kbd> / <kbd>Touchpad</kbd> / <kbd>L3</kbd> | <kbd>R3</kbd> |
+| **Ataque 1 do Guardião ('1')** | <kbd>X</kbd> | <kbd>□</kbd> | <kbd>X</kbd> |
+| **Ataque 2 do Guardião ('3')** | <kbd>Y</kbd> | <kbd>△</kbd> | <kbd>Y</kbd> |
+| **Ataque Secundário / Habilidade ('7')**| <kbd>LB</kbd> (L1) | <kbd>L1</kbd> | <kbd>L</kbd> |
+| **Usar Poção / Item Rápido ('9')** | <kbd>RB</kbd> (R1) | <kbd>R1</kbd> | <kbd>R</kbd> |
+| **Alternar Poção $\leftarrow$ Anterior**| <kbd>LT</kbd> (Gatilho Esquerdo) | <kbd>L2</kbd> | <kbd>ZL</kbd> |
+| **Alternar Poção $\rightarrow$ Seguinte**| <kbd>RT</kbd> (Gatilho Direito) | <kbd>R2</kbd> | <kbd>ZR</kbd> |
+| **Rotacionar Orientação da Tela** *(Switch)*| — | — | <kbd>-</kbd> (Minus) |
+| **Ocultar / Reexibir Botões Virtuais** *(Switch)*| — | — | <kbd>L3</kbd> |
+| **Vibração / Haptics** | Rumble em combate | Rumble em combate | Rumble em combate |
+
+---
+
+### ⌨️ Teclado de Computador (PC / Linux)
 
 | Ação no Jogo | Teclas Modernas (PC) | Teclado Numérico (J2ME) | Tecla Original |
 | :--- | :--- | :--- | :--- |
-| **Mover para Cima** | <kbd>W</kbd> ou <kbd>↑</kbd> (Seta Cima) | <kbd>Num 2</kbd> | `UP` / `2` |
-| **Mover para Baixo** | <kbd>S</kbd> ou <kbd>↓</kbd> (Seta Baixo) | <kbd>Num 8</kbd> | `DOWN` / `8` |
-| **Mover para a Esquerda** | <kbd>A</kbd> ou <kbd>←</kbd> (Seta Esquerda) | <kbd>Num 4</kbd> | `LEFT` / `4` |
-| **Mover para a Direita** | <kbd>D</kbd> ou <kbd>→</kbd> (Seta Direita) | <kbd>Num 6</kbd> | `RIGHT` / `6` |
+| **Mover para Cima** | <kbd>W</kbd> ou <kbd>↑</kbd> | <kbd>Num 2</kbd> | `UP` / `2` |
+| **Mover para Baixo** | <kbd>S</kbd> ou <kbd>↓</kbd> | <kbd>Num 8</kbd> | `DOWN` / `8` |
+| **Mover para a Esquerda** | <kbd>A</kbd> ou <kbd>←</kbd> | <kbd>Num 4</kbd> | `LEFT` / `4` |
+| **Mover para a Direita** | <kbd>D</kbd> ou <kbd>→</kbd> | <kbd>Num 6</kbd> | `RIGHT` / `6` |
 | **Atacar (Arma) / Confirmar / Interagir** | <kbd>Espaço</kbd>, <kbd>Enter</kbd>, <kbd>J</kbd>, <kbd>Z</kbd> | <kbd>Num 5</kbd> | `FIRE` / `5` |
 | **Menu Principal / Inventário** | <kbd>Tab</kbd>, <kbd>Esc</kbd>, <kbd>F1</kbd> | — | `CLR` (-8) |
 | **Status / Cancelar / Fechar** | <kbd>F2</kbd>, <kbd>Backspace</kbd> | — | `RSK` (-7) |
@@ -47,141 +81,119 @@ O mapeamento foi planejado com ergonomia moderna para PC (teclado e controles US
 | **Abrir/Fechar Minimapa** | <kbd>M</kbd>, <kbd>R</kbd>, <kbd>O</kbd> ou <kbd>0</kbd> | <kbd>Num 0</kbd> | `0` |
 | **Atalhos Rápidos** | <kbd>*</kbd> | <kbd>*</kbd> (Numpad) | `*` |
 
-### 🕹️ Gamepad (Xbox, PlayStation, Switch Pro, 8BitDo)
+---
 
-| Ação no Jogo | Controle Xbox / Genérico | Controle PlayStation | Controle Switch Pro |
-| :--- | :--- | :--- | :--- |
-| **Movimentação (360° Contínua)** | <kbd>D-Pad</kbd> ou <kbd>Analógico Esquerdo</kbd> | <kbd>D-Pad</kbd> ou <kbd>Analógico Esquerdo</kbd> | <kbd>D-Pad</kbd> ou <kbd>Analógico Esquerdo</kbd> |
-| **Atacar (Arma) / Confirmar ('5')** | <kbd>A</kbd> | <kbd>✕</kbd> | <kbd>B</kbd> |
-| **Status / Cancelar (RSK)** | <kbd>B</kbd> | <kbd>○</kbd> | <kbd>A</kbd> |
-| **Menu Principal / Inventário** | <kbd>Start</kbd> | <kbd>Options</kbd> | <kbd>+</kbd> |
-| **Abrir / Fechar Minimapa ('0')** | <kbd>Select</kbd> / <kbd>Back</kbd> / <kbd>L3</kbd> | <kbd>Share</kbd> / <kbd>Touchpad</kbd> / <kbd>L3</kbd> | <kbd>-</kbd> / <kbd>L3</kbd> |
-| **Ataque 1 do Guardião ('1')** | <kbd>X</kbd> | <kbd>□</kbd> | <kbd>Y</kbd> |
-| **Ataque 2 do Guardião ('3')** | <kbd>Y</kbd> | <kbd>△</kbd> | <kbd>X</kbd> |
-| **Ataque Secundário / Habilidade ('7')**| <kbd>LB</kbd> (L1) | <kbd>L1</kbd> | <kbd>L</kbd> |
-| **Usar Poção / Item Rápido ('9')** | <kbd>RB</kbd> (R1) | <kbd>R1</kbd> | <kbd>R</kbd> |
-| **Alternar Poção $\leftarrow$ Anterior**| <kbd>LT</kbd> (Gatilho Esquerdo) | <kbd>L2</kbd> | <kbd>ZL</kbd> |
-| **Alternar Poção $\rightarrow$ Seguinte**| <kbd>RT</kbd> (Gatilho Direito) / <kbd>R3</kbd> | <kbd>R2</kbd> / <kbd>R3</kbd> | <kbd>ZR</kbd> / <kbd>R3</kbd> |
-| **Vibração / Haptics** | Suporte a rumble em combate | Suporte a rumble em combate | Suporte a rumble em combate |
+## 🕹️ Funcionalidades Específicas por Plataforma
+
+### 🎮 Nintendo Switch (.nro Homebrew)
+- **Instalação:** Copie `heroes_lore.nro` para `sdmc:/switch/heroes_lore/heroes_lore.nro` no seu Switch desbloqueado (Atmosphere).
+- **3 Modos de Rotação da Tela (Orientação Dinâmica):**
+  - **Modo 0 (Paisagem Padrão - 1280x720):** Jogo centralizado na proporção clássica 240x320 com barras decorativas laterais.
+  - **Modo 1 (Retrato 90° Horário):** Segure o console na vertical como um smartphone gigante.
+  - **Modo 2 (Retrato 270° Anti-horário / Flip Grip):** Otimizado especialmente para acessórios como o **Flip Grip**, posicionando os Joy-Cons confortavelmente nas laterais.
+- **Alternar Orientação:** Pressione <kbd>-</kbd> (Minus) a qualquer momento para ciclar entre os modos.
+- **Ocultar/Reexibir Botões Virtuais:** Pressione <kbd>L3</kbd> (pressionar o analógico esquerdo).
+- **Touchscreen Capacitivo:** Toques na tela capacitiva do Switch são mapeados matematicamente em 1:1, mesmo com a tela rotacionada.
+
+### 🐧 Linux & Steam Deck (.AppImage)
+- **Execução Direta:** Pacote AppImage portátil que não requer instalação de dependências:
+  ```bash
+  chmod +x heroes_lore_linux_x86_64.AppImage
+  ./heroes_lore_linux_x86_64.AppImage
+  ```
+- **Steam Deck (SteamOS):** No modo Desktop, adicione o arquivo como "Jogo não-Steam" à sua biblioteca. O jogo roda diretamente no modo Gaming com suporte completo aos controles embutidos do portátil!
+
+### 📱 Android (APK Nativo Standalone)
+- **Instalação Direta:** Baixe o APK release da seção de Releases e instale no seu celular ou tablet.
+- **Controles na Tela:** D-Pad virtual analógico e botões de ação com feedback tátil e suporte a multitoque suave.
+- **Controles Bluetooth/USB:** Plug-and-play imediato com controles de Xbox, PlayStation, Gamesir e Razer Kishi.
 
 ---
 
 ## 🏗️ Arquitetura do Projeto
 
-O projeto é dividido em camadas modulares para facilitar futuras compilações em outras plataformas (como WebAssembly/Emscripten, Android, Linux e Nintendo Switch):
+O código-fonte foi estruturado de forma desacoplada em módulos nativos limpos:
 
 ```
 heroes_lore_recomp/
 ├── src/
 │   ├── vm/                     # Motor de Execução JVM / CLDC 1.1 em C++17
-│   │   ├── vm.h / vm.cpp       # Gerenciamento de classes, GC com tracing de raízes, GIL
-│   │   ├── interp.cpp          # Interpretador de bytecodes otimizado (sem wide/float)
-│   │   ├── classfile.cpp       # Parser binário de arquivos .class Java
-│   │   └── natives.cpp         # Implementação de java/lang, java/io e java/util
+│   │   ├── vm.h / vm.cpp       # Gerenciamento de classes, pool de constantes, GC com tracing de raízes
+│   │   ├── interp.cpp          # Interpretador de bytecodes otimizado (focado nas instruções do jogo)
+│   │   └── natives.cpp         # Implementação das APIs nativas de java/lang, java/io e java/util
 │   ├── midp/                   # Emulação da camada J2ME MIDP 2.0
-│   │   ├── midp.h / midp.cpp   # Displayable, Canvas, Graphics, Image e RecordStore (RMS)
+│   │   ├── midp.h / midp.cpp   # Displayable, Canvas, Graphics 2D, Image e RecordStore (RMS)
 │   │   └── stb_image.h         # Decodificação de imagens PNG e texturas
 │   ├── platform/               # Camada de Plataforma (Hardware Abstraction Layer)
 │   │   ├── platform.h          # Interface de janela, loop de eventos e áudio
-│   │   └── platform_sdl.cpp    # Backend SDL2 com Direct3D 11 e WASAPI
+│   │   ├── platform_sdl.cpp    # Backend SDL2 com renderização acelerada, escala e entrada
+│   │   ├── midi_synth.h        # Interface do sintetizador de áudio
+│   │   └── midi_synth.cpp      # Sintetizador MIDI com TinySoundFont (TSF) + TinyMidiLoader (TML)
 │   └── main.cpp                # Ponto de entrada, boot do GameMIDlet e loop principal
 ├── reference/
-│   ├── extracted/              # Assets extraídos do JAR (paletas, fontes, mapas, sons)
-│   ├── decompiled_cfr/         # 90 classes originais decompiladas com CFR
+│   ├── extracted/              # Assets extraídos do JAR (paletas, fontes, mapas, sons, classes)
+│   ├── decompiled_cfr/         # 90 classes originais decompiladas com CFR para auditoria
 │   └── javap/                  # Bytecode original desmontado com javap
-├── tests/
-│   └── test_stream_rms.cpp     # Teste unitário automatizado de streams e persistência RMS
-├── docs/                       # Documentação técnica, engenharia reversa e learnings
+├── dist_linux/                 # Metadados de desktop, ícones e AppRun para empacotamento Linux
+├── switch/                     # Ícone oficial e assets específicos do Nintendo Switch
+├── android/                    # Projeto Gradle + NDK para compilação do APK Android
+├── tools/                      # Scripts auxiliares de empacotamento, créditos e RomFS
+├── docs/                       # Documentação técnica detalhada, mapa de classes e learnings
 └── CMakeLists.txt              # Configuração de build moderna para CMake e Ninja
 ```
 
 ---
 
-## ⚙️ Compilação e Execução
+## ⚙️ Como Compilar o Projeto
 
-### Pré-requisitos (Windows)
-Recomenda-se o ambiente **MSYS2 UCRT64** com os seguintes pacotes instalados:
-- `gcc` / `g++` (suporte a C++17)
-- `cmake` (>= 3.20)
-- `ninja`
-- `mingw-w64-ucrt-x86_64-SDL2`
-- `mingw-w64-ucrt-x86_64-SDL2_mixer`
+O projeto utiliza um pipeline unificado no GitHub Actions que compila automaticamente todas as plataformas a cada push ou tag. Se preferir compilar localmente:
 
-### Compilando via Terminal
-
-1. Abra o terminal (PowerShell ou Prompt de Comando) e adicione o compilador UCRT64 ao PATH:
+### 🪟 Windows (MSYS2 UCRT64)
 ```powershell
-$env:Path = "C:\msys64\ucrt64\bin;$env:Path"
-```
-
-2. Configure e compile o projeto com CMake:
-```powershell
+# Pré-requisitos: pacotes mingw-w64-ucrt-x86_64-gcc, cmake, ninja, SDL2 e SDL2_mixer
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release
-```
-
-3. Execute o jogo:
-```powershell
+cmake --build build
 .\build\heroes_lore.exe
 ```
 
-> **Nota:** As DLLs necessárias (`SDL2.dll`, `SDL2_mixer.dll`, bibliotecas do GCC e codecs de áudio) são copiadas automaticamente para a pasta `build/` no pós-build do CMake. Você pode rodar o jogo diretamente dando dois cliques em `heroes_lore.exe` dentro da pasta `build`.
+### 🐧 Linux (Ubuntu / Debian / Arch / Fedora)
+```bash
+# Pré-requisitos: build-essential, cmake, ninja-build, libsdl2-dev, libsdl2-mixer-dev, pkg-config
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+python3 tools/prepare_appimage.py
+```
 
----
+### 🎮 Nintendo Switch (devkitA64 + libnx)
+```bash
+python3 tools/prepare_switch_romfs.py
+make -f Makefile.switch
+# Gera: heroes_lore.nro
+```
 
-## 📱 Versão Nativa Android (APK Standalone)
-
-O jogo conta com port nativo standalone em **C++17 + SDL2** compilado para Android, sem necessidade de emuladores ou Winlator!
-
-### 📥 Instalação Direta
-Os APKs compilados com **Split per ABI** encontram-se em `bin/`:
-- **`bin/heroes_lore-arm64-v8a.apk`** (ou `bin/heroes_lore.apk`): **~2.35 MB** — Versão nativa pura de 64-bit (`arm64-v8a`), recomendada para todos os smartphones modernos!
-- **`bin/heroes_lore-armeabi-v7a.apk`**: **~2.18 MB** — Versão de 32-bit para aparelhos legados.
-- **`bin/heroes_lore-universal.apk`**: **~3.49 MB** — Versão universal (contém ambas as arquiteturas).
-
-### 🕹️ Controles no Android
-- **Controles por Toque (Touchscreen Multi-touch):**
-  - D-Pad virtual translúcido no canto inferior esquerdo (suporta movimentação contínua a 60 FPS).
-  - Botão de Ataque/Confirmar (<kbd>5</kbd>) e botões de Habilidade (<kbd>1</kbd>, <kbd>3</kbd>), Poção (<kbd>7</kbd>) e Item (<kbd>9</kbd>) no canto inferior direito.
-  - Botões superiores de acesso rápido: <kbd>MENU</kbd> (Menu in-game), <kbd>MAP</kbd> (Mapa mundi) e <kbd>RSK</kbd>.
-  - Alternância rápida de poções: botões <kbd>&lt;</kbd> e <kbd>&gt;</kbd>.
-  - Em telas widescreen no modo paisagem, as barras pretas laterais (letterbox) funcionam como painéis de toque adicionais para os polegares.
-- **Controles Físicos (Bluetooth / USB-C):**
-  - Plug-and-play imediato com controles de Xbox, PlayStation, Gamesir, Razer Kishi, etc., com vibração háptica (rumble).
-
-### 🛠️ Como recompilar o APK (opcional):
-```powershell
+### 📱 Android (Gradle + NDK)
+```bash
 cd android
-.\gradlew.bat assembleDebug
-```
-O APK gerado ficará em `android/app/build/outputs/apk/debug/app-debug.apk`.
-
----
-
-## 🧪 Verificação e Testes Automatizados
-
-O projeto inclui suíte de testes de estresse para validar operações críticas como fluxos de stream polimórficos e persistência binária do RMS:
-
-```powershell
-$env:Path = "C:\msys64\ucrt64\bin;$env:Path"
-g++ -Isrc -Ithird_party -std=gnu++17 tests/test_stream_rms.cpp build/CMakeFiles/heroes_lore.dir/src/midp/midp.cpp.obj build/CMakeFiles/heroes_lore.dir/src/platform/platform_sdl.cpp.obj build/CMakeFiles/heroes_lore.dir/src/vm/interp.cpp.obj build/CMakeFiles/heroes_lore.dir/src/vm/natives.cpp.obj build/CMakeFiles/heroes_lore.dir/src/vm/vm.cpp.obj -lmingw32 -lSDL2main -lSDL2 -lSDL2_mixer -o build/test_stream_rms.exe
-.\build\test_stream_rms.exe
+./gradlew assembleRelease
+# Gera os APKs em android/app/build/outputs/apk/release/
 ```
 
 ---
 
-## 📜 Histórico & Engenharia Reversa
+## 📜 Engenharia Reversa & Documentação Técnica
 
 Para detalhes sobre a engenharia reversa das 90 classes ofuscadas, resolução de colisões de identificadores no carregador de classes e detalhes de implementação do RMS, consulte:
 - [`docs/STATUS.md`](docs/STATUS.md) — Marco atual e checklist de desenvolvimento.
 - [`docs/LEARNINGS.md`](docs/LEARNINGS.md) — Aprendizados técnicos, armadilhas superadas e decisões de arquitetura.
 - [`docs/CLASS_MAP.md`](docs/CLASS_MAP.md) — Mapeamento detalhado das classes do jogo.
 
+---
+
 ## 👥 Créditos & Agradecimentos
 
 - **Port Nativo & Recompilação (Windows, Linux, Android, Nintendo Switch):** [David Kalil Braga](https://github.com/davidkalil10) (2026)
 - **Desenvolvimento Original J2ME:** *Hands-On Mobile* & *Electronic Arts (EA Mobile)*
-- **Tradução Português-BR (J2ME Original):** *Open Mind Team* (Bruno Freire, Bruno Vilhena, John Peres)
+- **Tradução Português-BR (J2ME Original):** *Open Mind Team* (Bruno Freire, Bruno Vilhena, John Peres) — Versão `v.0.0.2` (2008)
 
 ---
 
