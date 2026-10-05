@@ -14,6 +14,7 @@ set(SOURCES
     src/vm/natives.cpp
     src/midp/midp.cpp
     src/platform/platform_sdl.cpp
+    src/platform/midi_synth.cpp
 )
 
 add_executable(heroes_lore ${SOURCES})

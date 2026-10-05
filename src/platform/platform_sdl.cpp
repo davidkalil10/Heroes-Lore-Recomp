@@ -1,5 +1,6 @@
 // platform_sdl.cpp — backend SDL2 com renderização 240x320 escalada, áudio SDL_mixer e mapeamento de teclado
 #include "platform.h"
+#include "midi_synth.h"
 #include "midp/midp.h"
 #include "vm/vm.h"
 
@@ -28,7 +29,13 @@
 #endif
 
 #ifdef __SWITCH__
-#include <switch.h>
+#if defined(__has_include)
+  #if __has_include(<switch.h>)
+    #include <switch.h>
+  #endif
+#else
+  #include <switch.h>
+#endif
 #include <sys/stat.h>
 #endif
 
@@ -88,10 +95,19 @@ static int mapControllerButton(Uint8 btn) {
     case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return -4;
 
     // Botões de Ação Frontais
+#ifdef __SWITCH__
+    // Switch: o SDL usa layout posicional Xbox (A = botão de baixo = "B" do Switch).
+    // Trocamos para seguir os rótulos físicos do Switch: A (direita) confirma, B (baixo) cancela.
+    case SDL_CONTROLLER_BUTTON_B: return 53; // Switch A -> Atacar / Interagir / Confirmar ('5')
+    case SDL_CONTROLLER_BUTTON_A: return -7; // Switch B -> Status / Cancelar (RSK)
+    case SDL_CONTROLLER_BUTTON_Y: return 49; // Switch X (topo) -> Ataque 1 do Guardião ('1')
+    case SDL_CONTROLLER_BUTTON_X: return 51; // Switch Y (esquerda) -> Ataque 2 do Guardião ('3')
+#else
     case SDL_CONTROLLER_BUTTON_A: return 53; // A (Xbox) / X (PS) -> Atacar com Arma / Interagir / Confirmar ('5')
     case SDL_CONTROLLER_BUTTON_B: return -7; // B (Xbox) / O (PS) -> Status / Cancelar (RSK)
     case SDL_CONTROLLER_BUTTON_X: return 49; // X (Xbox) / Quad (PS) -> Ataque 1 do Guardião ('1')
     case SDL_CONTROLLER_BUTTON_Y: return 51; // Y (Xbox) / Tri (PS) -> Ataque 2 do Guardião ('3')
+#endif
 
     // Botões de Ombro (Shoulders)
     case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: return 55;  // L1 -> Ataque Secundário / Habilidade ('7')
@@ -131,6 +147,7 @@ bool Platform::init(int scale) {
     fprintf(stderr, "Aviso: Mixer audio não inicializou: %s\n", Mix_GetError());
   } else {
     Mix_AllocateChannels(16);
+    MidiSynth::init();
   }
 
 #ifdef __SWITCH__
@@ -285,10 +302,19 @@ static SDL_Texture* s_texBtnPrev = nullptr;
 static SDL_Texture* s_texBtnNext = nullptr;
 static SDL_Texture* s_texBtnEyeOpen = nullptr;
 static SDL_Texture* s_texBtnEyeClosed = nullptr;
+static SDL_Texture* s_texBtnRotate = nullptr;
 static SDL_Texture* s_texBtnGlow = nullptr;
 static bool s_gamepadTexturesLoaded = false;
 
 static const int KEY_TOGGLE_TOUCH_UI = -999;
+static const int KEY_TOGGLE_ORIENTATION = -998;
+
+// Orientação de tela no Switch:
+// 0 = Paisagem horizontal normal (1280x720)
+// 1 = Retrato vertical (TATE 90° CW, 720x1280)
+// 2 = Retrato vertical invertido (TATE 270° CCW / Flip Grip, 720x1280)
+static int s_screenRotation = 0;
+static SDL_Texture* s_rotateTarget = nullptr;
 
 struct ActiveFinger {
   SDL_FingerID id;
@@ -345,6 +371,7 @@ static void loadGamepadTextures() {
   s_texBtnNext = loadRgbaTexture("btn_next");
   s_texBtnEyeOpen = loadRgbaTexture("btn_eye_open");
   s_texBtnEyeClosed = loadRgbaTexture("btn_eye_closed");
+  s_texBtnRotate = loadRgbaTexture("btn_rotate");
   s_texBtnGlow = loadRgbaTexture("btn_glow");
   s_gamepadTexturesLoaded = true;
 }
@@ -389,6 +416,13 @@ static GamepadLayout calculateLayout(int winW, int winH) {
     int toggleY = winH - (int)(winW * 0.09f);
     layout.buttons.push_back({ KEY_TOGGLE_TOUCH_UI, toggleX, toggleY, rToggle, rToggle * 2, rToggle * 2,
                                s_touchOverlayEnabled ? s_texBtnEyeOpen : s_texBtnEyeClosed });
+
+#ifdef __SWITCH__
+    // Botão de Alternar Orientação (ao lado do olho)
+    int rotX = toggleX + (int)(rToggle * 2.3f);
+    int rotY = toggleY;
+    layout.buttons.push_back({ KEY_TOGGLE_ORIENTATION, rotX, rotY, rToggle, rToggle * 2, rToggle * 2, s_texBtnRotate });
+#endif
 
     if (s_touchOverlayEnabled) {
       // D-Pad e Cluster de Ação subidos para winW * 0.42f (ergonomia perfeita e abre espaço inferior limpo)
@@ -449,6 +483,13 @@ static GamepadLayout calculateLayout(int winW, int winH) {
     int toggleY = winH - (int)(winH * 0.12f);
     layout.buttons.push_back({ KEY_TOGGLE_TOUCH_UI, toggleX, toggleY, rToggleLand, rToggleLand * 2, rToggleLand * 2,
                                s_touchOverlayEnabled ? s_texBtnEyeOpen : s_texBtnEyeClosed });
+
+#ifdef __SWITCH__
+    // Botão de Alternar Orientação (ao lado do olho na coluna esquerda)
+    int rotX = toggleX + (int)(rToggleLand * 2.3f);
+    int rotY = toggleY;
+    layout.buttons.push_back({ KEY_TOGGLE_ORIENTATION, rotX, rotY, rToggleLand, rToggleLand * 2, rToggleLand * 2, s_texBtnRotate });
+#endif
 
     if (s_touchOverlayEnabled) {
       // D-Pad na coluna esquerda (grande e confortável)
@@ -578,7 +619,7 @@ static void drawGamepad(const GamepadLayout& layout) {
     if (!b.tex) continue;
     bool isHeld = isTouchKeyHeld(b.key);
     
-    if (b.key == KEY_TOGGLE_TOUCH_UI) {
+    if (b.key == KEY_TOGGLE_TOUCH_UI || b.key == KEY_TOGGLE_ORIENTATION) {
       Uint8 alpha = isHeld ? 255 : (s_touchOverlayEnabled ? 150 : 110);
       SDL_SetTextureAlphaMod(b.tex, alpha);
     } else {
@@ -638,6 +679,28 @@ static void cyclePotionNext(VM& vm) {
     } catch (...) {}
     vm.gilUnlock();
   }
+}
+
+static void getTouchCoords(const SDL_TouchFingerEvent& tf, int winW, int winH, float& outX, float& outY, int& outW, int& outH) {
+#ifdef __SWITCH__
+  if (s_screenRotation == 1) { // 90° CW
+    outW = 720;
+    outH = 1280;
+    outX = tf.y * 720.0f;
+    outY = (1.0f - tf.x) * 1280.0f;
+    return;
+  } else if (s_screenRotation == 2) { // 270° CCW / Flip Grip
+    outW = 720;
+    outH = 1280;
+    outX = (1.0f - tf.y) * 720.0f;
+    outY = tf.x * 1280.0f;
+    return;
+  }
+#endif
+  outW = winW;
+  outH = winH;
+  outX = tf.x * winW;
+  outY = tf.y * winH;
 }
 
 bool Platform::pollEvents(VM& vm) {
@@ -867,9 +930,10 @@ bool Platform::pollEvents(VM& vm) {
       int winW = 0, winH = 0;
       SDL_GetRendererOutputSize(s_renderer, &winW, &winH);
       if (winW <= 0 || winH <= 0) SDL_GetWindowSize(s_window, &winW, &winH);
-      float touchX = ev.tfinger.x * winW;
-      float touchY = ev.tfinger.y * winH;
-      GamepadLayout layout = calculateLayout(winW, winH);
+      float touchX = 0, touchY = 0;
+      int layoutW = 0, layoutH = 0;
+      getTouchCoords(ev.tfinger, winW, winH, touchX, touchY, layoutW, layoutH);
+      GamepadLayout layout = calculateLayout(layoutW, layoutH);
 
       int key = hitTestTouch(touchX, touchY, layout);
       if (key == KEY_TOGGLE_TOUCH_UI) {
@@ -889,6 +953,9 @@ bool Platform::pollEvents(VM& vm) {
           s_activeFingers.clear();
         }
         Platform::rumble(0.20f, 40);
+      } else if (key == KEY_TOGGLE_ORIENTATION) {
+        s_screenRotation = (s_screenRotation + 1) % 3;
+        Platform::rumble(0.25f, 50);
       } else if (key != 0 && s_touchOverlayEnabled) {
         s_activeFingers.push_back({ev.tfinger.fingerId, key});
         if (key == -101) {
@@ -925,14 +992,15 @@ bool Platform::pollEvents(VM& vm) {
       int winW = 0, winH = 0;
       SDL_GetRendererOutputSize(s_renderer, &winW, &winH);
       if (winW <= 0 || winH <= 0) SDL_GetWindowSize(s_window, &winW, &winH);
-      float touchX = ev.tfinger.x * winW;
-      float touchY = ev.tfinger.y * winH;
-      GamepadLayout layout = calculateLayout(winW, winH);
+      float touchX = 0, touchY = 0;
+      int layoutW = 0, layoutH = 0;
+      getTouchCoords(ev.tfinger, winW, winH, touchX, touchY, layoutW, layoutH);
+      GamepadLayout layout = calculateLayout(layoutW, layoutH);
 
       for (auto& f : s_activeFingers) {
         if (f.id == ev.tfinger.fingerId) {
           int newKey = hitTestTouch(touchX, touchY, layout);
-          if (newKey == KEY_TOGGLE_TOUCH_UI) newKey = 0;
+          if (newKey == KEY_TOGGLE_TOUCH_UI || newKey == KEY_TOGGLE_ORIENTATION) newKey = 0;
           if (newKey != f.key) {
             int oldKey = f.key;
             f.key = newKey;
@@ -1097,32 +1165,44 @@ void Platform::present() {
 
   loadGamepadTextures();
 
+#ifdef __SWITCH__
+  if (s_screenRotation != 0) {
+    if (!s_rotateTarget) {
+      s_rotateTarget = SDL_CreateTexture(
+          s_renderer,
+          SDL_PIXELFORMAT_RGBA8888,
+          SDL_TEXTUREACCESS_TARGET,
+          720, 1280);
+    }
+    if (s_rotateTarget) {
+      SDL_SetRenderTarget(s_renderer, s_rotateTarget);
+      SDL_SetRenderDrawColor(s_renderer, 10, 12, 16, 255);
+      SDL_RenderClear(s_renderer);
+
+      GamepadLayout layout = calculateLayout(720, 1280);
+      SDL_RenderCopy(s_renderer, s_screenTexture, nullptr, &layout.gameRect);
+      drawGamepad(layout);
+
+      SDL_SetRenderTarget(s_renderer, nullptr);
+      SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, 255);
+      SDL_RenderClear(s_renderer);
+
+      double angle = (s_screenRotation == 1) ? 90.0 : 270.0;
+      SDL_Rect dstRect = { 280, -280, 720, 1280 };
+      SDL_RenderCopyEx(s_renderer, s_rotateTarget, nullptr, &dstRect, angle, nullptr, SDL_FLIP_NONE);
+      SDL_RenderPresent(s_renderer);
+      return;
+    }
+  }
+#endif
+
   SDL_SetRenderDrawColor(s_renderer, 10, 12, 16, 255);
   SDL_RenderClear(s_renderer);
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(__SWITCH__)
   GamepadLayout layout = calculateLayout(winW, winH);
   SDL_RenderCopy(s_renderer, s_screenTexture, nullptr, &layout.gameRect);
   drawGamepad(layout);
-#elif defined(__SWITCH__)
-  if (s_touchOverlayEnabled) {
-    GamepadLayout layout = calculateLayout(winW, winH);
-    SDL_RenderCopy(s_renderer, s_screenTexture, nullptr, &layout.gameRect);
-    drawGamepad(layout);
-  } else {
-    // Modo Switch: tela 1280x720 / 1080p, jogo centralizado 240:320
-    float scaleX = (float)winW / 240.0f;
-    float scaleY = (float)winH / 320.0f;
-    float scale = std::min(scaleX, scaleY);
-    int dstW = (int)(240.0f * scale);
-    int dstH = (int)(320.0f * scale);
-    SDL_Rect dstGame = { (winW - dstW) / 2, (winH - dstH) / 2, dstW, dstH };
-    SDL_RenderCopy(s_renderer, s_screenTexture, nullptr, &dstGame);
-
-    // No Switch, desenha o botão discreto do olho para permitir ativar touch se estiver em modo portátil sem Joy-Cons
-    GamepadLayout layout = calculateLayout(winW, winH);
-    drawGamepad(layout);
-  }
 #else
   if (s_touchOverlayEnabled) {
     GamepadLayout layout = calculateLayout(winW, winH);
@@ -1144,10 +1224,12 @@ void Platform::present() {
 }
 
 void Platform::shutdown() {
+  MidiSynth::shutdown();
   for (auto* pad : s_controllers) {
     if (pad) SDL_GameControllerClose(pad);
   }
   s_controllers.clear();
+  if (s_rotateTarget) { SDL_DestroyTexture(s_rotateTarget); s_rotateTarget = nullptr; }
   if (s_texDpadBase) { SDL_DestroyTexture(s_texDpadBase); s_texDpadBase = nullptr; }
   if (s_texDpadArrowActive) { SDL_DestroyTexture(s_texDpadArrowActive); s_texDpadArrowActive = nullptr; }
   if (s_texBtn5) { SDL_DestroyTexture(s_texBtn5); s_texBtn5 = nullptr; }
@@ -1162,6 +1244,7 @@ void Platform::shutdown() {
   if (s_texBtnNext) { SDL_DestroyTexture(s_texBtnNext); s_texBtnNext = nullptr; }
   if (s_texBtnEyeOpen) { SDL_DestroyTexture(s_texBtnEyeOpen); s_texBtnEyeOpen = nullptr; }
   if (s_texBtnEyeClosed) { SDL_DestroyTexture(s_texBtnEyeClosed); s_texBtnEyeClosed = nullptr; }
+  if (s_texBtnRotate) { SDL_DestroyTexture(s_texBtnRotate); s_texBtnRotate = nullptr; }
   if (s_texBtnGlow) { SDL_DestroyTexture(s_texBtnGlow); s_texBtnGlow = nullptr; }
   s_gamepadTexturesLoaded = false;
   if (s_screenTexture) { SDL_DestroyTexture(s_screenTexture); s_screenTexture = nullptr; }

@@ -36,6 +36,9 @@ def prepare_romfs():
         if os.path.exists("assets/ui"):
             print("[RomFS] Copiando assets/ui para romfs/ui...")
             shutil.copytree("assets/ui", os.path.join(romfs_dir, "ui"), dirs_exist_ok=True)
+        if os.path.exists("assets/soundfont"):
+            print("[RomFS] Copiando assets/soundfont para romfs/soundfont...")
+            shutil.copytree("assets/soundfont", os.path.join(romfs_dir, "soundfont"), dirs_exist_ok=True)
 
     print("[RomFS] Pasta romfs/ gerada com sucesso e pronta para o elf2nro!")
 

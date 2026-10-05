@@ -1,6 +1,7 @@
 // midp.cpp — implementação das APIs J2ME MIDP 2.0 (LCDUI, RecordStore, Audio)
 #include "midp.h"
 #include "../platform/platform.h"
+#include "../platform/midi_synth.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../third_party/stb_image.h"
 
@@ -634,9 +635,16 @@ static void Player_addPlayerListener(VM&, Value*, Value*) {}
 static void Player_close(VM&, Value* args, Value*) {
   PlayerObj* p = static_cast<PlayerObj*>(args[0].o);
   if (p) {
-    if (p->handle) {
-      if (p->isMusic) Mix_HaltMusic();
-      else Mix_HaltChannel(-1);
+    if (p->isMusic) {
+      MidiSynth::stop();
+      if (p->handle) {
+        Mix_FreeMusic((Mix_Music*)p->handle);
+        p->handle = nullptr;
+      }
+    } else if (p->handle) {
+      Mix_HaltChannel(-1);
+      Mix_FreeChunk((Mix_Chunk*)p->handle);
+      p->handle = nullptr;
     }
     p->state = 0;
   }
@@ -658,14 +666,25 @@ static void Player_realize(VM&, Value* args, Value*) {
   if (p->state < 200) {
     p->state = 200;
     if (!p->data.empty() && !p->handle) {
-      if (p->type.find("midi") != std::string::npos || p->type.find(".mid") != std::string::npos) {
+      bool isMidi = (p->type.find("midi") != std::string::npos ||
+                     p->type.find(".mid") != std::string::npos);
+      if (!isMidi && p->data.size() >= 4) {
+        if (p->data[0] == 'M' && p->data[1] == 'T' && p->data[2] == 'h' && p->data[3] == 'd') {
+          isMidi = true;
+        }
+      }
+      if (isMidi) {
+        p->isMusic = true;
         SDL_RWops* rw = SDL_RWFromConstMem(p->data.data(), (int)p->data.size());
         p->handle = Mix_LoadMUS_RW(rw, 1);
-        p->isMusic = true;
+        boot_log("[Audio] Carregado MIDI %s (%zu bytes, Mix_LoadMUS=%p)\n",
+                 p->type.c_str(), p->data.size(), p->handle);
       } else {
         SDL_RWops* rw = SDL_RWFromConstMem(p->data.data(), (int)p->data.size());
         p->handle = Mix_LoadWAV_RW(rw, 1);
         p->isMusic = false;
+        if (!p->handle) boot_log("[Audio] Falha ao carregar WAV %s (%zu bytes): %s\n",
+                                 p->type.c_str(), p->data.size(), Mix_GetError());
       }
     }
   }
@@ -680,21 +699,25 @@ static void Player_start(VM&, Value* args, Value*) {
   PlayerObj* p = static_cast<PlayerObj*>(args[0].o);
   if (!p) return;
   p->state = 400;
-  if (p->handle) {
-    if (p->isMusic) {
-      Mix_PlayMusic((Mix_Music*)p->handle, (p->loopCount == -1) ? -1 : p->loopCount);
-    } else {
-      Mix_PlayChannel(-1, (Mix_Chunk*)p->handle, (p->loopCount == -1) ? -1 : 0);
+  if (p->isMusic) {
+    if (!MidiSynth::play(p->data.data(), p->data.size(), (p->loopCount == -1) ? -1 : p->loopCount)) {
+      if (p->handle) {
+        Mix_PlayMusic((Mix_Music*)p->handle, (p->loopCount == -1) ? -1 : p->loopCount);
+      }
     }
+  } else if (p->handle) {
+    Mix_PlayChannel(-1, (Mix_Chunk*)p->handle, (p->loopCount == -1) ? -1 : 0);
   }
 }
 
 static void Player_stop(VM&, Value* args, Value*) {
   PlayerObj* p = static_cast<PlayerObj*>(args[0].o);
   if (p) {
-    if (p->handle) {
-      if (p->isMusic) Mix_HaltMusic();
-      else Mix_HaltChannel(-1);
+    if (p->isMusic) {
+      MidiSynth::stop();
+      if (p->handle) Mix_HaltMusic();
+    } else if (p->handle) {
+      Mix_HaltChannel(-1);
     }
     p->state = 300;
   }
@@ -719,8 +742,12 @@ static void VolumeControl_setLevel(VM&, Value* args, Value* ret) {
   if (vc && vc->player) {
     vc->player->volume = level;
     int sdlVol = (level * MIX_MAX_VOLUME) / 100;
-    if (vc->player->isMusic) Mix_VolumeMusic(sdlVol);
-    else Mix_Volume(-1, sdlVol);
+    if (vc->player->isMusic) {
+      if (vc->player->handle) Mix_VolumeMusic(sdlVol);
+      MidiSynth::setVolume(level);
+    } else {
+      Mix_Volume(-1, sdlVol);
+    }
   }
   ret[0].i = level;
 }

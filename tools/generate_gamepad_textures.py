@@ -321,6 +321,44 @@ def make_eye_icon(final_size=96, closed=False):
 
     return img.resize((final_size, final_size), Image.Resampling.LANCZOS)
 
+def make_rotate_icon(final_size=96):
+    import math
+    s = 4
+    size = final_size * s
+    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    cx, cy = size // 2, size // 2
+    r_outer = size // 2 - 6 * s
+
+    # Sombra
+    for i in range(8 * s, 0, -2 * s):
+        d.ellipse([cx - r_outer - i, cy - r_outer - i, cx + r_outer + i, cy + r_outer + i],
+                  fill=(0, 0, 0, int(15 * (1.0 - i / (8 * s)))))
+
+    # Base circular de vidro escuro
+    d.ellipse([cx - r_outer, cy - r_outer, cx + r_outer, cy + r_outer],
+              fill=(20, 24, 34, 230), outline=(70, 85, 110, 230), width=3*s)
+    # Chanfro superior
+    d.arc([cx - r_outer + 2*s, cy - r_outer + 2*s, cx + r_outer - 2*s, cy + r_outer - 2*s],
+          210, 330, fill=(160, 195, 245, 180), width=2*s)
+
+    # Smartphone outline no centro
+    pw = int(r_outer * 0.46)
+    ph = int(r_outer * 0.76)
+    d.rounded_rectangle([cx - pw//2, cy - ph//2, cx + pw//2, cy + ph//2], radius=4*s,
+                        fill=(35, 42, 58, 240), outline=(0, 210, 255, 255), width=3*s)
+    d.rounded_rectangle([cx - pw//2 + 3*s, cy - ph//2 + 6*s, cx + pw//2 - 3*s, cy + ph//2 - 6*s], radius=2*s,
+                        fill=(10, 15, 25, 255))
+    # Seta circular indicando rotação
+    r_arc = int(r_outer * 0.72)
+    d.arc([cx - r_arc, cy - r_arc, cx + r_arc, cy + r_arc], -30, 80, fill=(255, 255, 255, 240), width=3*s)
+    d.polygon([(cx + int(r_arc * math.cos(80*math.pi/180)) - 6*s, cy + int(r_arc * math.sin(80*math.pi/180)) - 4*s),
+               (cx + int(r_arc * math.cos(80*math.pi/180)) + 6*s, cy + int(r_arc * math.sin(80*math.pi/180)) + 8*s),
+               (cx + int(r_arc * math.cos(80*math.pi/180)) - 8*s, cy + int(r_arc * math.sin(80*math.pi/180)) + 12*s)],
+              fill=(255, 255, 255, 255))
+
+    return img.resize((final_size, final_size), Image.Resampling.LANCZOS)
+
 def main():
     dest_dirs = [
         "android/app/src/main/assets/ui",
@@ -343,6 +381,7 @@ def main():
         "btn_next": make_arrow_button("right", 108, accent_color=(0, 200, 255)),
         "btn_eye_open": make_eye_icon(96, False),
         "btn_eye_closed": make_eye_icon(96, True),
+        "btn_rotate": make_rotate_icon(96),
         "btn_glow": make_glow_overlay(128),
     }
 

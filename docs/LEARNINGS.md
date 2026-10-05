@@ -178,6 +178,24 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - A variável `extern thread_local ThreadCtx* tctx` dependia do registrador de Thread Local Storage (`TPIDR_EL0`). Em sistemas sem loader dinâmico completo de TLS, threads criadas fora da libc não têm seus segmentos `.tbss`/`.tdata` inicializados, corrompendo a leitura do ponteiro e causando Data Abort / Panic ao tentar acessar `tctx->sp`.
   - Como a máquina virtual já é 100% serializada pelo Global Interpreter Lock (`gil.lock()`), a variável foi convertida para um ponteiro global padrão `ThreadCtx* tctx = nullptr;`. Cada thread salva e restaura `tctx` deterministicamente ao adquirir e liberar o GIL (inclusive durante `sleepMs` e `monitorEnter` com `SDL_Delay`), garantindo segurança absoluta de concorrência sem depender de TLS.
 
+## Sessão 13 (Música MIDI via TinySoundFont, Inversão de Botões A/B e Orientação Retrato TATE no Switch)
+- **Sintetizador MIDI em Tempo Real via TinySoundFont (`tsf.h` + `tml.h`):**
+  - O pacote `switch-sdl2_mixer` fornecido pelo devkitPro não é compilado com backend MIDI (nem TiMidity nem FluidSynth), fazendo com que `Mix_LoadMUS_RW` retorne `nullptr` ou silencie faixas MIDI.
+  - Em vez de depender de codecs dinâmicos do sistema, incluímos as bibliotecas header-only `TinySoundFont` e `TinyMidiLoader` em `third_party/`, acompanhadas do SoundFont General MIDI de alta qualidade `TimGM6mb.sf2` (~5.7 MB) em `assets/soundfont/`.
+  - Criada a classe `hl::MidiSynth` que processa eventos MIDI e renderiza blocos de áudio PCM de 16 bits a 44.1 kHz estéreo diretamente no stream de reprodução do SDL2 via `Mix_HookMusic`.
+  - Além disso, adicionada checagem defensiva dos magic bytes de cabeçalho MIDI (`MThd`) em `Player_realize` para identificar faixas `.mid` mesmo quando a classe J2ME não especificar o mime-type exato.
+- **Alinhamento do Mapeamento Físico de Botões no Nintendo Switch:**
+  - O subsistema `SDL_GameController` utiliza a convenção posicional padrão do Xbox (onde o botão de baixo é o 'A' e o da direita é o 'B'). No Nintendo Switch, os rótulos físicos são invertidos: o botão da direita é o **A** (selecionar/confirmar) e o de baixo é o **B** (cancelar/voltar).
+  - Sob `#ifdef __SWITCH__`, invertemos o mapeamento para associar `SDL_CONTROLLER_BUTTON_B` (botão direito no Switch) ao código '5' (Ataque / Confirmar) e `SDL_CONTROLLER_BUTTON_A` (botão inferior no Switch) ao código '-7' (RSK / Cancelar / Status), além de `SDL_CONTROLLER_BUTTON_Y` para '1' (Skill 1) e `SDL_CONTROLLER_BUTTON_X` para '3' (Skill 2).
+- **Orientação Retrato / Vertical (TATE Mode) no Switch:**
+  - O console Nintendo Switch possui proporção 16:9 em tela cheia (1280x720), o que deixa colunas laterais pretas para o jogo em proporção clássica 240x320.
+  - Foi implementado um alternador de orientação de tela (`s_screenRotation`):
+    - Modo 0: Paisagem horizontal padrão (1280x720).
+    - Modo 1: Retrato / TATE 90° horário (720x1280).
+    - Modo 2: Retrato / TATE 270° anti-horário (Flip Grip, 720x1280).
+  - Quando ativado, o jogo e o overlay virtual são renderizados em um target texture intermediário de 720x1280 (`SDL_TEXTUREACCESS_TARGET`) e apresentados no display com `SDL_RenderCopyEx` no ângulo de rotação correspondente.
+  - A função `getTouchCoords()` traduz algebricamente as coordenadas normalizadas dos dedos (`ev.tfinger.x`, `ev.tfinger.y`) para o espaço virtual rotacionado, permitindo jogar com comandos touchscreen com total naturalidade como se o Switch fosse um smartphone gigante.
+
 
 
 

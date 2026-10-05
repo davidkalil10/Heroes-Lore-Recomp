@@ -72,10 +72,23 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
     - Substituição de `std::thread` por `SDL_CreateThreadWithStackSize` (2MB de stack) com suporte nativo da libnx.
     - Remoção de `thread_local` no ponteiro `tctx`, eliminando corrupção de TLS no Switch.
 
+- [x] Correções e Melhorias no Port do Nintendo Switch (Hardware Real):
+  - [x] Sintetizador MIDI em Tempo Real (BGM):
+    - Solucionada a ausência de músicas de fundo no Switch integrando `TinySoundFont` (`tsf.h`) e `TinyMidiLoader` (`tml.h`).
+    - Empacotado o soundfont general midi de alta fidelidade `TimGM6mb.sf2` (~5.7 MB) diretamente dentro do `.nro` via RomFS (`romfs:/soundfont/TimGM6mb.sf2`).
+    - Implementado `MidiSynth` com síntese contínua em 44.1kHz estéreo 16-bit PCM conectado ao `Mix_HookMusic` e detecção universal de arquivos MIDI via magic bytes `MThd`.
+  - [x] Correção do Mapeamento Físico de Botões do Switch:
+    - Invertidos os botões posicionais do SDL sob `#ifdef __SWITCH__` para alinhar com os rótulos oficiais da Nintendo: botão <kbd>A</kbd> (direita) para Confirmar/Atacar ('5') e botão <kbd>B</kbd> (baixo) para Cancelar/Status (RSK), além de <kbd>X</kbd> (topo) e <kbd>Y</kbd> (esquerda) para habilidades.
+  - [x] Modo Retrato / Vertical (TATE Mode) no Switch:
+    - Implementada alternância dinâmica de orientação entre Paisagem (1280x720) e Retrato (TATE 90° horário e 270° anti-horário / Flip Grip).
+    - Botão de rotação intuitivo (`btn_rotate`) posicionado ergonomicamente na barra de utilitários da tela.
+    - Renderização acelerada em target texture (`SDL_TEXTUREACCESS_TARGET`) e rotação via `SDL_RenderCopyEx`.
+    - Mapeamento matemático 1:1 de toques da tela capacitiva para a geometria rotacionada.
+
 ## Próximos passos (Roadmap)
-- [ ] Passo 5: Aspect Ratio & Taxa de Quadros (Widescreen, Molduras Temáticas / Bezels e seletor 30 FPS Clássico vs 60 FPS Fluido).
-- [ ] Passo 6: Cloud Save & Sincronização Cruzada (PC <-> Celular <-> Switch).
-- [ ] Passo 7: Seletor de Idiomas / Localização (PT-BR, EN, ES).
-- [ ] Passo 8: Build automatica via github actions, com releases para as 3 plataformas (android, windows e switch)
+- [ ] Passo 5: Build automatica via github actions, com releases para as 3 plataformas (android, windows e switch)
+- [ ] Passo 6: Aspect Ratio & Taxa de Quadros (Widescreen, Molduras Temáticas / Bezels e seletor 30 FPS Clássico vs 60 FPS Fluido).
+- [ ] Passo 7: Cloud Save & Sincronização Cruzada (PC <-> Celular <-> Switch).
+- [ ] Passo 8: Seletor de Idiomas / Localização (PT-BR, EN, ES).
 
 
