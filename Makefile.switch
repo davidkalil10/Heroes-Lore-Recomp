@@ -143,8 +143,8 @@ all: $(OUTPUT).nro
 $(OUTPUT).nro:  $(OUTPUT).elf $(OUTPUT).nacp
 
 $(OUTPUT).nacp:
-	@echo "Creating $(notdir $@) com TitleID $(APP_TITLEID)..."
-	@nacptool --create "$(APP_TITLE)" "$(APP_AUTHOR)" "$(APP_VERSION)" $@ --titleid=$(APP_TITLEID)
+	@echo "Creating $(notdir $@)..."
+	@nacptool --create "$(APP_TITLE)" "$(APP_AUTHOR)" "$(APP_VERSION)" $@
 
 $(OUTPUT).elf:  $(OFILES)
 
