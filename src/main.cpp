@@ -15,6 +15,9 @@
 #include <cstdio>
 #include <cstdarg>
 #include <string>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 static FILE* s_bootLog = nullptr;
 void boot_log(const char* fmt, ...) {
@@ -41,9 +44,13 @@ int main(int argc, char** argv) {
   using namespace hl;
 
 #ifdef __SWITCH__
-  s_bootLog = fopen("sdmc:/heroes_lore_boot.log", "w");
-  if (!s_bootLog) s_bootLog = fopen("sdmc:/switch/heroes_lore/boot.log", "w");
-  if (!s_bootLog) s_bootLog = fopen("heroes_lore_boot.log", "w");
+  s_bootLog = fopen("sdmc:/heroes_lore_boot.log", "a");
+  if (!s_bootLog) s_bootLog = fopen("sdmc:/switch/heroes_lore/boot.log", "a");
+  if (!s_bootLog) s_bootLog = fopen("heroes_lore_boot.log", "a");
+  if (s_bootLog) {
+    dup2(fileno(s_bootLog), STDOUT_FILENO);
+    dup2(fileno(s_bootLog), STDERR_FILENO);
+  }
 #endif
 
   boot_log("==================================================\n");
@@ -116,8 +123,21 @@ int main(int argc, char** argv) {
     vm.invoke(vm.mustMethod(midletClass, "<init>:()V"), args, ret);
     boot_log("[Init] Chamando startApp()...\n");
     vm.invoke(vm.mustMethod(midletClass, "startApp:()V"), args, ret);
+    boot_log("[Init] startApp() finalizou com sucesso!\n");
   } catch (JavaThrow& jt) {
-    boot_log("[Init] Exceção durante inicialização: %s\n", describeThrowable(vm, jt.ex).c_str());
+    boot_log("[Init] Exceção Java durante inicialização: %s\n", describeThrowable(vm, jt.ex).c_str());
+    vm.gilUnlock();
+    Platform::shutdown();
+    if (s_bootLog) fclose(s_bootLog);
+    return 1;
+  } catch (const std::exception& e) {
+    boot_log("[Init] std::exception durante inicialização: %s\n", e.what());
+    vm.gilUnlock();
+    Platform::shutdown();
+    if (s_bootLog) fclose(s_bootLog);
+    return 1;
+  } catch (...) {
+    boot_log("[Init] Exceção desconhecida durante inicialização!\n");
     vm.gilUnlock();
     Platform::shutdown();
     if (s_bootLog) fclose(s_bootLog);

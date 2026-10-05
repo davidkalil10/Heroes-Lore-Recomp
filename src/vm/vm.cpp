@@ -136,8 +136,13 @@ static const BC kBuiltin[] = {
   {"[", "java/lang/Object", "", K_ARRAY, 0, false},
 };
 
+extern void boot_log(const char* fmt, ...);
+
 void VM::fatal(const std::string& msg) {
-  fprintf(stderr, "[FATAL] %s\n", msg.c_str()); fflush(stderr); exit(2);
+  boot_log("\n[FATAL] %s\n", msg.c_str());
+  fprintf(stderr, "[FATAL] %s\n", msg.c_str());
+  fflush(stderr);
+  exit(2);
 }
 
 void VM::init(const std::string& dir) {
@@ -442,18 +447,29 @@ static std::string throwableText(VM& vm, Object* ex) {
 void VM::startThread(ThreadObj* t) {
   if (t->started) throwNew("java/lang/IllegalStateException");
   t->started = true; roots.push_back(t);
-  std::thread([this, t]() {
-    gil.lock();
-    ThreadCtx ctx; ctx.id = nextTid++; tctx = &ctx; threads.push_back(&ctx);
-    try {
-      if (t->runnable) { Value r[2]; invokeVirtual(t->runnable, "run:()V", nullptr, 0, r); }
-    } catch (JavaThrow& jt) {
-      fprintf(stderr, "[thread] exceção não tratada: %s\n", throwableText(*this, jt.ex).c_str());
-    }
-    threads.erase(std::remove(threads.begin(), threads.end(), &ctx), threads.end());
-    roots.erase(std::remove(roots.begin(), roots.end(), (Object*)t), roots.end());
-    tctx = nullptr; gil.unlock();
-  }).detach();
+  try {
+    std::thread([this, t]() {
+      gil.lock();
+      ThreadCtx ctx; ctx.id = nextTid++; tctx = &ctx; threads.push_back(&ctx);
+      try {
+        if (t->runnable) { Value r[2]; invokeVirtual(t->runnable, "run:()V", nullptr, 0, r); }
+      } catch (JavaThrow& jt) {
+        boot_log("[thread] exceção Java não tratada: %s\n", throwableText(*this, jt.ex).c_str());
+        fprintf(stderr, "[thread] exceção não tratada: %s\n", throwableText(*this, jt.ex).c_str());
+      } catch (const std::exception& e) {
+        boot_log("[thread] std::exception em thread: %s\n", e.what());
+        fprintf(stderr, "[thread] std::exception em thread: %s\n", e.what());
+      } catch (...) {
+        boot_log("[thread] exceção desconhecida em thread!\n");
+      }
+      threads.erase(std::remove(threads.begin(), threads.end(), &ctx), threads.end());
+      roots.erase(std::remove(roots.begin(), roots.end(), (Object*)t), roots.end());
+      tctx = nullptr; gil.unlock();
+    }).detach();
+  } catch (const std::exception& e) {
+    boot_log("[startThread] ERRO ao criar std::thread: %s\n", e.what());
+    fprintf(stderr, "[startThread] ERRO ao criar std::thread: %s\n", e.what());
+  }
 }
 
 void VM::invokeVirtual(Object* self, const std::string& key, Value* extra, int nextra, Value* ret) {

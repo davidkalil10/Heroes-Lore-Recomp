@@ -40,15 +40,15 @@ LIBNX    ?= $(DEVKITPRO)/libnx
 #---------------------------------------------------------------------------------
 ARCH    :=  -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIE
 
-CFLAGS  :=  -g -Wall -O2 -ffunction-sections \
+CFLAGS  :=  -g -Wall -O2 -ffunction-sections -pthread \
             $(ARCH) $(DEFINES)
 
 CFLAGS  +=  $(INCLUDE) -I$(PORTLIBS)/include/SDL2 -I$(PORTLIBS)/include -I$(LIBNX)/include -D__SWITCH__
 
-CXXFLAGS    := $(CFLAGS) -std=gnu++17 -fexceptions
+CXXFLAGS    := $(CFLAGS) -std=gnu++17 -fexceptions -pthread
 
 ASFLAGS :=  -g $(ARCH)
-LDFLAGS = -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
+LDFLAGS = -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -pthread -Wl,-Map,$(notdir $*.map)
 
 LIBS    := -L$(PORTLIBS)/lib -L$(LIBNX)/lib -lSDL2_mixer -lmodplug -lmpg123 -lvorbisfile -lvorbis -logg -lopusfile -lopus -lFLAC -lSDL2 -lEGL -lglapi -ldrm_nouveau -lnx
 

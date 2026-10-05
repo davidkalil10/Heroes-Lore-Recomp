@@ -69,6 +69,7 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
 ## Próximos passos (Roadmap)
 - [ ] Passo 5: Aspect Ratio & Taxa de Quadros (Widescreen, Molduras Temáticas / Bezels e seletor 30 FPS Clássico vs 60 FPS Fluido).
 - [ ] Passo 6: Cloud Save & Sincronização Cruzada (PC <-> Celular <-> Switch).
-- [ ] Passo 7: Seletor de Idiomas / Localização (PT-BR, EN, KO, ES).
+- [ ] Passo 7: Seletor de Idiomas / Localização (PT-BR, EN, ES).
+- [ ] Passo 8: Build automatica via github actions, com releases para as 3 plataformas (android, windows e switch)
 
 
