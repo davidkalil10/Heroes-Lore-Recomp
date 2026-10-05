@@ -13,7 +13,22 @@
   #include <SDL.h>
 #endif
 #include <cstdio>
+#include <cstdarg>
 #include <string>
+
+static FILE* s_bootLog = nullptr;
+void boot_log(const char* fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  vprintf(fmt, args);
+  va_end(args);
+  if (s_bootLog) {
+    va_start(args, fmt);
+    vfprintf(s_bootLog, fmt, args);
+    va_end(args);
+    fflush(s_bootLog);
+  }
+}
 
 namespace hl {
   extern Object* g_serialRunnable;
@@ -25,10 +40,16 @@ int main(int argc, char** argv) {
   setvbuf(stderr, nullptr, _IONBF, 0);
   using namespace hl;
 
-  printf("==================================================\n");
-  printf(" Heroes Lore: Wind of Soltia — Native Recomp\n");
-  printf(" C++17 + SDL2 Pixel-Perfect Native Port\n");
-  printf("==================================================\n");
+#ifdef __SWITCH__
+  s_bootLog = fopen("sdmc:/heroes_lore_boot.log", "w");
+  if (!s_bootLog) s_bootLog = fopen("sdmc:/switch/heroes_lore/boot.log", "w");
+  if (!s_bootLog) s_bootLog = fopen("heroes_lore_boot.log", "w");
+#endif
+
+  boot_log("==================================================\n");
+  boot_log(" Heroes Lore: Wind of Soltia — Native Recomp\n");
+  boot_log(" C++17 + SDL2 Pixel-Perfect Native Port\n");
+  boot_log("==================================================\n");
 
   std::string dataDir = "reference/extracted";
   if (argc > 1) {
@@ -52,16 +73,21 @@ int main(int argc, char** argv) {
     }
 #endif
   }
-  printf("[Init] Usando pasta de dados: %s\n", dataDir.c_str());
+  boot_log("[Init] Usando pasta de dados: %s\n", dataDir.c_str());
 
   // Inicializa janela e áudio SDL2 (escala 2x: 480x640)
+  boot_log("[Init] Inicializando plataforma SDL2...\n");
   if (!Platform::init(2)) {
-    fprintf(stderr, "Falha ao inicializar plataforma SDL2.\n");
+    boot_log("[Init] ERRO FATAL: Falha ao inicializar plataforma SDL2.\n");
+    if (s_bootLog) fclose(s_bootLog);
     return 1;
   }
+  boot_log("[Init] Plataforma SDL2 inicializada!\n");
 
   VM vm;
+  boot_log("[Init] Inicializando VM J2ME...\n");
   vm.init(dataDir);
+  boot_log("[Init] VM J2ME inicializada!\n");
 
   // Inicializa contexto de thread para a thread principal
   ThreadCtx mainCtx;
@@ -76,7 +102,7 @@ int main(int argc, char** argv) {
   g_screenGraphics->resetClip();
   vm.roots.push_back(g_screenGraphics);
 
-  printf("[Init] Carregando MIDlet principal rpg/GameMIDlet...\n");
+  boot_log("[Init] Carregando MIDlet principal rpg/GameMIDlet...\n");
   ClassInfo* midletClass = vm.mustClass("rpg/GameMIDlet");
   Object* midlet = vm.newObject(midletClass);
   vm.roots.push_back(midlet);
@@ -86,18 +112,20 @@ int main(int argc, char** argv) {
     Value args[1];
     args[0].o = midlet;
     Value ret[2];
+    boot_log("[Init] Chamando construtor <init>()...\n");
     vm.invoke(vm.mustMethod(midletClass, "<init>:()V"), args, ret);
-    printf("[Init] Chamando startApp()...\n");
+    boot_log("[Init] Chamando startApp()...\n");
     vm.invoke(vm.mustMethod(midletClass, "startApp:()V"), args, ret);
   } catch (JavaThrow& jt) {
-    fprintf(stderr, "[Init] Exceção durante inicialização: %s\n", describeThrowable(vm, jt.ex).c_str());
+    boot_log("[Init] Exceção durante inicialização: %s\n", describeThrowable(vm, jt.ex).c_str());
     vm.gilUnlock();
     Platform::shutdown();
+    if (s_bootLog) fclose(s_bootLog);
     return 1;
   }
   vm.gilUnlock();
 
-  printf("[Game] Loop principal iniciado. Bom jogo!\n");
+  boot_log("[Game] Loop principal iniciado. Bom jogo!\n");
 
   auto saveBMP = [](const char* filename, const uint32_t* pixels, int w, int h) {
     uint8_t header[54] = {
@@ -136,7 +164,7 @@ int main(int argc, char** argv) {
         Value ret[2];
         vm.invokeVirtual(r, "run:()V", nullptr, 0, ret);
       } catch (JavaThrow& jt) {
-        fprintf(stderr, "[serialRunnable] Exceção: %s\n", describeThrowable(vm, jt.ex).c_str());
+        boot_log("[serialRunnable] Exceção: %s\n", describeThrowable(vm, jt.ex).c_str());
       }
     }
 
@@ -151,7 +179,7 @@ int main(int argc, char** argv) {
       try {
         vm.invokeVirtual(g_display->current, "paint:(Ljavax/microedition/lcdui/Graphics;)V", args, 1, ret);
       } catch (JavaThrow& jt) {
-        fprintf(stderr, "[paint] Exceção: %s\n", describeThrowable(vm, jt.ex).c_str());
+        boot_log("[paint] Exceção: %s\n", describeThrowable(vm, jt.ex).c_str());
       }
     }
 
@@ -175,7 +203,11 @@ int main(int argc, char** argv) {
     SDL_Delay(8);
   }
 
-  printf("[Game] Encerrando...\n");
+  boot_log("[Game] Encerrando graciosamente...\n");
   Platform::shutdown();
+  if (s_bootLog) {
+    fclose(s_bootLog);
+    s_bootLog = nullptr;
+  }
   return 0;
 }

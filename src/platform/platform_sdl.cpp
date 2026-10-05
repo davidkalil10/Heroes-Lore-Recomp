@@ -119,8 +119,11 @@ bool Platform::init(int scale) {
   }
 #endif
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS | SDL_INIT_GAMECONTROLLER) < 0) {
-    fprintf(stderr, "Erro ao inicializar SDL: %s\n", SDL_GetError());
-    return false;
+    fprintf(stderr, "Aviso: Falha ao inicializar SDL completo: %s. Tentando apenas video e eventos...\n", SDL_GetError());
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) < 0) {
+      fprintf(stderr, "Erro ao inicializar SDL video: %s\n", SDL_GetError());
+      return false;
+    }
   }
 
   // Inicializa áudio
@@ -136,6 +139,13 @@ bool Platform::init(int scale) {
       0, 0,
       1280, 720,
       0);
+  if (!s_window) {
+    s_window = SDL_CreateWindow(
+        "Heroes Lore: Wind of Soltia",
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        1280, 720,
+        SDL_WINDOW_FULLSCREEN);
+  }
 #else
   int winW = 240 * scale;
   int winH = 320 * scale;
