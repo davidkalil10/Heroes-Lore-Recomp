@@ -5,9 +5,12 @@
 #if defined(__has_include)
   #if __has_include(<SDL2/SDL.h>)
     #include <SDL2/SDL.h>
-    #include <SDL2/SDL_mixer.h>
   #else
     #include <SDL.h>
+  #endif
+  #if __has_include(<SDL2/SDL_mixer.h>)
+    #include <SDL2/SDL_mixer.h>
+  #elif __has_include(<SDL_mixer.h>)
     #include <SDL_mixer.h>
   #endif
 #else

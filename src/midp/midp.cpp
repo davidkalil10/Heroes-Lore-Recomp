@@ -5,8 +5,21 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../third_party/stb_image.h"
 
-#include <SDL.h>
-#include <SDL_mixer.h>
+#if defined(__has_include)
+  #if __has_include(<SDL2/SDL.h>)
+    #include <SDL2/SDL.h>
+  #else
+    #include <SDL.h>
+  #endif
+  #if __has_include(<SDL2/SDL_mixer.h>)
+    #include <SDL2/SDL_mixer.h>
+  #elif __has_include(<SDL_mixer.h>)
+    #include <SDL_mixer.h>
+  #endif
+#else
+  #include <SDL.h>
+  #include <SDL_mixer.h>
+#endif
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
