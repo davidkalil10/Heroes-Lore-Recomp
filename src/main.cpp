@@ -57,6 +57,7 @@ int main(int argc, char** argv) {
   boot_log("==================================================\n");
   boot_log(" Heroes Lore: Wind of Soltia — Native Recomp\n");
   boot_log(" C++17 + SDL2 Pixel-Perfect Native Port\n");
+  boot_log(" Port Nativo por David Kalil (Windows, Android, Switch)\n");
   boot_log("==================================================\n");
 
   std::string dataDir = "reference/extracted";

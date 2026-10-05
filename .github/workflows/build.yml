@@ -1,0 +1,198 @@
+name: Build Multiplatform & Release (Switch, Windows, Android)
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Publicar Release no GitHub?'
+        required: true
+        type: boolean
+        default: false
+      release_tag:
+        description: 'Tag / Versão do Release (ex: v1.0.0)'
+        required: false
+        default: 'v1.0.0'
+
+jobs:
+  # ==============================================================================
+  # 1. Nintendo Switch (.nro Homebrew)
+  # ==============================================================================
+  build-switch:
+    name: Nintendo Switch (.nro)
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure Git Safe Directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Prepare RomFS Assets
+        run: |
+          python3 tools/prepare_switch_romfs.py
+          ls -la romfs
+
+      - name: Compile Heroes Lore NRO
+        run: |
+          export DEVKITPRO=/opt/devkitpro
+          export DEVKITA64=$DEVKITPRO/devkitA64
+          export PORTLIBS=$DEVKITPRO/portlibs/switch
+          export LIBNX=$DEVKITPRO/libnx
+          export PATH=$DEVKITPRO/tools/bin:$PATH
+          make -f Makefile.switch
+
+      - name: Verify Output
+        run: |
+          ls -la heroes_lore.nro
+          python3 tools/inspect_nro.py heroes_lore.nro
+
+      - name: Upload Switch Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: heroes_lore_switch_nro
+          path: heroes_lore.nro
+
+  # ==============================================================================
+  # 2. Windows x64 (Portable ZIP)
+  # ==============================================================================
+  build-windows:
+    name: Windows x64 (ZIP)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2 UCRT64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-SDL2
+            mingw-w64-ucrt-x86_64-SDL2_mixer
+            zip
+
+      - name: Compile Windows Binary
+        shell: msys2 {0}
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+
+      - name: Package Windows Portable Release
+        shell: msys2 {0}
+        run: |
+          mkdir -p dist_windows
+          cp build/heroes_lore.exe dist_windows/
+          cp build/*.dll dist_windows/
+          cp -r build/assets dist_windows/
+          cd dist_windows && zip -r ../heroes_lore_windows_x64.zip .
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: heroes_lore_windows_zip
+          path: heroes_lore_windows_x64.zip
+
+  # ==============================================================================
+  # 3. Android (APKs Universal & ARM64)
+  # ==============================================================================
+  build-android:
+    name: Android (APK)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Ensure Android NDK 26.1.10909125
+        run: |
+          if [ ! -d "$ANDROID_SDK_ROOT/ndk/26.1.10909125" ]; then
+            echo "Instalando NDK 26.1.10909125..."
+            echo "y" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.1.10909125"
+          else
+            echo "NDK 26.1.10909125 já instalado no runner!"
+          fi
+
+      - name: Build Android Release APKs
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --stacktrace
+
+      - name: Organize APK Artifacts
+        run: |
+          mkdir -p apks
+          find android/app/build/outputs/apk/release/ -name "*.apk" -exec cp {} apks/ \;
+          ls -la apks/
+          cp apks/*universal*.apk heroes_lore_android_universal.apk 2>/dev/null || true
+          cp apks/*arm64-v8a*.apk heroes_lore_android_arm64.apk 2>/dev/null || true
+
+      - name: Upload Android Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: heroes_lore_android_apks
+          path: |
+            heroes_lore_android_universal.apk
+            heroes_lore_android_arm64.apk
+
+  # ==============================================================================
+  # 4. GitHub Release Automático (Tags v* ou workflow_dispatch)
+  # ==============================================================================
+  release:
+    name: Publicar Release Multiplataforma
+    needs: [build-switch, build-windows, build-android]
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.create_release == true)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Baixar Artefato Switch
+        uses: actions/download-artifact@v4
+        with:
+          name: heroes_lore_switch_nro
+
+      - name: Baixar Artefato Windows
+        uses: actions/download-artifact@v4
+        with:
+          name: heroes_lore_windows_zip
+
+      - name: Baixar Artefato Android
+        uses: actions/download-artifact@v4
+        with:
+          name: heroes_lore_android_apks
+
+      - name: Listar Arquivos do Release
+        run: ls -la
+
+      - name: Criar GitHub Release Oficial
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Heroes Lore: Wind of Soltia ${{ github.ref_name || inputs.release_tag }}"
+          tag_name: ${{ github.ref_name || inputs.release_tag }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            heroes_lore.nro
+            heroes_lore_windows_x64.zip
+            heroes_lore_android_universal.apk
+            heroes_lore_android_arm64.apk

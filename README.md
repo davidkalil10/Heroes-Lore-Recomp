@@ -177,6 +177,12 @@ Para detalhes sobre a engenharia reversa das 90 classes ofuscadas, resolução d
 - [`docs/LEARNINGS.md`](docs/LEARNINGS.md) — Aprendizados técnicos, armadilhas superadas e decisões de arquitetura.
 - [`docs/CLASS_MAP.md`](docs/CLASS_MAP.md) — Mapeamento detalhado das classes do jogo.
 
+## 👥 Créditos & Agradecimentos
+
+- **Port Nativo & Recompilação (Windows, Android, Nintendo Switch):** [David Kalil](https://github.com/davidkalil10)
+- **Desenvolvimento Original J2ME:** *Hands-On Mobile* & *Electronic Arts (EA Mobile)*
+- **Tradução Português-BR (J2ME Original):** *Open Mind Team* (Bruno Freire, Bruno Vilhena, John Peres)
+
 ---
 
 ## ⚖️ Licença e Aviso Legal

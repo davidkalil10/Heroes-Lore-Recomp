@@ -196,6 +196,18 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - Quando ativado, o jogo e o overlay virtual são renderizados em um target texture intermediário de 720x1280 (`SDL_TEXTUREACCESS_TARGET`) e apresentados no display com `SDL_RenderCopyEx` no ângulo de rotação correspondente.
   - A função `getTouchCoords()` traduz algebricamente as coordenadas normalizadas dos dedos (`ev.tfinger.x`, `ev.tfinger.y`) para o espaço virtual rotacionado, permitindo jogar com comandos touchscreen com total naturalidade como se o Switch fosse um smartphone gigante.
 
+## Sessão 14 (Créditos Oficiais do Port e CI/CD Multiplataforma com Releases)
+- **Estrutura Interna dos Arquivos Babble / Localização (`lang.en-GB`):**
+  - O arquivo de localização binário possui um inteiro de 4 bytes de tamanho no início, seguido por uma tabela de offsets relativos de `N * 4` bytes (onde $N = 3951$ strings).
+  - Cada entrada de texto é precedida por 2 bytes de comprimento do bloco (`len + 2`) seguidos pela representação canônica `writeUTF` do Java (2 bytes de comprimento da string seguidos pelos bytes codificados em UTF-8).
+  - Desenvolvido o script `tools/patch_credits.py` para injetar os créditos de David Kalil no menu Sobre (string 3928) e no menu Info -> Cred (string 1237). O script recalcula matematicamente os offsets de todas as strings subsequentes deslocadas na tabela, preservando a integridade das 3951 strings do jogo.
+- **Automação de Builds e Releases no GitHub Actions (`.github/workflows/build.yml`):**
+  - Unificados os fluxos de compilação em um pipeline multi-job paralelo que testa e compila as 3 plataformas simultaneamente:
+    1. **Nintendo Switch:** Container Docker oficial `devkitpro/devkita64:latest` montando RomFS e compilando `heroes_lore.nro`.
+    2. **Windows x64:** Runner `windows-latest` com MSYS2 UCRT64, CMake e Ninja, empacotando o executável, DLLs e pasta `assets/` em `heroes_lore_windows_x64.zip`.
+    3. **Android:** Runner `ubuntu-latest` com Java 17 e NDK 26, gerando os APKs Release assinados (`universal` e `arm64-v8a`).
+  - Integrado o step de release via `softprops/action-gh-release@v2`, que automaticamente coleta os binários das 3 plataformas e cria a release oficial no GitHub sempre que uma tag de versão (`v*`) for enviada ou acionada via `workflow_dispatch`.
+
 
 
 
