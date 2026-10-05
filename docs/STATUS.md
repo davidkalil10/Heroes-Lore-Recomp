@@ -47,9 +47,10 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
     - D-Pad e cluster de botões elevados em sincronia (~42% a partir da borda inferior), liberando uma faixa inferior limpa e ampla para as setas circulares de alteração de poção (◀ e ▶), agora perfeitamente centralizadas no eixo horizontal da tela (`winW / 2`).
     - Algoritmo de hit-test por menor razão de distância (`d / maxR`): elimina qualquer ambiguidade de clique ou necessidade de "adivinhar o ponto", registrando sempre com 100% de precisão o botão mais próximo do polegar.
     - Modo Paisagem (Horizontal) totalmente proporcional e balanceado: setas ◀ e ▶ movidas para a coluna esquerda (entre MENU e D-Pad), deixando o lado direito limpo e espaçoso para os 5 botões de ação e os botões MAPA e R.
+    - Botão de Ocultar/Reexibir Controles Virtuais (Ícone discreto de olho no canto inferior esquerdo): permite alternar entre a sobreposição de controles e uma visualização 100% limpa da tela do jogo (ideal para jogar com gamepad Bluetooth/USB ou apreciar cutscenes/cenários), com resposta tátil háptica e persistência elegante.
   - Ícone personalizado oficial extraído de `logo 512.png` integrado em todas as densidades (`mipmap-mdpi`, `hdpi`, `xhdpi`, `xxhdpi`, `xxxhdpi`) em versões padrão e circular (`ic_launcher_round`).
   - Suporte nativo a gamepads Bluetooth/USB (Xbox, PlayStation, Gamesir, Razer Kishi) com rumble.
-  - APKs Release assinados e otimizados (~2.70 MB em `arm64-v8a`) gerados e prontos em `bin/heroes_lore-arm64-v8a.apk`, `bin/heroes_lore.apk` e `bin/heroes_lore-universal.apk`.
+  - APKs Release assinados e otimizados (~2.74 MB em `arm64-v8a`) gerados e prontos em `bin/heroes_lore-arm64-v8a.apk`, `bin/heroes_lore.apk` e `bin/heroes_lore-universal.apk`.
 
 ## Próximos passos (Roadmap)
 - [ ] Passo 4: Port Homebrew para Nintendo Switch (Arquivo `.nro` via devkitPro / libnx).

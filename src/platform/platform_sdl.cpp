@@ -236,8 +236,12 @@ static SDL_Texture* s_texBtnMap = nullptr;
 static SDL_Texture* s_texBtnRsk = nullptr;
 static SDL_Texture* s_texBtnPrev = nullptr;
 static SDL_Texture* s_texBtnNext = nullptr;
+static SDL_Texture* s_texBtnEyeOpen = nullptr;
+static SDL_Texture* s_texBtnEyeClosed = nullptr;
 static SDL_Texture* s_texBtnGlow = nullptr;
 static bool s_gamepadTexturesLoaded = false;
+
+static const int KEY_TOGGLE_TOUCH_UI = -999;
 
 struct ActiveFinger {
   SDL_FingerID id;
@@ -292,6 +296,8 @@ static void loadGamepadTextures() {
   s_texBtnRsk = loadRgbaTexture("btn_rsk");
   s_texBtnPrev = loadRgbaTexture("btn_prev");
   s_texBtnNext = loadRgbaTexture("btn_next");
+  s_texBtnEyeOpen = loadRgbaTexture("btn_eye_open");
+  s_texBtnEyeClosed = loadRgbaTexture("btn_eye_closed");
   s_texBtnGlow = loadRgbaTexture("btn_glow");
   s_gamepadTexturesLoaded = true;
 }
@@ -315,6 +321,7 @@ struct GamepadLayout {
 static GamepadLayout calculateLayout(int winW, int winH) {
   GamepadLayout layout;
   layout.isPortrait = (winH > winW);
+  layout.dpadR = 0;
 
   if (layout.isPortrait) {
     // Modo Retrato (Smartphone em pé)
@@ -329,43 +336,52 @@ static GamepadLayout calculateLayout(int winW, int winH) {
     layout.gameRect = { gameX, gameY, gameW, gameH };
     layout.controllerBgRect = { 0, 0, 0, 0 }; // Sem fundo opaco, overlay translúcido sobre o jogo!
 
-    // D-Pad e Cluster de Ação subidos para winW * 0.42f (ergonomia perfeita e abre espaço inferior limpo)
-    layout.dpadX = (int)(winW * 0.22f);
-    layout.dpadY = winH - (int)(winW * 0.42f);
-    layout.dpadR = (int)(winW * 0.175f);
+    // Botão de Ocultar/Reexibir Controles Virtuais (Olho discreto no canto inferior esquerdo)
+    int rToggle = (int)(winW * 0.055f);
+    int toggleX = (int)(winW * 0.09f);
+    int toggleY = winH - (int)(winW * 0.09f);
+    layout.buttons.push_back({ KEY_TOGGLE_TOUCH_UI, toggleX, toggleY, rToggle, rToggle * 2, rToggle * 2,
+                               s_touchOverlayEnabled ? s_texBtnEyeOpen : s_texBtnEyeClosed });
 
-    // Disposição original clássica ergonômica (5 no centro, 1 e 7 na coluna esquerda, 3 no topo, 9 no topo-direito):
-    int actX = (int)(winW * 0.74f);
-    int actY = winH - (int)(winW * 0.42f);
-    int r5 = (int)(winW * 0.11f);
-    int rSub = (int)(r5 * 0.74f);
+    if (s_touchOverlayEnabled) {
+      // D-Pad e Cluster de Ação subidos para winW * 0.42f (ergonomia perfeita e abre espaço inferior limpo)
+      layout.dpadX = (int)(winW * 0.22f);
+      layout.dpadY = winH - (int)(winW * 0.42f);
+      layout.dpadR = (int)(winW * 0.175f);
 
-    // 5 - Ataque (Centro, grande)
-    layout.buttons.push_back({ 53, actX, actY, r5, r5 * 2, r5 * 2, s_texBtn5 });
-    // 1 - Skill 1 (Esquerda-cima)
-    layout.buttons.push_back({ 49, actX - (int)(r5 * 1.95f), actY - (int)(r5 * 0.95f), rSub, rSub * 2, rSub * 2, s_texBtn1 });
-    // 3 - Skill 2 (Topo)
-    layout.buttons.push_back({ 51, actX - (int)(r5 * 0.20f), actY - (int)(r5 * 2.10f), rSub, rSub * 2, rSub * 2, s_texBtn3 });
-    // 7 - Poção (Esquerda-baixo, abaixo de 1)
-    layout.buttons.push_back({ 55, actX - (int)(r5 * 1.85f), actY + (int)(r5 * 1.15f), rSub, rSub * 2, rSub * 2, s_texBtn7 });
-    // 9 - Item (Direita-cima)
-    layout.buttons.push_back({ 57, actX + (int)(r5 * 1.35f), actY - (int)(r5 * 1.65f), rSub, rSub * 2, rSub * 2, s_texBtn9 });
+      // Disposição original clássica ergonômica (5 no centro, 1 e 7 na coluna esquerda, 3 no topo, 9 no topo-direito):
+      int actX = (int)(winW * 0.74f);
+      int actY = winH - (int)(winW * 0.42f);
+      int r5 = (int)(winW * 0.11f);
+      int rSub = (int)(r5 * 0.74f);
 
-    // Barra de Sistema no topo (MENU, MAPA, R) com proporção 2.4:1 perfeita e abaixo da status bar
-    int pillW = (int)(winW * 0.25f);
-    int pillH = (int)(pillW * (100.0f / 240.0f));
-    int topY = std::max((int)(winH * 0.080f), pillH / 2 + 36);
+      // 5 - Ataque (Centro, grande)
+      layout.buttons.push_back({ 53, actX, actY, r5, r5 * 2, r5 * 2, s_texBtn5 });
+      // 1 - Skill 1 (Esquerda-cima)
+      layout.buttons.push_back({ 49, actX - (int)(r5 * 1.95f), actY - (int)(r5 * 0.95f), rSub, rSub * 2, rSub * 2, s_texBtn1 });
+      // 3 - Skill 2 (Topo)
+      layout.buttons.push_back({ 51, actX - (int)(r5 * 0.20f), actY - (int)(r5 * 2.10f), rSub, rSub * 2, rSub * 2, s_texBtn3 });
+      // 7 - Poção (Esquerda-baixo, abaixo de 1)
+      layout.buttons.push_back({ 55, actX - (int)(r5 * 1.85f), actY + (int)(r5 * 1.15f), rSub, rSub * 2, rSub * 2, s_texBtn7 });
+      // 9 - Item (Direita-cima)
+      layout.buttons.push_back({ 57, actX + (int)(r5 * 1.35f), actY - (int)(r5 * 1.65f), rSub, rSub * 2, rSub * 2, s_texBtn9 });
 
-    layout.buttons.push_back({ -8, (int)(winW * 0.17f), topY, 0, pillW, pillH, s_texBtnMenu });
-    layout.buttons.push_back({ 48, (int)(winW * 0.50f), topY, 0, pillW, pillH, s_texBtnMap });
-    layout.buttons.push_back({ -7, (int)(winW * 0.83f), topY, 0, pillW, pillH, s_texBtnRsk });
+      // Barra de Sistema no topo (MENU, MAPA, R) com proporção 2.4:1 perfeita e abaixo da status bar
+      int pillW = (int)(winW * 0.25f);
+      int pillH = (int)(pillW * (100.0f / 240.0f));
+      int topY = std::max((int)(winH * 0.080f), pillH / 2 + 36);
 
-    // Alternância de Poção (◀ e ▶) perfeitamente centralizadas no eixo horizontal da tela
-    int rArrow = (int)(winW * 0.060f);
-    int arrowSpacing = (int)(rArrow * 1.25f);
-    int potY = winH - (int)(winW * 0.095f);
-    layout.buttons.push_back({ -101, winW / 2 - arrowSpacing, potY, rArrow, rArrow * 2, rArrow * 2, s_texBtnPrev });
-    layout.buttons.push_back({ 35, winW / 2 + arrowSpacing, potY, rArrow, rArrow * 2, rArrow * 2, s_texBtnNext });
+      layout.buttons.push_back({ -8, (int)(winW * 0.17f), topY, 0, pillW, pillH, s_texBtnMenu });
+      layout.buttons.push_back({ 48, (int)(winW * 0.50f), topY, 0, pillW, pillH, s_texBtnMap });
+      layout.buttons.push_back({ -7, (int)(winW * 0.83f), topY, 0, pillW, pillH, s_texBtnRsk });
+
+      // Alternância de Poção (◀ e ▶) perfeitamente centralizadas no eixo horizontal da tela
+      int rArrow = (int)(winW * 0.060f);
+      int arrowSpacing = (int)(rArrow * 1.25f);
+      int potY = winH - (int)(winW * 0.095f);
+      layout.buttons.push_back({ -101, winW / 2 - arrowSpacing, potY, rArrow, rArrow * 2, rArrow * 2, s_texBtnPrev });
+      layout.buttons.push_back({ 35, winW / 2 + arrowSpacing, potY, rArrow, rArrow * 2, rArrow * 2, s_texBtnNext });
+    }
 
   } else {
     // Modo Paisagem (Landscape)
@@ -380,54 +396,65 @@ static GamepadLayout calculateLayout(int winW, int winH) {
     int rightX = gameX + gameW;
     int rightW = winW - rightX;
 
-    // D-Pad na coluna esquerda (grande e confortável)
-    layout.dpadX = leftW / 2;
-    layout.dpadY = (int)(winH * 0.68f);
-    layout.dpadR = std::min((int)(leftW * 0.35f), (int)(winH * 0.25f));
+    // Botão de Ocultar/Reexibir Controles Virtuais (Canto inferior esquerdo da coluna esquerda)
+    int rToggleLand = (int)(winH * 0.065f);
+    int toggleX = (int)(leftW * 0.18f);
+    int toggleY = winH - (int)(winH * 0.12f);
+    layout.buttons.push_back({ KEY_TOGGLE_TOUCH_UI, toggleX, toggleY, rToggleLand, rToggleLand * 2, rToggleLand * 2,
+                               s_touchOverlayEnabled ? s_texBtnEyeOpen : s_texBtnEyeClosed });
 
-    // MENU proporcional e grande no topo da coluna esquerda
-    int menuW = std::min(240, (int)(leftW * 0.48f));
-    int menuH = (int)(menuW * (100.0f / 240.0f));
-    layout.buttons.push_back({ -8, leftW / 2, (int)(winH * 0.14f), 0, menuW, menuH, s_texBtnMenu });
+    if (s_touchOverlayEnabled) {
+      // D-Pad na coluna esquerda (grande e confortável)
+      layout.dpadX = leftW / 2;
+      layout.dpadY = (int)(winH * 0.68f);
+      layout.dpadR = std::min((int)(leftW * 0.35f), (int)(winH * 0.25f));
 
-    // Setas circulares para poções (◀ e ▶) na coluna ESQUERDA (entre MENU e D-Pad, super ergonômico)
-    int rArrowLand = (int)(winH * 0.075f);
-    int arrowSpacingLand = (int)(rArrowLand * 1.35f);
-    layout.buttons.push_back({ -101, leftW / 2 - arrowSpacingLand, (int)(winH * 0.33f), rArrowLand, rArrowLand * 2, rArrowLand * 2, s_texBtnPrev });
-    layout.buttons.push_back({ 35, leftW / 2 + arrowSpacingLand, (int)(winH * 0.33f), rArrowLand, rArrowLand * 2, rArrowLand * 2, s_texBtnNext });
+      // MENU proporcional e grande no topo da coluna esquerda
+      int menuW = std::min(240, (int)(leftW * 0.48f));
+      int menuH = (int)(menuW * (100.0f / 240.0f));
+      layout.buttons.push_back({ -8, leftW / 2, (int)(winH * 0.14f), 0, menuW, menuH, s_texBtnMenu });
 
-    // MAPA e R no topo da coluna direita (grandes e legíveis)
-    int topPillW = std::min(200, (int)(rightW * 0.38f));
-    int topPillH = (int)(topPillW * (100.0f / 240.0f));
-    layout.buttons.push_back({ 48, rightX + (int)(rightW * 0.28f), (int)(winH * 0.14f), 0, topPillW, topPillH, s_texBtnMap });
-    layout.buttons.push_back({ -7, rightX + (int)(rightW * 0.72f), (int)(winH * 0.14f), 0, topPillW, topPillH, s_texBtnRsk });
+      // Setas circulares para poções (◀ e ▶) na coluna ESQUERDA (entre MENU e D-Pad, super ergonômico)
+      int rArrowLand = (int)(winH * 0.075f);
+      int arrowSpacingLand = (int)(rArrowLand * 1.35f);
+      layout.buttons.push_back({ -101, leftW / 2 - arrowSpacingLand, (int)(winH * 0.33f), rArrowLand, rArrowLand * 2, rArrowLand * 2, s_texBtnPrev });
+      layout.buttons.push_back({ 35, leftW / 2 + arrowSpacingLand, (int)(winH * 0.33f), rArrowLand, rArrowLand * 2, rArrowLand * 2, s_texBtnNext });
 
-    // Botões de ação no formato ergonômico favorito na coluna direita (amplo e espaçoso sem as setas!)
-    int actX = rightX + (int)(rightW * 0.50f);
-    int actY = (int)(winH * 0.65f);
-    int r5 = std::min((int)(rightW * 0.17f), (int)(winH * 0.13f));
-    int rSub = (int)(r5 * 0.74f);
+      // MAPA e R no topo da coluna direita (grandes e legíveis)
+      int topPillW = std::min(200, (int)(rightW * 0.38f));
+      int topPillH = (int)(topPillW * (100.0f / 240.0f));
+      layout.buttons.push_back({ 48, rightX + (int)(rightW * 0.28f), (int)(winH * 0.14f), 0, topPillW, topPillH, s_texBtnMap });
+      layout.buttons.push_back({ -7, rightX + (int)(rightW * 0.72f), (int)(winH * 0.14f), 0, topPillW, topPillH, s_texBtnRsk });
 
-    layout.buttons.push_back({ 53, actX, actY, r5, r5 * 2, r5 * 2, s_texBtn5 });
-    layout.buttons.push_back({ 49, actX - (int)(r5 * 1.95f), actY - (int)(r5 * 0.95f), rSub, rSub * 2, rSub * 2, s_texBtn1 });
-    layout.buttons.push_back({ 51, actX - (int)(r5 * 0.20f), actY - (int)(r5 * 2.10f), rSub, rSub * 2, rSub * 2, s_texBtn3 });
-    layout.buttons.push_back({ 55, actX - (int)(r5 * 1.85f), actY + (int)(r5 * 1.15f), rSub, rSub * 2, rSub * 2, s_texBtn7 });
-    layout.buttons.push_back({ 57, actX + (int)(r5 * 1.35f), actY - (int)(r5 * 1.65f), rSub, rSub * 2, rSub * 2, s_texBtn9 });
+      // Botões de ação no formato ergonômico favorito na coluna direita (amplo e espaçoso sem as setas!)
+      int actX = rightX + (int)(rightW * 0.50f);
+      int actY = (int)(winH * 0.65f);
+      int r5 = std::min((int)(rightW * 0.17f), (int)(winH * 0.13f));
+      int rSub = (int)(r5 * 0.74f);
+
+      layout.buttons.push_back({ 53, actX, actY, r5, r5 * 2, r5 * 2, s_texBtn5 });
+      layout.buttons.push_back({ 49, actX - (int)(r5 * 1.95f), actY - (int)(r5 * 0.95f), rSub, rSub * 2, rSub * 2, s_texBtn1 });
+      layout.buttons.push_back({ 51, actX - (int)(r5 * 0.20f), actY - (int)(r5 * 2.10f), rSub, rSub * 2, rSub * 2, s_texBtn3 });
+      layout.buttons.push_back({ 55, actX - (int)(r5 * 1.85f), actY + (int)(r5 * 1.15f), rSub, rSub * 2, rSub * 2, s_texBtn7 });
+      layout.buttons.push_back({ 57, actX + (int)(r5 * 1.35f), actY - (int)(r5 * 1.65f), rSub, rSub * 2, rSub * 2, s_texBtn9 });
+    }
   }
 
   return layout;
 }
 
 static int hitTestTouch(float touchX, float touchY, const GamepadLayout& layout) {
-  // 1. Testa D-Pad primeiro se o toque estiver na sua vizinhança
-  float ddx = touchX - layout.dpadX;
-  float ddy = touchY - layout.dpadY;
-  float distDpad = sqrt(ddx * ddx + ddy * ddy);
-  if (distDpad <= layout.dpadR * 1.25f && distDpad >= layout.dpadR * 0.08f) {
-    if (std::abs(ddx) > std::abs(ddy)) {
-      return (ddx < 0) ? -3 : -4; // Left / Right
-    } else {
-      return (ddy < 0) ? -1 : -2; // Up / Down
+  // 1. Testa D-Pad primeiro se o toque estiver na sua vizinhança e D-Pad estiver ativo
+  if (layout.dpadR > 0) {
+    float ddx = touchX - layout.dpadX;
+    float ddy = touchY - layout.dpadY;
+    float distDpad = sqrt(ddx * ddx + ddy * ddy);
+    if (distDpad <= layout.dpadR * 1.25f && distDpad >= layout.dpadR * 0.08f) {
+      if (std::abs(ddx) > std::abs(ddy)) {
+        return (ddx < 0) ? -3 : -4; // Left / Right
+      } else {
+        return (ddy < 0) ? -1 : -2; // Up / Down
+      }
     }
   }
 
@@ -469,8 +496,8 @@ static int hitTestTouch(float touchX, float touchY, const GamepadLayout& layout)
 static void drawGamepad(const GamepadLayout& layout) {
   if (!s_renderer) return;
 
-  // 1. D-Pad Virtual (Translúcido / Frosted Glass Overlay)
-  if (s_texDpadBase) {
+  // 1. D-Pad Virtual (Translúcido / Frosted Glass Overlay) se controles habilitados
+  if (s_touchOverlayEnabled && s_texDpadBase && layout.dpadR > 0) {
     bool dpadActive = (s_touchHeldDirection != 0);
     SDL_SetTextureAlphaMod(s_texDpadBase, dpadActive ? 230 : 155);
 
@@ -503,7 +530,13 @@ static void drawGamepad(const GamepadLayout& layout) {
   for (const auto& b : layout.buttons) {
     if (!b.tex) continue;
     bool isHeld = isTouchKeyHeld(b.key);
-    SDL_SetTextureAlphaMod(b.tex, isHeld ? 255 : 155);
+    
+    if (b.key == KEY_TOGGLE_TOUCH_UI) {
+      Uint8 alpha = isHeld ? 255 : (s_touchOverlayEnabled ? 150 : 110);
+      SDL_SetTextureAlphaMod(b.tex, alpha);
+    } else {
+      SDL_SetTextureAlphaMod(b.tex, isHeld ? 255 : 155);
+    }
 
     SDL_Rect dst = { b.cx - b.w / 2, b.cy - b.h / 2, b.w, b.h };
     SDL_RenderCopy(s_renderer, b.tex, nullptr, &dst);
@@ -778,7 +811,6 @@ bool Platform::pollEvents(VM& vm) {
 
     // Toques na tela (Touchscreen Mobile / Virtual Controller)
     else if (ev.type == SDL_FINGERDOWN) {
-      s_touchOverlayEnabled = true;
       int winW = 0, winH = 0;
       SDL_GetRendererOutputSize(s_renderer, &winW, &winH);
       if (winW <= 0 || winH <= 0) SDL_GetWindowSize(s_window, &winW, &winH);
@@ -787,7 +819,24 @@ bool Platform::pollEvents(VM& vm) {
       GamepadLayout layout = calculateLayout(winW, winH);
 
       int key = hitTestTouch(touchX, touchY, layout);
-      if (key != 0) {
+      if (key == KEY_TOGGLE_TOUCH_UI) {
+        s_touchOverlayEnabled = !s_touchOverlayEnabled;
+        if (!s_touchOverlayEnabled) {
+          // Solta direcional ou teclas mantidas para não travar andando
+          if (s_activeDirection != 0 && g_display && g_display->current) {
+            vm.gilLock();
+            try {
+              Value args[1]; args[0].i = s_activeDirection; Value ret[2];
+              vm.invokeVirtual(g_display->current, "keyReleased:(I)V", args, 1, ret);
+            } catch (...) {}
+            vm.gilUnlock();
+          }
+          s_activeDirection = 0;
+          s_touchHeldDirection = 0;
+          s_activeFingers.clear();
+        }
+        Platform::rumble(0.20f, 40);
+      } else if (key != 0 && s_touchOverlayEnabled) {
         s_activeFingers.push_back({ev.tfinger.fingerId, key});
         if (key == -101) {
           cyclePotionPrev(vm);
@@ -830,6 +879,7 @@ bool Platform::pollEvents(VM& vm) {
       for (auto& f : s_activeFingers) {
         if (f.id == ev.tfinger.fingerId) {
           int newKey = hitTestTouch(touchX, touchY, layout);
+          if (newKey == KEY_TOGGLE_TOUCH_UI) newKey = 0;
           if (newKey != f.key) {
             int oldKey = f.key;
             f.key = newKey;
@@ -997,6 +1047,11 @@ void Platform::present() {
   SDL_SetRenderDrawColor(s_renderer, 10, 12, 16, 255);
   SDL_RenderClear(s_renderer);
 
+#ifdef __ANDROID__
+  GamepadLayout layout = calculateLayout(winW, winH);
+  SDL_RenderCopy(s_renderer, s_screenTexture, nullptr, &layout.gameRect);
+  drawGamepad(layout);
+#else
   if (s_touchOverlayEnabled) {
     GamepadLayout layout = calculateLayout(winW, winH);
     SDL_RenderCopy(s_renderer, s_screenTexture, nullptr, &layout.gameRect);
@@ -1011,6 +1066,7 @@ void Platform::present() {
     SDL_Rect dstGame = { (winW - dstW) / 2, (winH - dstH) / 2, dstW, dstH };
     SDL_RenderCopy(s_renderer, s_screenTexture, nullptr, &dstGame);
   }
+#endif
 
   SDL_RenderPresent(s_renderer);
 }
@@ -1032,6 +1088,8 @@ void Platform::shutdown() {
   if (s_texBtnRsk) { SDL_DestroyTexture(s_texBtnRsk); s_texBtnRsk = nullptr; }
   if (s_texBtnPrev) { SDL_DestroyTexture(s_texBtnPrev); s_texBtnPrev = nullptr; }
   if (s_texBtnNext) { SDL_DestroyTexture(s_texBtnNext); s_texBtnNext = nullptr; }
+  if (s_texBtnEyeOpen) { SDL_DestroyTexture(s_texBtnEyeOpen); s_texBtnEyeOpen = nullptr; }
+  if (s_texBtnEyeClosed) { SDL_DestroyTexture(s_texBtnEyeClosed); s_texBtnEyeClosed = nullptr; }
   if (s_texBtnGlow) { SDL_DestroyTexture(s_texBtnGlow); s_texBtnGlow = nullptr; }
   s_gamepadTexturesLoaded = false;
   if (s_screenTexture) { SDL_DestroyTexture(s_screenTexture); s_screenTexture = nullptr; }

@@ -123,9 +123,13 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
 - **Centralização Simétrica Vertical e Balanceamento de Colunas em Paisagem:**
   - No modo vertical, as setas `◀` e `▶` agora usam como âncora o centro exato da tela (`winW / 2`), ficando posicionadas simetricamente à esquerda (`winW/2 - spacing`) e à direita (`winW/2 + spacing`), alinhando-se com a pílula do `MAPA` e a barra de gestos do Android.
   - No modo paisagem, transferir as setas `◀` e `▶` para a coluna esquerda (entre o `MENU` e o D-Pad) equilibrou perfeitamente as duas metades da tela. O polegar esquerdo agora pode facilmente alterar poções/itens enquanto navega, e o polegar direito ganha espaço desobstruído para os 5 botões de ação e os botões de sistema `MAPA` e `R`.
-
-
-
+- **Botão de Alternância para Ocultar/Reexibir Controles Virtuais (Eye Toggle Overlay):**
+  - Implementado um botão sutil de olho no canto inferior esquerdo da tela (`btn_eye_open` e `btn_eye_closed`), renderizado com estética glassmorphic e 4x supersampling.
+  - Permite ao jogador desativar completamente a sobreposição dos botões na tela com um único toque, deixando a imagem do jogo 100% desobstruída (ideal para cutscenes, apreciação de cenários ou quando estiver usando um gamepad Bluetooth físico).
+  - Para reexibir, basta tocar no ícone discreto do olho fechado.
+  - Prevenção de reativação indesejada: toques comuns na área do jogo não reexibem os controles, apenas o botão de alternância dedicado.
+  - Ao ocultar com teclas pressionadas, o sistema limpa `s_activeFingers` e emite `keyReleased` para o VM J2ME, evitando que o personagem continue andando sozinho.
+  - Acompanhado de leve vibração tátil (haptic feedback) de confirmação.
 
 
 

@@ -265,6 +265,62 @@ def make_glow_overlay(final_size=128):
 
     return img.resize((final_size, final_size), Image.Resampling.LANCZOS)
 
+def make_eye_icon(final_size=96, closed=False):
+    import math
+    s = 4
+    size = final_size * s
+    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    cx, cy = size // 2, size // 2
+    r_outer = size // 2 - 6 * s
+
+    # Sombra
+    for i in range(8 * s, 0, -2 * s):
+        d.ellipse([cx - r_outer - i, cy - r_outer - i, cx + r_outer + i, cy + r_outer + i],
+                  fill=(0, 0, 0, int(15 * (1.0 - i / (8 * s)))))
+
+    # Base circular de vidro escuro
+    d.ellipse([cx - r_outer, cy - r_outer, cx + r_outer, cy + r_outer],
+              fill=(20, 24, 34, 230), outline=(70, 85, 110, 230), width=3*s)
+    # Chanfro superior
+    d.arc([cx - r_outer + 2*s, cy - r_outer + 2*s, cx + r_outer - 2*s, cy + r_outer - 2*s],
+          210, 330, fill=(160, 195, 245, 180), width=2*s)
+
+    # Contorno do olho
+    ew = int(r_outer * 0.70)
+    eh = int(r_outer * 0.42)
+    eye_pts_top = []
+    eye_pts_bot = []
+    steps = 40
+    for step in range(steps + 1):
+        t = step / steps
+        x = cx - ew + 2 * ew * t
+        y_offset = eh * math.sin(t * math.pi)
+        eye_pts_top.append((x, cy - y_offset))
+        eye_pts_bot.append((x, cy + y_offset))
+
+    eye_poly = eye_pts_top + eye_pts_bot[::-1]
+    d.polygon(eye_poly, fill=(35, 42, 58, 240), outline=(180, 205, 235, 240))
+    for i in range(len(eye_poly)):
+        p1 = eye_poly[i]
+        p2 = eye_poly[(i + 1) % len(eye_poly)]
+        d.line([p1, p2], fill=(200, 225, 255, 255), width=3*s)
+
+    # Pupila / Íris
+    r_iris = int(eh * 0.75)
+    d.ellipse([cx - r_iris, cy - r_iris, cx + r_iris, cy + r_iris],
+              fill=(0, 200, 255, 255), outline=(255, 255, 255, 220), width=2*s)
+    r_pupil = int(r_iris * 0.50)
+    d.ellipse([cx - r_pupil, cy - r_pupil, cx + r_pupil, cy + r_pupil], fill=(10, 15, 25, 255))
+    d.ellipse([cx - r_pupil // 2, cy - r_pupil // 2 - 2*s, cx, cy - 2*s], fill=(255, 255, 255, 255))
+
+    if closed:
+        slash_len = int(r_outer * 0.75)
+        d.line([(cx - slash_len, cy - slash_len), (cx + slash_len, cy + slash_len)],
+               fill=(255, 60, 80, 255), width=4*s)
+
+    return img.resize((final_size, final_size), Image.Resampling.LANCZOS)
+
 def main():
     dest_dirs = [
         "android/app/src/main/assets/ui",
@@ -285,6 +341,8 @@ def main():
         "btn_rsk": make_pill_button("R", 240, 100, accent_color=(240, 110, 80)),
         "btn_prev": make_arrow_button("left", 108, accent_color=(0, 200, 255)),
         "btn_next": make_arrow_button("right", 108, accent_color=(0, 200, 255)),
+        "btn_eye_open": make_eye_icon(96, False),
+        "btn_eye_closed": make_eye_icon(96, True),
         "btn_glow": make_glow_overlay(128),
     }
 
