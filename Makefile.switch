@@ -138,11 +138,13 @@ else
 
 DEPENDS :=  $(OFILES:.o=.d)
 
+all: $(OUTPUT).nro
+
+$(OUTPUT).nro:  $(OUTPUT).elf $(OUTPUT).nacp
+
 $(OUTPUT).nacp:
 	@echo "Creating $(notdir $@) com TitleID $(APP_TITLEID)..."
 	@nacptool --create "$(APP_TITLE)" "$(APP_AUTHOR)" "$(APP_VERSION)" $@ --titleid=$(APP_TITLEID)
-
-$(OUTPUT).nro:  $(OUTPUT).elf $(OUTPUT).nacp
 
 $(OUTPUT).elf:  $(OFILES)
 
