@@ -111,9 +111,14 @@ static int mapControllerButton(Uint8 btn) {
 
 bool Platform::init(int scale) {
 #ifdef __SWITCH__
-  romfsInit();
+  Result rc = romfsInit();
+  if (R_FAILED(rc)) {
+    fprintf(stderr, "[RomFS] Falha ao inicializar romfsInit: 0x%x\n", rc);
+  } else {
+    printf("[RomFS] RomFS inicializado com sucesso!\n");
+  }
 #endif
-  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC) < 0) {
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS | SDL_INIT_GAMECONTROLLER) < 0) {
     fprintf(stderr, "Erro ao inicializar SDL: %s\n", SDL_GetError());
     return false;
   }
@@ -130,7 +135,7 @@ bool Platform::init(int scale) {
       "Heroes Lore: Wind of Soltia",
       0, 0,
       1280, 720,
-      SDL_WINDOW_FULLSCREEN);
+      0);
 #else
   int winW = 240 * scale;
   int winH = 320 * scale;
@@ -149,13 +154,19 @@ bool Platform::init(int scale) {
   // Configura hints antes de criar renderizador e texturas
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0"); // Pixel-perfect nearest neighbor
 
+#ifdef _WIN32
   // Prioriza direct3d11 no Windows para estabilidade moderna de GPU
   SDL_SetHint(SDL_HINT_RENDER_DRIVER, "direct3d11");
+#endif
   s_renderer = SDL_CreateRenderer(
       s_window, -1,
       SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
   if (!s_renderer) {
+#ifndef __SWITCH__
     SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+#else
+    SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengles2");
+#endif
     s_renderer = SDL_CreateRenderer(s_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
   }
   if (!s_renderer) {
@@ -620,6 +631,12 @@ static void cyclePotionNext(VM& vm) {
 }
 
 bool Platform::pollEvents(VM& vm) {
+#ifdef __SWITCH__
+  if (!appletMainLoop()) {
+    s_quit = true;
+    return false;
+  }
+#endif
   SDL_Event ev;
   while (SDL_PollEvent(&ev)) {
     if (ev.type == SDL_QUIT) {
@@ -1167,45 +1184,58 @@ bool Platform::shouldQuit() {
 std::vector<uint8_t> Platform::readAsset(const std::string& path) {
   if (path.empty()) return {};
 
+  std::string clean = path;
+  while (!clean.empty() && (clean[0] == '/' || clean[0] == '\\')) {
+    clean = clean.substr(1);
+  }
+
   // 1. Tenta o caminho exato
-  SDL_RWops* rw = SDL_RWFromFile(path.c_str(), "rb");
+  SDL_RWops* rw = SDL_RWFromFile(clean.c_str(), "rb");
   
   // 2. Se falhar e começar com "./", tenta sem
-  if (!rw && path.rfind("./", 0) == 0) {
-    rw = SDL_RWFromFile(path.substr(2).c_str(), "rb");
+  if (!rw && clean.rfind("./", 0) == 0) {
+    rw = SDL_RWFromFile(clean.substr(2).c_str(), "rb");
   }
   
   // 3. Tenta prefixando "assets/"
   if (!rw) {
-    std::string alt = "assets/" + path;
+    std::string alt = "assets/" + clean;
     rw = SDL_RWFromFile(alt.c_str(), "rb");
   }
 
   // 4. Tenta prefixando "reference/extracted/"
   if (!rw) {
-    std::string alt = "reference/extracted/" + path;
+    std::string alt = "reference/extracted/" + clean;
     rw = SDL_RWFromFile(alt.c_str(), "rb");
   }
 
 #ifdef __SWITCH__
   // 5. No Nintendo Switch, tenta via romfs:/
   if (!rw) {
-    std::string alt = "romfs:/" + path;
+    std::string alt = "romfs:/" + clean;
     rw = SDL_RWFromFile(alt.c_str(), "rb");
   }
   if (!rw) {
-    std::string alt = "romfs:/reference/extracted/" + path;
+    std::string alt = "romfs:/reference/extracted/" + clean;
     rw = SDL_RWFromFile(alt.c_str(), "rb");
   }
   if (!rw) {
-    std::string alt = "romfs:/assets/" + path;
+    std::string alt = "romfs:/extracted/" + clean;
+    rw = SDL_RWFromFile(alt.c_str(), "rb");
+  }
+  if (!rw) {
+    std::string alt = "romfs:/assets/" + clean;
+    rw = SDL_RWFromFile(alt.c_str(), "rb");
+  }
+  if (!rw) {
+    std::string alt = "romfs:/ui/" + clean;
     rw = SDL_RWFromFile(alt.c_str(), "rb");
   }
 #endif
 
   // 6. Tenta em ../assets/ ou ../reference/extracted/
   if (!rw) {
-    std::string alt = "../" + path;
+    std::string alt = "../" + clean;
     rw = SDL_RWFromFile(alt.c_str(), "rb");
   }
 

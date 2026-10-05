@@ -142,5 +142,18 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - Com o script `tools/prepare_switch_romfs.py`, unificamos `reference/extracted` (bytecodes `.class`, mapas `.dat`, trilhas sonoras `.mid`, fontes e gráficos) e `assets` em uma pasta temporária `romfs/`.
   - O arquivo final `heroes_lore.nro` fica com ~5 MB completamente autocontido, dispensando a necessidade de copiar pastas avulsas para o SD Card. Basta copiar o `.nro` e jogar.
 - **CI / GitHub Actions com Container Oficial `devkita64`:**
-  - Configurado workflow automatizado em `.github/workflows/build-switch.yml` usando o container Docker oficial `devkitpro/devkita64:latest`. A cada push, as dependências `switch-dev`, `switch-sdl2` e `switch-sdl2_mixer` são instaladas via `dkp-pacman`, e o executável `.nro` é gerado e disponibilizado para download nos artefatos da compilação.
+  - Configurado workflow automatizado em `.github/workflows/build-switch.yml` usando o container Docker oficial `devkitpro/devkita64:latest`. A cada push, as dependências e ferramentas já integradas na imagem oficial compilam o executável `.nro`, que é verificado por `tools/inspect_nro.py` e disponibilizado nos artefatos.
+
+## Sessão 10 (Diagnóstico do Boot no Switch e Correção de CI / RomFS)
+- **Eliminação do Erro 403 no devkitPro Pacman:**
+  - O repositório `pkg.devkitpro.org` possui proteção Cloudflare que rejeita sincronizações (`-Sy` / `-Syu`) originadas dos IPs do GitHub Actions com HTTP 403.
+  - Como o container `devkitpro/devkita64:latest` já inclui os headers do SDL2 e as bibliotecas estáticas (`libSDL2.a`, `libSDL2_mixer.a`, etc.) pré-instaladas em `/opt/devkitpro/portlibs/switch`, a invocação do `dkp-pacman` é totalmente desnecessária, eliminando os erros do pipeline de CI.
+- **Causa do Fechamento Imediato no Boot (`SDL_INIT_HAPTIC`):**
+  - O backend SDL2 para Nintendo Switch (libnx) não suporta a API legada de feedback háptico (`SDL_HAPTIC`). Chamar `SDL_Init` incluindo `SDL_INIT_HAPTIC` faz com que o `SDL_Init` falhe com código `< 0`, abortando a inicialização no primeiro milissegundo.
+  - O rumble no Switch é realizado exclusivamente através da API moderna `SDL_GameControllerRumble()`. A remoção da flag restaura a inicialização perfeita do SDL2.
+- **Criação de Superfície de Janela (`SDL_CreateWindow`):**
+  - No Switch, o uso da flag `SDL_WINDOW_FULLSCREEN` em alguns emuladores mobile (Eden, Citron) causa tentativa de mudança de modo de exibição de desktop que pode encerrar a aplicação. A utilização da flag neutra `0` (conforme exemplos oficiais do libnx) cria a superfície direta em 1280x720 sem efeitos colaterais.
+- **Espelhamento de Estrutura de Pastas na RomFS:**
+  - O utilitário `tools/prepare_switch_romfs.py` foi atualizado com `dirs_exist_ok=True` para empacotar os arquivos na raiz de `romfs:/`, em `romfs:/reference/extracted/` e em `romfs:/extracted/`, garantindo compatibilidade total independente do formato com que a VM ou as classes Java solicitarem os arquivos (com ou sem barra inicial, prefixadas ou relativas).
+
 

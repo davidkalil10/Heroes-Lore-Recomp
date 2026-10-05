@@ -161,6 +161,7 @@ int main(int argc, char** argv) {
     Platform::present();
 
     frameCount++;
+#ifndef __SWITCH__
     if (frameCount == 1 || frameCount == 10 || frameCount == 30 || frameCount == 60 || frameCount == 120 ||
         frameCount == 160 || frameCount == 200 || frameCount == 260 || frameCount == 320) {
       char fname[64];
@@ -169,6 +170,7 @@ int main(int argc, char** argv) {
       printf("[Frame %d] Salvo screenshot %s (current Canvas: %s)\n",
              frameCount, fname, (g_display && g_display->current) ? g_display->current->cls->name.c_str() : "none");
     }
+#endif
 
     SDL_Delay(8);
   }

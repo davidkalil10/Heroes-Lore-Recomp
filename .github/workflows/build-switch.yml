@@ -20,24 +20,18 @@ jobs:
       - name: Configure Git Safe Directory
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - name: Install Switch Dependencies
+      - name: Verify Switch Toolchain & Portlibs
         run: |
-          for conf in /opt/devkitpro/pacman/etc/pacman.conf /etc/pacman.conf; do
-            if [ -f "$conf" ]; then
-              echo "Configurando $conf com User-Agent de navegador..."
-              sed -i 's|^#*XferCommand = .*|XferCommand = /usr/bin/curl -g -q --retry 3 --retry-delay 3 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36" -L -C - -f -o %o %u|' "$conf"
-            fi
-          done
-          for i in 1 2 3 4 5; do
-            echo "Tentativa $i de instalação das bibliotecas SDL2..."
-            dkp-pacman -Sy --needed --noconfirm switch-sdl2 switch-sdl2_mixer && break || sleep 3
-          done
+          export DEVKITPRO=/opt/devkitpro
+          export PORTLIBS=$DEVKITPRO/portlibs/switch
+          echo "Verificando headers SDL2 e bibliotecas..."
+          ls -la $PORTLIBS/include/SDL2/SDL.h
+          ls -la $PORTLIBS/lib/libSDL2.a
+          ls -la $PORTLIBS/lib/libSDL2_mixer.a
 
       - name: Prepare RomFS Assets
         run: |
-          mkdir -p romfs
-          cp -r reference/extracted romfs/
-          cp -r assets romfs/
+          python3 tools/prepare_switch_romfs.py
           ls -la romfs
 
       - name: Compile Heroes Lore NRO
