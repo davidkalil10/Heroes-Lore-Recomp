@@ -22,7 +22,16 @@ jobs:
 
       - name: Install Switch Dependencies
         run: |
-          dkp-pacman -Syu --noconfirm switch-dev switch-sdl2 switch-sdl2_mixer switch-pkg-config
+          for conf in /opt/devkitpro/pacman/etc/pacman.conf /etc/pacman.conf; do
+            if [ -f "$conf" ]; then
+              echo "Configurando $conf com User-Agent de navegador..."
+              sed -i 's|^#*XferCommand = .*|XferCommand = /usr/bin/curl -g -q --retry 3 --retry-delay 3 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36" -L -C - -f -o %o %u|' "$conf"
+            fi
+          done
+          for i in 1 2 3 4 5; do
+            echo "Tentativa $i de instalação das bibliotecas SDL2..."
+            dkp-pacman -Sy --needed --noconfirm switch-sdl2 switch-sdl2_mixer && break || sleep 3
+          done
 
       - name: Prepare RomFS Assets
         run: |
