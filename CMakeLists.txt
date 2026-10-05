@@ -5,7 +5,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(SDL2 REQUIRED)
-find_package(SDL2_mixer REQUIRED)
+find_package(SDL2_mixer QUIET)
+if (NOT SDL2_mixer_FOUND)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(SDL2_MIXER REQUIRED IMPORTED_TARGET SDL2_mixer)
+endif()
 
 set(SOURCES
     src/main.cpp
@@ -38,6 +42,8 @@ endif()
 
 if (TARGET SDL2_mixer::SDL2_mixer)
     target_link_libraries(heroes_lore PRIVATE SDL2_mixer::SDL2_mixer)
+elseif (TARGET PkgConfig::SDL2_MIXER)
+    target_link_libraries(heroes_lore PRIVATE PkgConfig::SDL2_MIXER)
 else()
     target_link_libraries(heroes_lore PRIVATE ${SDL2_MIXER_LIBRARIES})
 endif()
