@@ -156,4 +156,19 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
 - **Espelhamento de Estrutura de Pastas na RomFS:**
   - O utilitário `tools/prepare_switch_romfs.py` foi atualizado com `dirs_exist_ok=True` para empacotar os arquivos na raiz de `romfs:/`, em `romfs:/reference/extracted/` e em `romfs:/extracted/`, garantindo compatibilidade total independente do formato com que a VM ou as classes Java solicitarem os arquivos (com ou sem barra inicial, prefixadas ou relativas).
 
+## Sessão 11 (Estabilidade no Switch Real, Diagnóstico de Memória e Threading)
+- **Eliminação do Crash / Kernel Panic do Atmosphère (`2168-0001` no `hbloader`):**
+  - O utilitário `nacptool` estava sendo invocado com a flag fixa `--titleid=0100686C73000000`. No Atmosphère e no Horizon OS, especificar um Title ID arbitrário em binários `.nro` faz com que o loader do sistema tente vincular o aplicativo a um TID inexistente no console, gerando um kernel panic fatal que forçava o reboot do Switch.
+  - A remoção da flag `--titleid` no `Makefile.switch` permite que o `hbloader` execute o Homebrew no espaço de memória limpo de homebrew padrão (`010000000000100d`), cessando completamente os crashes do sistema.
+- **Diagnóstico Crítico: Applet Mode (Álbum) vs. Title Override:**
+  - O crash dump gerado no console físico revelou que o aplicativo estava sendo iniciado via Applet Mode (clicar no Álbum). No modo Applet, o Horizon OS reserva apenas ~32 MB a 40 MB de memória RAM total para o processo.
+  - O carregamento das centenas de classes J2ME, buffers de tela e assets estoura rapidamente essa cota.
+  - No Switch real, homebrews com engines ou máquinas virtuais devem ser executados via **Title Override** (segurar o botão <kbd>R</kbd> ao abrir qualquer jogo comercial ou demo instalado no console), garantindo acesso a todos os ~3.5 GB de memória RAM disponíveis.
+- **Suporte a Threads (`std::thread`) no Toolchain devkitA64:**
+  - No GCC `aarch64-none-elf`, chamadas a `std::thread` requerem explicitamente a flag `-pthread` no compilador e no linker. A ausência da flag impedia o funcionamento da thread principal de lógica do jogo iniciada por `GameMIDlet.startApp()` (`bs.var_bs_a.c()`).
+- **Persistência de Logs em Disco com `dup2`:**
+  - Adicionado redirecionamento no boot de `STDOUT_FILENO` e `STDERR_FILENO` diretamente para o descritor de arquivo de `sdmc:/heroes_lore_boot.log` usando `dup2()`.
+  - A função de log `hl::boot_log` foi unificada no namespace `hl` em `src/platform/platform.h` e conectada a `VM::fatal()`, garantindo que qualquer encerramento inesperado ou exceção não tratada seja imediatamente persistida no cartão microSD.
+
+
 

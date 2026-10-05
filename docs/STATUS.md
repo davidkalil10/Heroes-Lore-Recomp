@@ -63,8 +63,12 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
     - Suporte a tela de toque capacitiva com opção de overlay touch ativável pelo botão discreto de olho.
   - Ícone oficial do Switch em alta qualidade (256x256 JPEG) gerado em `switch/icon.jpg`.
   - Pipeline de RomFS automatizado em `tools/prepare_switch_romfs.py` para empacotar o jogo completo em um único executável `.nro` autocontido de ~5 MB.
-  - Makefile devkitPro oficial configurado em `Makefile.switch` com metadados NACP (Título, Descrição, Autor, Versão e Ícone) e flags C++17 com suporte a exceções (`-fexceptions`).
+  - Makefile devkitPro oficial configurado em `Makefile.switch` com metadados NACP (Título, Descrição, Autor, Versão e Ícone), flags C++17 com suporte a exceções (`-fexceptions`) e threading (`-pthread`).
   - Workflow de Integração Contínua (CI) em `.github/workflows/build-switch.yml` utilizando o container oficial `devkitpro/devkita64:latest` para compilar e gerar o arquivo `heroes_lore.nro` automaticamente a cada push.
+  - Estabilidade em Hardware Real (Atmosphère):
+    - Removido `--titleid` fixo do `nacptool` que causava pânico do kernel (`2168-0001` no `hbloader`).
+    - Identificada e documentada a restrição do Applet Mode (~32MB RAM) vs Title Override (acesso a 3.5GB RAM).
+    - Redirecionamento de `stdout`/`stderr` via `dup2` para `sdmc:/heroes_lore_boot.log` e unificação de `hl::boot_log`.
 
 ## Próximos passos (Roadmap)
 - [ ] Passo 5: Aspect Ratio & Taxa de Quadros (Widescreen, Molduras Temáticas / Bezels e seletor 30 FPS Clássico vs 60 FPS Fluido).
