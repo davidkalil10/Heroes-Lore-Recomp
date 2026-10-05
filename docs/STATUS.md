@@ -69,6 +69,8 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
     - Removido `--titleid` fixo do `nacptool` que causava pânico do kernel (`2168-0001` no `hbloader`).
     - Identificada e documentada a restrição do Applet Mode (~32MB RAM) vs Title Override (acesso a 3.5GB RAM).
     - Redirecionamento de `stdout`/`stderr` via `dup2` para `sdmc:/heroes_lore_boot.log` e unificação de `hl::boot_log`.
+    - Substituição de `std::thread` por `SDL_CreateThreadWithStackSize` (2MB de stack) com suporte nativo da libnx.
+    - Remoção de `thread_local` no ponteiro `tctx`, eliminando corrupção de TLS no Switch.
 
 ## Próximos passos (Roadmap)
 - [ ] Passo 5: Aspect Ratio & Taxa de Quadros (Widescreen, Molduras Temáticas / Bezels e seletor 30 FPS Clássico vs 60 FPS Fluido).

@@ -170,5 +170,14 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - Adicionado redirecionamento no boot de `STDOUT_FILENO` e `STDERR_FILENO` diretamente para o descritor de arquivo de `sdmc:/heroes_lore_boot.log` usando `dup2()`.
   - A função de log `hl::boot_log` foi unificada no namespace `hl` em `src/platform/platform.h` e conectada a `VM::fatal()`, garantindo que qualquer encerramento inesperado ou exceção não tratada seja imediatamente persistida no cartão microSD.
 
+## Sessão 12 (Substituição de std::thread por SDL_CreateThread e Remoção de thread_local)
+- **Incompatibilidade Crítica de `std::thread` no devkitA64 / libnx:**
+  - O GCC 15 `aarch64-none-elf` no ambiente bare-metal do devkitPro não implementa um runtime completo de POSIX pthreads. Chamar `std::thread` faz com que o construtor invoque `std::terminate()` / `abort()`, encerrando imediatamente o processo do Switch com a mensagem "O software foi fechado pois ocorreu um erro".
+  - A solução ideal foi migrar a criação de threads secundárias da VM J2ME (`VM::startThread`) para a API nativa do SDL2: `SDL_CreateThreadWithStackSize(javaThreadRunner, "HL_JavaThread", 2 * 1024 * 1024, args)`. O SDL2 possui suporte direto ao kernel do Switch via chamadas oficiais `threadCreate()` e `threadStart()`, com stack dedicado de 2MB.
+- **Eliminação do `thread_local` no Ponteiro `tctx`:**
+  - A variável `extern thread_local ThreadCtx* tctx` dependia do registrador de Thread Local Storage (`TPIDR_EL0`). Em sistemas sem loader dinâmico completo de TLS, threads criadas fora da libc não têm seus segmentos `.tbss`/`.tdata` inicializados, corrompendo a leitura do ponteiro e causando Data Abort / Panic ao tentar acessar `tctx->sp`.
+  - Como a máquina virtual já é 100% serializada pelo Global Interpreter Lock (`gil.lock()`), a variável foi convertida para um ponteiro global padrão `ThreadCtx* tctx = nullptr;`. Cada thread salva e restaura `tctx` deterministicamente ao adquirir e liberar o GIL (inclusive durante `sleepMs` e `monitorEnter` com `SDL_Delay`), garantindo segurança absoluta de concorrência sem depender de TLS.
+
+
 
 
