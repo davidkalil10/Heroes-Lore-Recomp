@@ -22,7 +22,7 @@ jobs:
 
       - name: Install Switch Dependencies
         run: |
-          dkp-pacman -Syu --noconfirm switch-dev switch-sdl2 switch-sdl2_mixer
+          dkp-pacman -Syu --noconfirm switch-dev switch-sdl2 switch-sdl2_mixer switch-pkg-config
 
       - name: Prepare RomFS Assets
         run: |

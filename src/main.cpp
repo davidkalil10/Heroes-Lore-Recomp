@@ -3,7 +3,15 @@
 #include "midp/midp.h"
 #include "vm/vm.h"
 
-#include <SDL.h>
+#if defined(__has_include)
+  #if __has_include(<SDL2/SDL.h>)
+    #include <SDL2/SDL.h>
+  #else
+    #include <SDL.h>
+  #endif
+#else
+  #include <SDL.h>
+#endif
 #include <cstdio>
 #include <string>
 
