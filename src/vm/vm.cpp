@@ -1,5 +1,6 @@
 // vm.cpp — carregador de classes, objetos, GC, exceções, threads
 #include "vm.h"
+#include "../platform/platform.h"
 #if defined(__has_include)
   #if __has_include(<SDL2/SDL.h>)
     #include <SDL2/SDL.h>
