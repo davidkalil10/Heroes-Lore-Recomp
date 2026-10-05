@@ -29,6 +29,7 @@ APP_TITLE   :=  Heroes Lore: Wind of Soltia
 APP_DESCRIPTION := Recompilacao Nativa C++17 + SDL2
 APP_AUTHOR  :=  EA Mobile / Recomp
 APP_VERSION :=  1.0.0
+APP_TITLEID :=  0100686C73000000
 APP_ICON    :=  $(TOPDIR)/switch/icon.jpg
 
 PORTLIBS ?= $(DEVKITPRO)/portlibs/switch
@@ -70,6 +71,7 @@ export APP_TITLE
 export APP_DESCRIPTION
 export APP_AUTHOR
 export APP_VERSION
+export APP_TITLEID
 export APP_ICON
 
 export VPATH    :=  $(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
@@ -103,10 +105,20 @@ export INCLUDE  :=  $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 
 export LIBPATHS :=  $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
+export NROFLAGS :=
+
 ifeq ($(strip $(ROMFS)),)
     export NROFLAGS +=
 else
     export NROFLAGS += --romfsdir=$(CURDIR)/$(ROMFS)
+endif
+
+ifneq ($(strip $(APP_ICON)),)
+    export NROFLAGS += --icon=$(APP_ICON)
+endif
+
+ifneq ($(strip $(APP_TITLE)),)
+    export NROFLAGS += --nacp=$(OUTPUT).nacp
 endif
 
 .PHONY: $(BUILD) clean all
@@ -126,7 +138,11 @@ else
 
 DEPENDS :=  $(OFILES:.o=.d)
 
-$(OUTPUT).nro:  $(OUTPUT).elf
+$(OUTPUT).nacp:
+	@echo "Creating $(notdir $@) com TitleID $(APP_TITLEID)..."
+	@nacptool --create "$(APP_TITLE)" "$(APP_AUTHOR)" "$(APP_VERSION)" $@ --titleid=$(APP_TITLEID)
+
+$(OUTPUT).nro:  $(OUTPUT).elf $(OUTPUT).nacp
 
 $(OUTPUT).elf:  $(OFILES)
 

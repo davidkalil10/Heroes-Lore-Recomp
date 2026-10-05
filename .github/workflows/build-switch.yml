@@ -53,6 +53,8 @@ jobs:
         run: |
           ls -la heroes_lore.nro
           ls -la heroes_lore.elf
+          ls -la heroes_lore.nacp
+          python3 tools/inspect_nro.py heroes_lore.nro
 
       - name: Upload Switch NRO Artifact
         uses: actions/upload-artifact@v4
