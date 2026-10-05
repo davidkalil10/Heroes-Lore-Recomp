@@ -156,7 +156,8 @@ void VM::init(const std::string& dir) {
     while (!ifs.empty()) {
       size_t q = ifs.find(',', p); std::string n = ifs.substr(p, q == std::string::npos ? q : q - p);
       if (!n.empty()) c->interfaces.push_back(classes[n]);
-      if (q == std::string::npos) break; p = q + 1;
+      if (q == std::string::npos) break;
+      p = q + 1;
     }
     classes[c->name] = c;
   }

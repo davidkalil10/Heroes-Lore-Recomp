@@ -49,7 +49,7 @@ CXXFLAGS    := $(CFLAGS) -std=gnu++17 -fexceptions
 ASFLAGS :=  -g $(ARCH)
 LDFLAGS = -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS    := -L$(PORTLIBS)/lib -L$(LIBNX)/lib -lSDL2_mixer -lSDL2 -lEGL -lglapi -ldrm_nouveau -lnx
+LIBS    := -L$(PORTLIBS)/lib -L$(LIBNX)/lib -lSDL2_mixer -lmodplug -lmpg123 -lvorbisfile -lvorbis -logg -lopusfile -lopus -lFLAC -lSDL2 -lEGL -lglapi -ldrm_nouveau -lnx
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
