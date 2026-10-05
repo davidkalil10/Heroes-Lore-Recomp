@@ -1,17 +1,27 @@
 // vm.cpp — carregador de classes, objetos, GC, exceções, threads
 #include "vm.h"
-#include "../platform/platform.h"
+#if defined(__has_include)
+  #if __has_include(<SDL2/SDL.h>)
+    #include <SDL2/SDL.h>
+    #include <SDL2/SDL_thread.h>
+  #else
+    #include <SDL.h>
+    #include <SDL_thread.h>
+  #endif
+#else
+  #include <SDL.h>
+  #include <SDL_thread.h>
+#endif
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
-#include <thread>
 #include <chrono>
 #include <algorithm>
 
 namespace hl {
 
-thread_local ThreadCtx* tctx = nullptr;
+ThreadCtx* tctx = nullptr;
 static std::unordered_map<std::u16string, Object*> g_interned;
 
 int64_t nowMs() {
@@ -421,16 +431,33 @@ void VM::throwNew(const char* cls, const std::string& msg) {
 
 // ---------- threads / monitores ----------
 void VM::sleepMs(int64_t ms) {
+  ThreadCtx* saved = tctx;
+  tctx = nullptr;
   gilUnlock();
-  if (ms > 0) std::this_thread::sleep_for(std::chrono::milliseconds(ms)); else std::this_thread::yield();
+  if (ms > 0) {
+    SDL_Delay(static_cast<uint32_t>(ms));
+  } else {
+    SDL_Delay(0);
+  }
   gilLock();
+  tctx = saved;
 }
+
 void VM::monitorEnter(Object* o) {
   if (!o) npe();
-  uint32_t me = tctx->id;
-  while (o->monOwner != 0 && o->monOwner != me) { gilUnlock(); std::this_thread::sleep_for(std::chrono::milliseconds(1)); gilLock(); }
-  o->monOwner = me; o->monCount++;
+  uint32_t me = tctx ? tctx->id : 0;
+  while (o->monOwner != 0 && o->monOwner != me) {
+    ThreadCtx* saved = tctx;
+    tctx = nullptr;
+    gilUnlock();
+    SDL_Delay(1);
+    gilLock();
+    tctx = saved;
+  }
+  o->monOwner = me;
+  o->monCount++;
 }
+
 void VM::monitorExit(Object* o) {
   if (!o) npe();
   if (o->monCount > 0 && --o->monCount == 0) o->monOwner = 0;
@@ -446,31 +473,72 @@ static std::string throwableText(VM& vm, Object* ex) {
   return s;
 }
 
+struct JavaThreadArgs {
+  VM* vm;
+  ThreadObj* threadObj;
+};
+
+static int SDLCALL javaThreadRunner(void* data) {
+  auto* args = static_cast<JavaThreadArgs*>(data);
+  VM* vm = args->vm;
+  ThreadObj* t = args->threadObj;
+  delete args;
+
+  boot_log("[Thread] Iniciando execução de thread secundária J2ME...\n");
+
+  vm->gilLock();
+  ThreadCtx ctx;
+  ctx.id = vm->nextTid++;
+  tctx = &ctx;
+  vm->threads.push_back(&ctx);
+
+  boot_log("[Thread %u] GIL obtida, executando runnable: %s\n",
+           ctx.id, (t->runnable && t->runnable->cls) ? t->runnable->cls->name.c_str() : "null");
+
+  try {
+    if (t->runnable) {
+      Value r[2];
+      vm->invokeVirtual(t->runnable, "run:()V", nullptr, 0, r);
+    }
+    boot_log("[Thread %u] Execução de run() finalizada normalmente.\n", ctx.id);
+  } catch (JavaThrow& jt) {
+    boot_log("[Thread %u] Exceção Java não tratada: %s\n", ctx.id, throwableText(*vm, jt.ex).c_str());
+  } catch (const std::exception& e) {
+    boot_log("[Thread %u] std::exception em thread: %s\n", ctx.id, e.what());
+  } catch (...) {
+    boot_log("[Thread %u] Exceção desconhecida em thread!\n", ctx.id);
+  }
+
+  vm->threads.erase(std::remove(vm->threads.begin(), vm->threads.end(), &ctx), vm->threads.end());
+  vm->roots.erase(std::remove(vm->roots.begin(), vm->roots.end(), static_cast<Object*>(t)), vm->roots.end());
+  tctx = nullptr;
+  vm->gilUnlock();
+
+  boot_log("[Thread] Thread secundária encerrada.\n");
+  return 0;
+}
+
 void VM::startThread(ThreadObj* t) {
   if (t->started) throwNew("java/lang/IllegalStateException");
-  t->started = true; roots.push_back(t);
-  try {
-    std::thread([this, t]() {
-      gil.lock();
-      ThreadCtx ctx; ctx.id = nextTid++; tctx = &ctx; threads.push_back(&ctx);
-      try {
-        if (t->runnable) { Value r[2]; invokeVirtual(t->runnable, "run:()V", nullptr, 0, r); }
-      } catch (JavaThrow& jt) {
-        boot_log("[thread] exceção Java não tratada: %s\n", throwableText(*this, jt.ex).c_str());
-        fprintf(stderr, "[thread] exceção não tratada: %s\n", throwableText(*this, jt.ex).c_str());
-      } catch (const std::exception& e) {
-        boot_log("[thread] std::exception em thread: %s\n", e.what());
-        fprintf(stderr, "[thread] std::exception em thread: %s\n", e.what());
-      } catch (...) {
-        boot_log("[thread] exceção desconhecida em thread!\n");
-      }
-      threads.erase(std::remove(threads.begin(), threads.end(), &ctx), threads.end());
-      roots.erase(std::remove(roots.begin(), roots.end(), (Object*)t), roots.end());
-      tctx = nullptr; gil.unlock();
-    }).detach();
-  } catch (const std::exception& e) {
-    boot_log("[startThread] ERRO ao criar std::thread: %s\n", e.what());
-    fprintf(stderr, "[startThread] ERRO ao criar std::thread: %s\n", e.what());
+  t->started = true;
+  roots.push_back(t);
+
+  boot_log("[startThread] Criando thread nativa SDL para runnable=%p (%s)...\n",
+           t->runnable, (t->runnable && t->runnable->cls) ? t->runnable->cls->name.c_str() : "none");
+
+  auto* args = new JavaThreadArgs{this, t};
+  SDL_Thread* th = SDL_CreateThreadWithStackSize(javaThreadRunner, "HL_JavaThread", 2 * 1024 * 1024, args);
+  if (!th) {
+    th = SDL_CreateThread(javaThreadRunner, "HL_JavaThread", args);
+  }
+
+  if (!th) {
+    boot_log("[startThread] ERRO FATAL ao criar thread SDL: %s\n", SDL_GetError());
+    delete args;
+    fatal(std::string("Falha ao criar thread: ") + SDL_GetError());
+  } else {
+    SDL_DetachThread(th);
+    boot_log("[startThread] Thread SDL criada e desanexada com sucesso!\n");
   }
 }
 

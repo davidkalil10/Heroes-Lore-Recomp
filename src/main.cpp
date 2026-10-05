@@ -116,34 +116,40 @@ int main(int argc, char** argv) {
   vm.roots.push_back(midlet);
 
   vm.gilLock();
+  tctx = &mainCtx;
   try {
     Value args[1];
     args[0].o = midlet;
     Value ret[2];
     boot_log("[Init] Chamando construtor <init>()...\n");
     vm.invoke(vm.mustMethod(midletClass, "<init>:()V"), args, ret);
+    boot_log("[Init] <init>() concluído com sucesso.\n");
     boot_log("[Init] Chamando startApp()...\n");
     vm.invoke(vm.mustMethod(midletClass, "startApp:()V"), args, ret);
     boot_log("[Init] startApp() finalizou com sucesso!\n");
   } catch (JavaThrow& jt) {
     boot_log("[Init] Exceção Java durante inicialização: %s\n", describeThrowable(vm, jt.ex).c_str());
+    tctx = nullptr;
     vm.gilUnlock();
     Platform::shutdown();
     if (s_bootLog) fclose(s_bootLog);
     return 1;
   } catch (const std::exception& e) {
     boot_log("[Init] std::exception durante inicialização: %s\n", e.what());
+    tctx = nullptr;
     vm.gilUnlock();
     Platform::shutdown();
     if (s_bootLog) fclose(s_bootLog);
     return 1;
   } catch (...) {
     boot_log("[Init] Exceção desconhecida durante inicialização!\n");
+    tctx = nullptr;
     vm.gilUnlock();
     Platform::shutdown();
     if (s_bootLog) fclose(s_bootLog);
     return 1;
   }
+  tctx = nullptr;
   vm.gilUnlock();
 
   boot_log("[Game] Loop principal iniciado. Bom jogo!\n");
@@ -178,6 +184,7 @@ int main(int argc, char** argv) {
   // Loop principal de renderização e eventos
   while (Platform::pollEvents(vm)) {
     vm.gilLock();
+    tctx = &mainCtx;
 
     // Executa serial runnable se agendado por callSerially
     if (g_serialRunnable) {
@@ -206,6 +213,7 @@ int main(int argc, char** argv) {
       }
     }
 
+    tctx = nullptr;
     vm.gilUnlock();
 
     // Apresenta tela na janela SDL

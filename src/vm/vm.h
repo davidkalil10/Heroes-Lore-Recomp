@@ -116,7 +116,7 @@ struct ThreadCtx {
   std::vector<Value> stack; size_t sp = 0; uint32_t id = 0;
   ThreadCtx() : stack(1 << 18) {}
 };
-extern thread_local ThreadCtx* tctx;
+extern ThreadCtx* tctx;
 
 struct VM {
   std::string dataDir;

@@ -267,7 +267,9 @@ void exec(VM& vm, Method* m, Value* L, Value* ret) {
 void VM::invoke(Method* m, Value* args, Value* ret) {
   if (m->native) { m->native(*this, args, ret); return; }
   if (m->code.empty()) fatal("método sem código: " + m->owner->name + "." + m->name + m->desc);
-  ThreadCtx* t = tctx; size_t base = t->sp;
+  ThreadCtx* t = tctx;
+  if (!t) fatal("invoke chamado sem ThreadCtx ativo no método: " + m->owner->name + "." + m->name);
+  size_t base = t->sp;
   int nargs = m->argSlots + (m->isStatic ? 0 : 1);
   size_t need = base + m->maxLocals + m->maxStack + 8;
   if (need >= t->stack.size()) throwNew("java/lang/Error", "StackOverflow");

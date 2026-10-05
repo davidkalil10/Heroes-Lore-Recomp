@@ -477,6 +477,7 @@ static void Runtime_gc(VM& vm, Value*, Value*) {
 // -------------------------------------------------------------
 static void Thread_init(VM& vm, Value* args, Value*) {
   ThreadObj* t = static_cast<ThreadObj*>(args[0].o);
+  boot_log("[Native] java/lang/Thread.<init> (ThreadObj=%p, runnable=%p)\n", t, args[1].o);
   if (!t) vm.npe();
   t->runnable = args[1].o;
 }
@@ -488,6 +489,7 @@ static void Thread_sleep(VM& vm, Value* args, Value*) {
 
 static void Thread_start(VM& vm, Value* args, Value*) {
   ThreadObj* t = static_cast<ThreadObj*>(args[0].o);
+  boot_log("[Native] java/lang/Thread.start (ThreadObj=%p)\n", t);
   if (!t) vm.npe();
   vm.startThread(t);
 }
