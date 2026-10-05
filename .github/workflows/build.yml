@@ -135,13 +135,24 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Setup Java 17 with Gradle Cache
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
+          cache: 'gradle'
+
+      - name: Cache Third-Party SDL2 & SDL2_mixer
+        id: cache-sdl
+        uses: actions/cache@v4
+        with:
+          path: |
+            third_party/SDL2
+            third_party/SDL2_mixer
+          key: ${{ runner.os }}-sdl2-2.30.12-mixer-2.8.0
 
       - name: Fetch Third-Party SDL2 and SDL2_mixer
+        if: steps.cache-sdl.outputs.cache-hit != 'true'
         run: |
           mkdir -p third_party
           if [ ! -d "third_party/SDL2" ]; then
@@ -151,10 +162,12 @@ jobs:
             git clone --depth 1 --branch release-2.8.0 https://github.com/libsdl-org/SDL_mixer.git third_party/SDL2_mixer
           fi
 
-      - name: Ensure Android CMake and NDK
+      - name: Verify Android Environment
         run: |
-          echo "y" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          echo "y" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" "ndk;26.1.10909125"
+          echo "=== Android SDK & NDK Pré-instalados no Runner ==="
+          ls -la "$ANDROID_SDK_ROOT/ndk" 2>/dev/null || true
+          ls -la "$ANDROID_SDK_ROOT/cmake" 2>/dev/null || true
+          ls -la "$ANDROID_SDK_ROOT/build-tools" 2>/dev/null || true
 
       - name: Build Android Release APKs
         run: |
