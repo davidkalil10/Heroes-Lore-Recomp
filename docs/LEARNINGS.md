@@ -200,7 +200,9 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
 - **Estrutura Interna dos Arquivos Babble / Localização (`lang.en-GB`):**
   - O arquivo de localização binário possui um inteiro de 4 bytes de tamanho no início, seguido por uma tabela de offsets relativos de `N * 4` bytes (onde $N = 3951$ strings).
   - Cada entrada de texto é precedida por 2 bytes de comprimento do bloco (`len + 2`) seguidos pela representação canônica `writeUTF` do Java (2 bytes de comprimento da string seguidos pelos bytes codificados em UTF-8).
-  - Desenvolvido o script `tools/patch_credits.py` para injetar os créditos de David Kalil no menu Sobre (string 3928) e no menu Info -> Cred (string 1237). O script recalcula matematicamente os offsets de todas as strings subsequentes deslocadas na tabela, preservando a integridade das 3951 strings do jogo.
+  - Desenvolvido o script `tools/patch_credits.py` para injetar os créditos de David Kalil Braga (2026) no menu Sobre (`bl.class`) e no menu Info -> Cred (string 1237).
+  - No menu Sobre, a versão original `v.0.0.2` (tradução brasileira da Open Mind Team de 2008) foi rigorosamente mantida intacta antes dos créditos do port nativo, alterando de forma cirúrgica a string concatenada no bytecode de `bl.<init>` e substituindo o bytecode subsequente por NOPs para não deslocar labels nem offsets do interpretador.
+  - No menu Info -> Cred (`lang.en-GB`), o script recalcula matematicamente os offsets de todas as strings subsequentes deslocadas na tabela, preservando a integridade das 3951 strings do jogo.
 - **Automação de Builds e Releases no GitHub Actions (`.github/workflows/build.yml`):**
   - Unificados os fluxos de compilação em um pipeline multi-job paralelo que testa e compila as 3 plataformas simultaneamente:
     1. **Nintendo Switch:** Container Docker oficial `devkitpro/devkita64:latest` montando RomFS e compilando `heroes_lore.nro`.

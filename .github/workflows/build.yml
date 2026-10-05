@@ -95,8 +95,27 @@ jobs:
         run: |
           mkdir -p dist_windows
           cp build/heroes_lore.exe dist_windows/
-          cp build/*.dll dist_windows/
-          cp -r build/assets dist_windows/
+          # Copia DLLs do build e garante todas as DLLs de runtime necessarias do UCRT64
+          cp build/*.dll dist_windows/ 2>/dev/null || true
+          if [ -d "$MINGW_PREFIX/bin" ]; then
+            cp "$MINGW_PREFIX"/bin/SDL2.dll dist_windows/ 2>/dev/null || true
+            cp "$MINGW_PREFIX"/bin/SDL2_mixer.dll dist_windows/ 2>/dev/null || true
+            cp "$MINGW_PREFIX"/bin/libgcc_s_seh-1.dll dist_windows/ 2>/dev/null || true
+            cp "$MINGW_PREFIX"/bin/libstdc++-6.dll dist_windows/ 2>/dev/null || true
+            cp "$MINGW_PREFIX"/bin/libwinpthread-1.dll dist_windows/ 2>/dev/null || true
+            cp "$MINGW_PREFIX"/bin/libFLAC*.dll dist_windows/ 2>/dev/null || true
+            cp "$MINGW_PREFIX"/bin/libmpg123*.dll dist_windows/ 2>/dev/null || true
+            cp "$MINGW_PREFIX"/bin/libopus*.dll dist_windows/ 2>/dev/null || true
+            cp "$MINGW_PREFIX"/bin/libvorbis*.dll dist_windows/ 2>/dev/null || true
+            cp "$MINGW_PREFIX"/bin/libogg*.dll dist_windows/ 2>/dev/null || true
+            cp "$MINGW_PREFIX"/bin/libwavpack*.dll dist_windows/ 2>/dev/null || true
+            cp "$MINGW_PREFIX"/bin/libxmp*.dll dist_windows/ 2>/dev/null || true
+          fi
+          if [ -d "build/assets" ]; then
+            cp -r build/assets dist_windows/
+          else
+            cp -r reference/extracted dist_windows/assets
+          fi
           cd dist_windows && zip -r ../heroes_lore_windows_x64.zip .
 
       - name: Upload Windows Artifact
@@ -122,14 +141,20 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Ensure Android NDK 26.1.10909125
+      - name: Fetch Third-Party SDL2 and SDL2_mixer
         run: |
-          if [ ! -d "$ANDROID_SDK_ROOT/ndk/26.1.10909125" ]; then
-            echo "Instalando NDK 26.1.10909125..."
-            echo "y" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.1.10909125"
-          else
-            echo "NDK 26.1.10909125 já instalado no runner!"
+          mkdir -p third_party
+          if [ ! -d "third_party/SDL2" ]; then
+            git clone --depth 1 --branch release-2.30.12 https://github.com/libsdl-org/SDL.git third_party/SDL2
           fi
+          if [ ! -d "third_party/SDL2_mixer" ]; then
+            git clone --depth 1 --branch release-2.8.0 https://github.com/libsdl-org/SDL_mixer.git third_party/SDL2_mixer
+          fi
+
+      - name: Ensure Android CMake and NDK
+        run: |
+          echo "y" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          echo "y" | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" "ndk;26.1.10909125"
 
       - name: Build Android Release APKs
         run: |

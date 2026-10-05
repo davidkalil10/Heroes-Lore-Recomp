@@ -179,7 +179,7 @@ Para detalhes sobre a engenharia reversa das 90 classes ofuscadas, resolução d
 
 ## 👥 Créditos & Agradecimentos
 
-- **Port Nativo & Recompilação (Windows, Android, Nintendo Switch):** [David Kalil](https://github.com/davidkalil10)
+- **Port Nativo & Recompilação (Windows, Android, Nintendo Switch):** [David Kalil Braga](https://github.com/davidkalil10) (2026)
 - **Desenvolvimento Original J2ME:** *Hands-On Mobile* & *Electronic Arts (EA Mobile)*
 - **Tradução Português-BR (J2ME Original):** *Open Mind Team* (Bruno Freire, Bruno Vilhena, John Peres)
 

@@ -48,7 +48,13 @@ if (WIN32)
         libvorbis-0.dll
     )
     foreach(dll ${RUNTIME_DLLS})
-        find_file(DLL_PATH_${dll} NAMES ${dll} PATHS "C:/msys64/ucrt64/bin" NO_DEFAULT_PATH)
+        find_file(DLL_PATH_${dll} NAMES ${dll}
+            PATHS
+                "$ENV{MINGW_PREFIX}/bin"
+                "$ENV{MSYSTEM_PREFIX}/bin"
+                "C:/msys64/ucrt64/bin"
+                "C:/msys64/mingw64/bin"
+        )
         if (DLL_PATH_${dll})
             add_custom_command(TARGET heroes_lore POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different "${DLL_PATH_${dll}}" "$<TARGET_FILE_DIR:heroes_lore>"

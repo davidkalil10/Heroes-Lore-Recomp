@@ -85,14 +85,14 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
     - Renderização acelerada em target texture (`SDL_TEXTUREACCESS_TARGET`) e rotação via `SDL_RenderCopyEx`.
     - Mapeamento matemático 1:1 de toques da tela capacitiva para a geometria rotacionada.
 
-- [x] Passo 5 — Créditos Oficiais do Port para David Kalil:
-  - [x] Menu Principal -> SOBRE (string 3928): adicionado "Port Nativo (Windows, Android, Switch): David Kalil" logo abaixo de Tradução BR.
-  - [x] Menu INFO -> CRED (string 1237): adicionado "Port Nativo (Windows, Android, Nintendo Switch): David Kalil" ao final da seção de créditos.
-  - [x] Modificação binária limpa de `lang.en-GB` com preservação matemática dos offsets da tabela de strings via `tools/patch_credits.py`.
-  - [x] Metadados da build do Nintendo Switch (`Makefile.switch`): `APP_AUTHOR := EA Mobile / Port por David Kalil` e `APP_DESCRIPTION := Recompilacao Nativa C++17 + SDL2 por David Kalil`.
-  - [x] Banner de inicialização da VM nativa (`src/main.cpp`): exibição de "Port Nativo por David Kalil (Windows, Android, Switch)".
-  - [x] Recursos do Android (`strings.xml`): inclusão de `app_author` e `app_description`.
-  - [x] Documentação oficial (`README.md`): seção dedicada de Créditos & Agradecimentos com link para o autor.
+- [x] Passo 5 — Créditos Oficiais do Port para David Kalil Braga (2026):
+  - [x] Menu Principal -> SOBRE (`bl.class`): versão original de tradução de 2008 (`v.0.0.2`) mantida associada à Open Mind Team, seguida por "Port Nativo (Windows, Android, Switch): David Kalil Braga (2026)".
+  - [x] Menu INFO -> CRED (string 1237): adicionado "Port Nativo (Windows, Android, Nintendo Switch): David Kalil Braga (2026)" ao final da seção de créditos.
+  - [x] Modificação binária limpa de `lang.en-GB` e `bl.class` com preservação matemática dos offsets e bytecodes via `tools/patch_credits.py`.
+  - [x] Metadados da build do Nintendo Switch (`Makefile.switch`): `APP_AUTHOR := EA Mobile / Port por David Kalil Braga (2026)` e `APP_DESCRIPTION := Recompilacao Nativa C++17 + SDL2 por David Kalil Braga (2026)`.
+  - [x] Banner de inicialização da VM nativa (`src/main.cpp`): exibição de "Port Nativo por David Kalil Braga (2026) (Windows, Android, Switch)".
+  - [x] Recursos do Android (`strings.xml`): inclusão de `app_author` e `app_description` com David Kalil Braga (2026).
+  - [x] Documentação oficial (`README.md`): seção dedicada de Créditos & Agradecimentos para David Kalil Braga (2026).
 
 - [x] Passo 6 — Build Automatizada Multiplataforma e Releases via GitHub Actions:
   - [x] Workflow unificado e paralelo em `.github/workflows/build.yml` para compilar as 3 plataformas simultaneamente a cada push ou pull request:
