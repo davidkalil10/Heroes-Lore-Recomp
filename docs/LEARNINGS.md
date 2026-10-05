@@ -130,6 +130,17 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - Prevenção de reativação indesejada: toques comuns na área do jogo não reexibem os controles, apenas o botão de alternância dedicado.
   - Ao ocultar com teclas pressionadas, o sistema limpa `s_activeFingers` e emite `keyReleased` para o VM J2ME, evitando que o personagem continue andando sozinho.
   - Acompanhado de leve vibração tátil (haptic feedback) de confirmação.
-
-
+## Sessão 9 (Port Homebrew para Nintendo Switch — libnx, RomFS, Makefile e CI)
+- **Ciclo de Vida do Switch OS e `appletMainLoop()`:**
+  - Aplicações Homebrew no Nintendo Switch precisam respeitar o loop do applet manager (`appletMainLoop()`). Conectar essa verificação ao `Platform::shouldQuit()` permite que o jogo responda de forma nativa e instantânea ao botão HOME, transição para modo de suspensão/sleep e saída graciosa para o hbmenu sem travar o console.
+- **Armazenamento Seguro: RomFS (Somente Leitura) vs. SD Card (Escrita RMS):**
+  - O formato `.nro` permite embutir todos os dados do jogo via `elf2nro --romfsdir`. No boot, a chamada `romfsInit()` monta os arquivos internamente no ponto de montagem `romfs:/`.
+  - Como o RomFS é estático e somente leitura, os saves e dados de configuração (RMS) devem obrigatoriamente ser direcionados para o cartão de memória (`sdmc:/switch/heroes_lore/`). O método `Platform::getStorageDir()` cria automaticamente esses diretórios via `mkdir(path, 0777)`.
+- **Tratamento de Exceções C++ no Toolchain devkitA64:**
+  - O template padrão do devkitPro para Switch muitas vezes inclui a flag `-fno-exceptions`. No entanto, a máquina virtual de bytecode J2ME do nosso projeto utiliza `throw JavaThrow{ex}` para propagar exceções da linguagem Java entre os frames de execução do interpretador (`interp.cpp`). Portanto, o `Makefile.switch` deve ser configurado com `-fexceptions` explícito.
+- **Empacotamento All-in-One via RomFS:**
+  - Com o script `tools/prepare_switch_romfs.py`, unificamos `reference/extracted` (bytecodes `.class`, mapas `.dat`, trilhas sonoras `.mid`, fontes e gráficos) e `assets` em uma pasta temporária `romfs/`.
+  - O arquivo final `heroes_lore.nro` fica com ~5 MB completamente autocontido, dispensando a necessidade de copiar pastas avulsas para o SD Card. Basta copiar o `.nro` e jogar.
+- **CI / GitHub Actions com Container Oficial `devkita64`:**
+  - Configurado workflow automatizado em `.github/workflows/build-switch.yml` usando o container Docker oficial `devkitpro/devkita64:latest`. A cada push, as dependências `switch-dev`, `switch-sdl2` e `switch-sdl2_mixer` são instaladas via `dkp-pacman`, e o executável `.nro` é gerado e disponibilizado para download nos artefatos da compilação.
 

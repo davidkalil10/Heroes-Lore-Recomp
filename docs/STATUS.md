@@ -52,9 +52,22 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
   - Suporte nativo a gamepads Bluetooth/USB (Xbox, PlayStation, Gamesir, Razer Kishi) com rumble.
   - APKs Release assinados e otimizados (~2.74 MB em `arm64-v8a`) gerados e prontos em `bin/heroes_lore-arm64-v8a.apk`, `bin/heroes_lore.apk` e `bin/heroes_lore-universal.apk`.
 
+- [x] Passo 4 do Roadmap — Port Homebrew para Nintendo Switch (`.nro`):
+  - Camada de compatibilidade libnx integrada em `src/platform/platform_sdl.cpp`:
+    - Inicialização e fechamento do subsistema RomFS (`romfsInit()` / `romfsExit()`).
+    - Ciclo de vida integrado ao sistema operacional do Switch via `appletMainLoop()` (suspensão, sleep e encerramento limpo para o hbmenu).
+    - Janela em modo tela cheia 1280x720 nativo em modo portátil e resolução adaptativa para 1080p na Dock.
+    - I/O transparente via `romfs:/` com empacotamento completo de dados, classes e assets.
+    - Persistência dos saves RMS fora da RomFS diretamente no SD Card (`sdmc:/switch/heroes_lore/`).
+    - Suporte nativo a Joy-Cons acoplados, controles desacoplados e Switch Pro Controller via `SDL_GameController`.
+    - Suporte a tela de toque capacitiva com opção de overlay touch ativável pelo botão discreto de olho.
+  - Ícone oficial do Switch em alta qualidade (256x256 JPEG) gerado em `switch/icon.jpg`.
+  - Pipeline de RomFS automatizado em `tools/prepare_switch_romfs.py` para empacotar o jogo completo em um único executável `.nro` autocontido de ~5 MB.
+  - Makefile devkitPro oficial configurado em `Makefile.switch` com metadados NACP (Título, Descrição, Autor, Versão e Ícone) e flags C++17 com suporte a exceções (`-fexceptions`).
+  - Workflow de Integração Contínua (CI) em `.github/workflows/build-switch.yml` utilizando o container oficial `devkitpro/devkita64:latest` para compilar e gerar o arquivo `heroes_lore.nro` automaticamente a cada push.
+
 ## Próximos passos (Roadmap)
-- [ ] Passo 4: Port Homebrew para Nintendo Switch (Arquivo `.nro` via devkitPro / libnx).
-- [ ] Passo 5: Aspect Ratio & Taxa de Quadros (Widescreen, Molduras e seletor 30 FPS Clássico vs 60 FPS Fluido).
+- [ ] Passo 5: Aspect Ratio & Taxa de Quadros (Widescreen, Molduras Temáticas / Bezels e seletor 30 FPS Clássico vs 60 FPS Fluido).
 - [ ] Passo 6: Cloud Save & Sincronização Cruzada (PC <-> Celular <-> Switch).
 - [ ] Passo 7: Seletor de Idiomas / Localização (PT-BR, EN, KO, ES).
 

@@ -26,6 +26,13 @@ android/app/.cxx/
 *.apk
 *.aab
 
+# Nintendo Switch build outputs
+build_switch/
+romfs/
+*.nro
+*.nacp
+*.elf
+
 # Consultas e IDE
 .idea/
 .vscode/

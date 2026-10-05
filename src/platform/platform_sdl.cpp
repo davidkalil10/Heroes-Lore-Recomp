@@ -17,6 +17,11 @@
 #include <SDL_syswm.h>
 #endif
 
+#ifdef __SWITCH__
+#include <switch.h>
+#include <sys/stat.h>
+#endif
+
 namespace hl {
 
 static SDL_Window* s_window = nullptr;
@@ -95,6 +100,9 @@ static int mapControllerButton(Uint8 btn) {
 }
 
 bool Platform::init(int scale) {
+#ifdef __SWITCH__
+  romfsInit();
+#endif
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC) < 0) {
     fprintf(stderr, "Erro ao inicializar SDL: %s\n", SDL_GetError());
     return false;
@@ -107,6 +115,13 @@ bool Platform::init(int scale) {
     Mix_AllocateChannels(16);
   }
 
+#ifdef __SWITCH__
+  s_window = SDL_CreateWindow(
+      "Heroes Lore: Wind of Soltia",
+      0, 0,
+      1280, 720,
+      SDL_WINDOW_FULLSCREEN);
+#else
   int winW = 240 * scale;
   int winH = 320 * scale;
 
@@ -115,6 +130,7 @@ bool Platform::init(int scale) {
       SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
       winW, winH,
       SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+#endif
   if (!s_window) {
     fprintf(stderr, "Erro ao criar janela: %s\n", SDL_GetError());
     return false;
@@ -1051,6 +1067,25 @@ void Platform::present() {
   GamepadLayout layout = calculateLayout(winW, winH);
   SDL_RenderCopy(s_renderer, s_screenTexture, nullptr, &layout.gameRect);
   drawGamepad(layout);
+#elif defined(__SWITCH__)
+  if (s_touchOverlayEnabled) {
+    GamepadLayout layout = calculateLayout(winW, winH);
+    SDL_RenderCopy(s_renderer, s_screenTexture, nullptr, &layout.gameRect);
+    drawGamepad(layout);
+  } else {
+    // Modo Switch: tela 1280x720 / 1080p, jogo centralizado 240:320
+    float scaleX = (float)winW / 240.0f;
+    float scaleY = (float)winH / 320.0f;
+    float scale = std::min(scaleX, scaleY);
+    int dstW = (int)(240.0f * scale);
+    int dstH = (int)(320.0f * scale);
+    SDL_Rect dstGame = { (winW - dstW) / 2, (winH - dstH) / 2, dstW, dstH };
+    SDL_RenderCopy(s_renderer, s_screenTexture, nullptr, &dstGame);
+
+    // No Switch, desenha o botão discreto do olho para permitir ativar touch se estiver em modo portátil sem Joy-Cons
+    GamepadLayout layout = calculateLayout(winW, winH);
+    drawGamepad(layout);
+  }
 #else
   if (s_touchOverlayEnabled) {
     GamepadLayout layout = calculateLayout(winW, winH);
@@ -1097,6 +1132,9 @@ void Platform::shutdown() {
   if (s_window) { SDL_DestroyWindow(s_window); s_window = nullptr; }
   Mix_CloseAudio();
   SDL_Quit();
+#ifdef __SWITCH__
+  romfsExit();
+#endif
 }
 
 void Platform::rumble(float strength, int durationMs) {
@@ -1110,6 +1148,9 @@ void Platform::rumble(float strength, int durationMs) {
 }
 
 bool Platform::shouldQuit() {
+#ifdef __SWITCH__
+  if (!appletMainLoop()) return true;
+#endif
   return s_quit;
 }
 
@@ -1136,7 +1177,23 @@ std::vector<uint8_t> Platform::readAsset(const std::string& path) {
     rw = SDL_RWFromFile(alt.c_str(), "rb");
   }
 
-  // 5. Tenta em ../assets/ ou ../reference/extracted/
+#ifdef __SWITCH__
+  // 5. No Nintendo Switch, tenta via romfs:/
+  if (!rw) {
+    std::string alt = "romfs:/" + path;
+    rw = SDL_RWFromFile(alt.c_str(), "rb");
+  }
+  if (!rw) {
+    std::string alt = "romfs:/reference/extracted/" + path;
+    rw = SDL_RWFromFile(alt.c_str(), "rb");
+  }
+  if (!rw) {
+    std::string alt = "romfs:/assets/" + path;
+    rw = SDL_RWFromFile(alt.c_str(), "rb");
+  }
+#endif
+
+  // 6. Tenta em ../assets/ ou ../reference/extracted/
   if (!rw) {
     std::string alt = "../" + path;
     rw = SDL_RWFromFile(alt.c_str(), "rb");
@@ -1161,7 +1218,11 @@ std::vector<uint8_t> Platform::readAsset(const std::string& path) {
 }
 
 std::string Platform::getStorageDir() {
-#ifdef __ANDROID__
+#ifdef __SWITCH__
+  mkdir("sdmc:/switch", 0777);
+  mkdir("sdmc:/switch/heroes_lore", 0777);
+  return "sdmc:/switch/heroes_lore";
+#elif defined(__ANDROID__)
   const char* path = SDL_AndroidGetInternalStoragePath();
   if (path && path[0] != '\0') return std::string(path);
   return ".";

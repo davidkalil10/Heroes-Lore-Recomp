@@ -28,6 +28,8 @@ int main(int argc, char** argv) {
   } else {
 #ifdef __ANDROID__
     dataDir = ""; // No Android APK, os assets ficam na raiz do AssetManager
+#elif defined(__SWITCH__)
+    dataDir = "reference/extracted"; // No Switch, readAsset resolve via romfs:/ ou relativo
 #else
     const char* candidates[] = {
       "reference/extracted",
