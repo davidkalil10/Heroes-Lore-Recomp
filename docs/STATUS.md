@@ -38,9 +38,18 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
   - Compilação multi-arquitetura (`arm64-v8a` para smartphones modernos e `armeabi-v7a` para compatibilidade total).
   - Bibliotecas nativas compiladas: `libSDL2.so`, `libSDL2_mixer.so` (MIDI Timidity integrado, Vorbis STB, WAV) e `libmain.so` (C++17, VM CLDC 1.1, MIDP 2.0).
   - I/O unificado e transparente: `Platform::readAsset` acessa diretamente o `AAssetManager` do APK via `SDL_RWFromFile`; `Platform::getStorageDir` persiste saves RMS no armazenamento interno do app (`SDL_AndroidGetInternalStoragePath`).
-  - Controles virtuais na tela (Touchscreen Overlay): D-Pad virtual com suporte a movimento contínuo a 60 FPS, botões de ação (Ataque 5, Habilidades 1 e 3, Poção 7, Item 9), botões de sistema (MENU, MAPA, RSK) e alternância de poções (< e >). Suporte a multi-touch (andar e atacar simultaneamente) e toques nos pilares laterais de telas ultrawide (letterbox).
+  - Controles virtuais na tela (Virtual Gamepad Fullscreen Overlay):
+    - Layout de emulador moderno (Overlay Translúcido sobre o Jogo): o jogo ocupa o tamanho máximo da tela mantendo o aspect ratio original (240x320) perfeitamente centralizado.
+    - Controles estilo vidro fosco (*frosted glass* translúcido a ~60% de opacidade quando em repouso), permitindo enxergar toda a ação por baixo dos botões sem obstruir a visão.
+    - Ao tocar em qualquer botão ou direção do D-Pad, o controle ilumina a 100% de opacidade com efeito de brilho neon ciano e setas ativas.
+    - Redesign de MENU, MAPA e R (substituindo o antigo RSK por um nome mais intuitivo) com proporção 2.4:1 sem distorção e posicionamento seguro abaixo da barra de status.
+    - Disposição de ação clássica ergonômica restaurada: 5 no centro (ataque), 1 (Skill 1) à esquerda-cima, 3 (Skill 2) no topo, 7 (Poção) à esquerda-baixo e 9 (Item) à direita-cima, respeitando a curvatura natural do polegar.
+    - D-Pad e cluster de botões elevados em sincronia (~42% a partir da borda inferior), liberando uma faixa inferior limpa e ampla para as setas circulares de alteração de poção (◀ e ▶), agora perfeitamente centralizadas no eixo horizontal da tela (`winW / 2`).
+    - Algoritmo de hit-test por menor razão de distância (`d / maxR`): elimina qualquer ambiguidade de clique ou necessidade de "adivinhar o ponto", registrando sempre com 100% de precisão o botão mais próximo do polegar.
+    - Modo Paisagem (Horizontal) totalmente proporcional e balanceado: setas ◀ e ▶ movidas para a coluna esquerda (entre MENU e D-Pad), deixando o lado direito limpo e espaçoso para os 5 botões de ação e os botões MAPA e R.
+  - Ícone personalizado oficial extraído de `logo 512.png` integrado em todas as densidades (`mipmap-mdpi`, `hdpi`, `xhdpi`, `xxhdpi`, `xxxhdpi`) em versões padrão e circular (`ic_launcher_round`).
   - Suporte nativo a gamepads Bluetooth/USB (Xbox, PlayStation, Gamesir, Razer Kishi) com rumble.
-  - APK standalone compacto (~3.68 MB) gerado e pronto para instalação direta em `bin/heroes_lore.apk` e `android/heroes_lore.apk`.
+  - APKs Release assinados e otimizados (~2.70 MB em `arm64-v8a`) gerados e prontos em `bin/heroes_lore-arm64-v8a.apk`, `bin/heroes_lore.apk` e `bin/heroes_lore-universal.apk`.
 
 ## Próximos passos (Roadmap)
 - [ ] Passo 4: Port Homebrew para Nintendo Switch (Arquivo `.nro` via devkitPro / libnx).

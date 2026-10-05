@@ -87,5 +87,45 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
 - **Tamanho e Eficiência:**
   - O APK final gerado (`bin/heroes_lore.apk`) possui apenas ~3.68 MB e inclui todas as 996 classes e assets do jogo, além das bibliotecas nativas completas compiladas para 64-bit (`arm64-v8a`) e 32-bit (`armeabi-v7a`).
 
+## Sessão 7 (Redesign do Gamepad Virtual e Ícones Nativos em Alta Resolução)
+- **Causa Raiz do Deslocamento de Toque (Offset Touch) no Android:**
+  - O uso anterior de `SDL_RenderSetLogicalSize(s_renderer, 240, 320)` forçava a GPU a mapear todo o espaço de renderização em uma caixa lógica 240x320 centralizada na tela com letterbox. Quando coordenadas de toque (`ev.tfinger`) eram passadas por `SDL_RenderWindowToLogical`, as transformações sofriam distorções de proporção em telas modernas 20:9 e 19.5:9, deslocando a área de clique para longe do botão visual.
+  - Além disso, os botões eram desenhados por cima do jogo (obscurecendo o herói, inimigos e caixas de diálogo).
+- **Arquitetura de Gamepad Estilo Emulador Moderno (Fullscreen Frosted Glass Overlay):**
+  - O jogo agora ocupa o tamanho máximo possível da tela mantendo o aspect ratio original (240x320) perfeitamente centralizado.
+  - Os botões virtuais e o D-Pad flutuam diretamente por cima do jogo com modulação de transparência alfa (`SDL_SetTextureAlphaMod`):
+    - Em repouso: opacidade translúcida a ~60% (155/255), permitindo que o mapa, inimigos e textos passem por baixo sem bloquear a visão.
+    - Ao tocar: o botão pressionado atinge 100% de opacidade e ativa o halo neon ciano (`btn_glow`), além da seta brilhante indicando a direção no D-Pad.
+    - Adicionadas sombras projetadas (drop shadow) nas fontes dos botões para legibilidade impecável sobre qualquer tipo de cenário (neve, caverna, grama ou pergaminho).
+  - Coordenadas de toque são calculadas diretamente em pixels de tela física (`ev.tfinger.x * winW`, `ev.tfinger.y * winH`), garantindo precisão 1:1 absoluta. A margem de conforto tátil foi estendida para 1.30x no raio dos botões para eliminar completamente toques perdidos.
+- **Pipeline de Texturas com Supersampling (4x AA):**
+  - Desenvolvido gerador gráfico em Python (`tools/generate_gamepad_textures.py`) utilizando PIL com renderização em 4x supersampling (Lanczos) para produzir botões com estética glassmorphic moderna: anéis escuros com chanfro de luz e sombra 3D (bevel), ícones iluminados e feedback neon cyan (`btn_glow`) quando pressionados.
+  - Texturas são carregadas em formato cru RGBA (`.rgba`) diretamente pela interface `Platform::readAsset` e instanciadas em superfícies SDL (`SDL_PIXELFORMAT_RGBA32`).
+- **Ícones Personalizados Oficiais em Mipmaps:**
+  - Extraído o asset oficial `logo 512.png` fornecido pelo usuário em `C:\Users\david\Downloads\logo 512.png` (copiado para `assets/logo_512.png`).
+  - Gerados ícones para todas as densidades Android (`mdpi`, `hdpi`, `xhdpi`, `xxhdpi`, `xxxhdpi`) em versões padrão e circular (`ic_launcher_round.png`), com registro no `AndroidManifest.xml`.
+- **Refinamento de Proporção, Disposição Diamante e Modo Paisagem:**
+  - `MENU`, `MAPA` e `R` (substituindo RSK por R para simplicidade e familiaridade com controles de videogame) foram remodelados com textura de alta resolução 240x100 em proporção 2.4:1 (evitando o achatamento elíptico) e posicionados com recuo de 8% da altura da tela para nunca colidirem com o relógio/notch do sistema.
+  - No Modo Paisagem (Horizontal), todos os controles nas colunas pretas laterais foram redimensionados para tamanhos 2x a 3x maiores (`MENU` 240x100, `MAPA` e `R` 200x83, setas 140px, cluster de ação amplo), preenchendo as laterais de forma equilibrada e ergonômica.
+
+## Sessão 8 (Restauração da Ergonomia Clássica, Elevação dos Controles e Hit-Testing por Menor Distância)
+- **Ergonomia do Polegar Humano vs. Diamante Simétrico Ortogonal:**
+  - O layout em cruz/diamante estrito (N/S/L/O) foi rejeitado no teste prático porque o polegar direito não se move em ângulos cardeais perfeitos; ele pivota a partir da articulação metacárpica descrevendo um arco natural com inclinação de ~30° a 45°.
+  - A disposição clássica original (5 no centro para ataque, 1 e 7 na coluna esquerda, 3 acima de 5 e 9 à direita) encaixa perfeitamente no repouso do dedo.
+- **Elevação Sincronizada do D-Pad e Bloco de Ação:**
+  - Ao invés de amontoar as setas de troca de poção entre os botões de ação ou distorcer os botões, a solução ideal foi elevar em sincronia tanto o D-Pad quanto todo o cluster de ação para ~42% da altura em relação à base da tela (`winH - winW * 0.42f`).
+  - Isso liberou uma faixa horizontal de ~200px de altura totalmente vazia na parte inferior da tela, onde as setas circulares `◀` e `▶` foram posicionadas com conforto absoluto, sem nenhum risco de toque acidental no botão 7 ou no D-Pad.
+- **Resolução do Problema de "Adivinhar o Ponto de Clique" (Hit-Testing por Menor Razão de Distância):**
+  - Anteriormente, o teste de colisão avaliava a lista linear de botões com raio ampliado (1.30x) e retornava a primeira correspondência encontrada (`return b.key`). Caso a zona de tolerância de dois botões adjacentes se tocasse, o primeiro botão registrado na lista sempre vencia, mesmo se o dedo estivesse muito mais próximo do centro do segundo botão.
+  - Implementado o algoritmo de menor razão euclidiana normalizada:
+    `ratio = dist / maxRadius` (para círculos) e `max(dx/maxW, dy/maxH)` (para pílulas/retângulos).
+    O botão que tiver a menor razão em relação ao ponto de toque sempre vence. Isso garante resposta tátil instantânea, sem sensação de imprecisão ou deslocamento.
+- **Centralização Simétrica Vertical e Balanceamento de Colunas em Paisagem:**
+  - No modo vertical, as setas `◀` e `▶` agora usam como âncora o centro exato da tela (`winW / 2`), ficando posicionadas simetricamente à esquerda (`winW/2 - spacing`) e à direita (`winW/2 + spacing`), alinhando-se com a pílula do `MAPA` e a barra de gestos do Android.
+  - No modo paisagem, transferir as setas `◀` e `▶` para a coluna esquerda (entre o `MENU` e o D-Pad) equilibrou perfeitamente as duas metades da tela. O polegar esquerdo agora pode facilmente alterar poções/itens enquanto navega, e o polegar direito ganha espaço desobstruído para os 5 botões de ação e os botões de sistema `MAPA` e `R`.
+
+
+
+
 
 
