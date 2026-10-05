@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Heroes Lore: Wind of Soltia
+GenericName=Action RPG
+Comment=Port Nativo C++17 + SDL2 por David Kalil Braga (2026)
+Exec=heroes_lore
+Icon=heroes_lore
+Terminal=false
+Categories=Game;RolePlaying;
+Keywords=heroes;lore;soltia;rpg;j2me;
+StartupWMClass=heroes_lore

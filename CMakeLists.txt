@@ -22,13 +22,25 @@ add_executable(heroes_lore ${SOURCES})
 target_include_directories(heroes_lore PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party
+    ${SDL2_INCLUDE_DIRS}
+    ${SDL2_MIXER_INCLUDE_DIRS}
 )
 
-target_link_libraries(heroes_lore PRIVATE
-    SDL2::SDL2main
-    SDL2::SDL2
-    SDL2_mixer::SDL2_mixer
-)
+if (TARGET SDL2::SDL2main)
+    target_link_libraries(heroes_lore PRIVATE SDL2::SDL2main)
+endif()
+
+if (TARGET SDL2::SDL2)
+    target_link_libraries(heroes_lore PRIVATE SDL2::SDL2)
+else()
+    target_link_libraries(heroes_lore PRIVATE ${SDL2_LIBRARIES})
+endif()
+
+if (TARGET SDL2_mixer::SDL2_mixer)
+    target_link_libraries(heroes_lore PRIVATE SDL2_mixer::SDL2_mixer)
+else()
+    target_link_libraries(heroes_lore PRIVATE ${SDL2_MIXER_LIBRARIES})
+endif()
 
 if (WIN32)
     set(RUNTIME_DLLS

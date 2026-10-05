@@ -1,7 +1,7 @@
 # ⚔️ Heroes Lore: Wind of Soltia — Native Recompilation (C++17 + SDL2)
 
 [![C++17](https://img.shields.io/badge/Language-C%2B%2B17-blue.svg)](https://en.cppreference.com/w/cpp/17)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20(Native)-informational.svg)](https://www.microsoft.com/windows)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Android%20%7C%20Switch-informational.svg)]()
 [![Rendering](https://img.shields.io/badge/Renderer-Direct3D%2011%20%2F%20SDL2-success.svg)](https://www.libsdl.org/)
 [![Status](https://img.shields.io/badge/Status-100%25%20Playable%20%26%20Save%20Working-brightgreen.svg)]()
 [![Language](https://img.shields.io/badge/Game%20Lang-Portugu%C3%AAs--BR-yellow.svg)]()
@@ -179,7 +179,7 @@ Para detalhes sobre a engenharia reversa das 90 classes ofuscadas, resolução d
 
 ## 👥 Créditos & Agradecimentos
 
-- **Port Nativo & Recompilação (Windows, Android, Nintendo Switch):** [David Kalil Braga](https://github.com/davidkalil10) (2026)
+- **Port Nativo & Recompilação (Windows, Linux, Android, Nintendo Switch):** [David Kalil Braga](https://github.com/davidkalil10) (2026)
 - **Desenvolvimento Original J2ME:** *Hands-On Mobile* & *Electronic Arts (EA Mobile)*
 - **Tradução Português-BR (J2ME Original):** *Open Mind Team* (Bruno Freire, Bruno Vilhena, John Peres)
 

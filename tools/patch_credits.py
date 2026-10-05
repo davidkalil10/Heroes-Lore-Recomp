@@ -56,7 +56,7 @@ def patch_lang():
     utf_len = struct.unpack('>H', orig_data[target_pos+2:target_pos+4])[0]
     str1237_orig = orig_data[target_pos+4 : target_pos+4+utf_len]
 
-    credit_info = "                              Port Nativo (Windows, Android, Nintendo Switch): David Kalil Braga (2026).".encode("utf-8")
+    credit_info = "                              Port Nativo (Windows, Linux, Android, Nintendo Switch): David Kalil Braga (2026).".encode("utf-8")
     new1237 = str1237_orig + credit_info
 
     data_patched = replace_string(orig_data, 1237, new1237)
@@ -82,9 +82,9 @@ def patch_bl_class():
     d = bytearray(raw_class)
 
     # 1. Substitui a constante UTF-8 '\nv.' por:
-    # '\nv.0.0.2\n\nPort Nativo (Windows, Android, Switch):\nDavid Kalil Braga (2026)'
+    # '\nv.0.0.2\n\nPort Nativo (Windows, Linux, Android, Switch):\nDavid Kalil Braga (2026)'
     old_str_entry = b'\x01\x00\x03\nv.'
-    new_str = "\nv.0.0.2\n\nPort Nativo (Windows, Android, Switch):\nDavid Kalil Braga (2026)".encode("utf-8")
+    new_str = "\nv.0.0.2\n\nPort Nativo (Windows, Linux, Android, Switch):\nDavid Kalil Braga (2026)".encode("utf-8")
     new_str_entry = b'\x01' + len(new_str).to_bytes(2, "big") + new_str
 
     if old_str_entry not in d:

@@ -207,8 +207,9 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - Unificados os fluxos de compilação em um pipeline multi-job paralelo que testa e compila as 3 plataformas simultaneamente:
     1. **Nintendo Switch:** Container Docker oficial `devkitpro/devkita64:latest` montando RomFS e compilando `heroes_lore.nro`.
     2. **Windows x64:** Runner `windows-latest` com MSYS2 UCRT64, CMake e Ninja, empacotando o executável, DLLs e pasta `assets/` em `heroes_lore_windows_x64.zip`.
-    3. **Android:** Runner `ubuntu-latest` com Java 17 e NDK 26, gerando os APKs Release assinados (`universal` e `arm64-v8a`).
-  - Integrado o step de release via `softprops/action-gh-release@v2`, que automaticamente coleta os binários das 3 plataformas e cria a release oficial no GitHub sempre que uma tag de versão (`v*`) for enviada ou acionada via `workflow_dispatch`.
+    3. **Linux x86_64 (AppImage / Steam Deck):** Runner `ubuntu-22.04` montando `AppDir/` com `dist_linux/` (AppRun, ícone, `.desktop`) e empacotando via `appimagetool` em `heroes_lore_linux_x86_64.AppImage`.
+    4. **Android:** Runner `ubuntu-latest` com Java 17 e NDK 26, gerando os APKs Release assinados (`universal` e `arm64-v8a`).
+  - Integrado o step de release via `softprops/action-gh-release@v2`, que automaticamente coleta os binários das 4 plataformas e cria a release oficial no GitHub sempre que uma tag de versão (`v*`) for enviada ou acionada via `workflow_dispatch`.
 
 
 

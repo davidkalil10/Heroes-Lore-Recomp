@@ -2,6 +2,9 @@
 build/
 bin/
 obj/
+AppDir/
+squashfs-root/
+*.AppImage
 *.exe
 *.dll
 *.so

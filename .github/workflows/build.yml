@@ -125,7 +125,54 @@ jobs:
           path: heroes_lore_windows_x64.zip
 
   # ==============================================================================
-  # 3. Android (APKs Universal & ARM64)
+  # 3. Linux x86_64 (AppImage Portátil / Steam Deck)
+  # ==============================================================================
+  build-linux:
+    name: Linux x86_64 (AppImage)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Linux Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            libsdl2-dev \
+            libsdl2-mixer-dev \
+            wget \
+            file
+
+      - name: Compile Linux Binary
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+
+      - name: Prepare AppDir
+        run: |
+          python3 tools/prepare_appimage.py
+
+      - name: Build AppImage with appimagetool
+        run: |
+          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          ./appimagetool-x86_64.AppImage --appimage-extract
+          ARCH=x86_64 ./squashfs-root/AppRun AppDir heroes_lore_linux_x86_64.AppImage
+          chmod +x heroes_lore_linux_x86_64.AppImage
+          ls -lh heroes_lore_linux_x86_64.AppImage
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: heroes_lore_linux_appimage
+          path: heroes_lore_linux_x86_64.AppImage
+
+  # ==============================================================================
+  # 4. Android (APKs Universal & ARM64)
   # ==============================================================================
   build-android:
     name: Android (APK)
@@ -192,11 +239,11 @@ jobs:
             heroes_lore_android_arm64.apk
 
   # ==============================================================================
-  # 4. GitHub Release Automático (Tags v* ou workflow_dispatch)
+  # 5. GitHub Release Automático (Tags v* ou workflow_dispatch)
   # ==============================================================================
   release:
     name: Publicar Release Multiplataforma
-    needs: [build-switch, build-windows, build-android]
+    needs: [build-switch, build-windows, build-linux, build-android]
     if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.create_release == true)
     runs-on: ubuntu-latest
     permissions:
@@ -212,6 +259,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: heroes_lore_windows_zip
+
+      - name: Baixar Artefato Linux
+        uses: actions/download-artifact@v4
+        with:
+          name: heroes_lore_linux_appimage
 
       - name: Baixar Artefato Android
         uses: actions/download-artifact@v4
@@ -232,5 +284,6 @@ jobs:
           files: |
             heroes_lore.nro
             heroes_lore_windows_x64.zip
+            heroes_lore_linux_x86_64.AppImage
             heroes_lore_android_universal.apk
             heroes_lore_android_arm64.apk

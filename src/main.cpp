@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
   boot_log("==================================================\n");
   boot_log(" Heroes Lore: Wind of Soltia — Native Recomp\n");
   boot_log(" C++17 + SDL2 Pixel-Perfect Native Port\n");
-  boot_log(" Port Nativo por David Kalil Braga (2026) (Windows, Android, Switch)\n");
+  boot_log(" Port Nativo por David Kalil Braga (2026) (Windows, Linux, Android, Switch)\n");
   boot_log("==================================================\n");
 
   std::string dataDir = "reference/extracted";
@@ -74,7 +74,9 @@ int main(int argc, char** argv) {
       "../reference/extracted",
       "../../reference/extracted",
       "assets",
-      "../assets"
+      "../assets",
+      "usr/share/heroes_lore/assets",
+      "/usr/share/heroes_lore/assets"
     };
     for (const char* c : candidates) {
       auto testBuf = Platform::readAsset(std::string(c) + "/META-INF/MANIFEST.MF");
