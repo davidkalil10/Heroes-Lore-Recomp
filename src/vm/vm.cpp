@@ -431,6 +431,11 @@ void VM::throwNew(const char* cls, const std::string& msg) {
 }
 
 // ---------- threads / monitores ----------
+void VM::gilLock() {
+  gil.lock();
+  if (mainCtx && (unsigned long)SDL_ThreadID() == mainTid) tctx = mainCtx;
+}
+
 void VM::sleepMs(int64_t ms) {
   ThreadCtx* saved = tctx;
   tctx = nullptr;

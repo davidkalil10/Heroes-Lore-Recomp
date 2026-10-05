@@ -102,6 +102,8 @@ int main(int argc, char** argv) {
   mainCtx.id = vm.nextTid++;
   tctx = &mainCtx;
   vm.threads.push_back(&mainCtx);
+  vm.mainCtx = &mainCtx;
+  vm.mainTid = (unsigned long)SDL_ThreadID();
 
   // Cria Graphics para a tela principal (240x320)
   ClassInfo* cg = vm.mustClass("javax/microedition/lcdui/Graphics");

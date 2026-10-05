@@ -165,7 +165,8 @@ struct VM {
   void invokeVirtual(Object* self, const std::string& key, Value* extraArgs, int nextra, Value* ret);
   void monitorEnter(Object* o); void monitorExit(Object* o);
   void gilUnlock() { gil.unlock(); }
-  void gilLock() { gil.lock(); }
+  void gilLock();
+  ThreadCtx* mainCtx = nullptr; unsigned long mainTid = 0;
   void sleepMs(int64_t ms);
   void startThread(ThreadObj* t);
   ClassObj* classObjOf(ClassInfo* c);
