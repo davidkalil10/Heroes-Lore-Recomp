@@ -19,6 +19,7 @@
 #include <unistd.h>
 #endif
 
+namespace hl {
 static FILE* s_bootLog = nullptr;
 void boot_log(const char* fmt, ...) {
   va_list args;
@@ -32,11 +33,11 @@ void boot_log(const char* fmt, ...) {
     fflush(s_bootLog);
   }
 }
+extern Object* g_serialRunnable;
+std::string describeThrowable(VM& vm, Object* ex);
+} // namespace hl
 
-namespace hl {
-  extern Object* g_serialRunnable;
-  std::string describeThrowable(VM& vm, Object* ex);
-}
+using hl::boot_log;
 
 int main(int argc, char** argv) {
   setvbuf(stdout, nullptr, _IONBF, 0);
@@ -147,6 +148,7 @@ int main(int argc, char** argv) {
 
   boot_log("[Game] Loop principal iniciado. Bom jogo!\n");
 
+#ifndef __SWITCH__
   auto saveBMP = [](const char* filename, const uint32_t* pixels, int w, int h) {
     uint8_t header[54] = {
       'B', 'M',
@@ -169,6 +171,7 @@ int main(int argc, char** argv) {
       fclose(fp);
     }
   };
+#endif
 
   int frameCount = 0;
 

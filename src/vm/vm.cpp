@@ -136,12 +136,14 @@ static const BC kBuiltin[] = {
   {"[", "java/lang/Object", "", K_ARRAY, 0, false},
 };
 
-extern void boot_log(const char* fmt, ...);
-
 void VM::fatal(const std::string& msg) {
   boot_log("\n[FATAL] %s\n", msg.c_str());
   fprintf(stderr, "[FATAL] %s\n", msg.c_str());
   fflush(stderr);
+  fflush(stdout);
+#ifdef __SWITCH__
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+#endif
   exit(2);
 }
 

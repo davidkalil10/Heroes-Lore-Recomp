@@ -8,6 +8,8 @@ namespace hl {
 
 struct VM;
 
+void boot_log(const char* fmt, ...);
+
 class Platform {
 public:
   static bool init(int scale = 2);
