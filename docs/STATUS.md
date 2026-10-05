@@ -98,7 +98,7 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
   - [x] Workflow unificado e paralelo em `.github/workflows/build.yml` para compilar as 3 plataformas simultaneamente a cada push ou pull request:
     - **Nintendo Switch:** gera `heroes_lore.nro` utilizando container `devkitpro/devkita64:latest`.
     - **Windows x64:** compila via CMake + Ninja no ambiente MSYS2 UCRT64, empacotando o executável, DLLs e pasta `assets/` em `heroes_lore_windows_x64.zip`.
-    - **Android:** compila com Gradle + NDK 26 e gera os APKs `heroes_lore_android_universal.apk` e `heroes_lore_android_arm64.apk`.
+    - **Android:** compila com Gradle + NDK 26 nativo (utilizando o NDK 26.1 e Build-Tools 34.0.0 pré-instalados na imagem do GitHub Actions, com cache de Gradle e repositórios SDL2/SDL2_mixer) gerando os APKs `heroes_lore_android_universal.apk` e `heroes_lore_android_arm64.apk`.
   - [x] Publicação automatizada de GitHub Release com todos os binários anexados ao criar tags de versão (`v*`) ou por disparo manual (`workflow_dispatch`).
 
 ## Próximos passos (Roadmap)
