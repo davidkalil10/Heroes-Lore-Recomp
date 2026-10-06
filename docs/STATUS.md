@@ -106,5 +106,6 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
 - [ ] Passo 7: Aspect Ratio & Taxa de Quadros (Widescreen, Molduras Temáticas / Bezels e seletor 30 FPS Clássico vs 60 FPS Fluido).
 - [ ] Passo 8: Cloud Save & Sincronização Cruzada (PC <-> Celular <-> Switch).
 - [ ] Passo 9: Seletor de Idiomas / Localização (PT-BR, EN, ES).
+- [ ] Passo 10: Port Imersivo VR / Realidade Mista para Meta Quest (OpenXR, Voxel/Diorama 3D Tabletop & Primeira Pessoa 360°). Detalhado em [`docs/VR_QUEST_CONCEPT.md`](VR_QUEST_CONCEPT.md).
 
 
