@@ -84,3 +84,23 @@ src/platform/
 - **Complexidade:** Média-Alta (exige criação da rotina de extrusão de malha e integração com a API OpenXR).
 - **Base Pronta:** A lógica J2ME, interpretador de bytecodes, áudio, salvamento e física já rodam nativamente em ARM64. O projeto precisa apenas de uma camada de renderização alternativa.
 - **Status:** Registrado oficialmente no Roadmap do projeto para futuras fases de expansão inovadora.
+
+---
+
+## 7. Repositórios e Projetos de Referência para Consulta Técnica
+
+Caso seja necessário analisar a arquitetura de conversão voxelizada e recompilação em fases futuras, consultar os seguintes repositórios:
+
+1. **[polymathiclabs/pokemon-gen1-voxel-vr](https://github.com/polymathiclabs/pokemon-gen1-voxel-vr):**
+   - Implementação de referência em Realidade Virtual imersiva convertendo tilemaps e sprites de primeira geração em voxels com OpenXR e controles 6DOF.
+2. **[polymathiclabs/DramaticShapeVoxelMod](https://github.com/polymathiclabs/DramaticShapeVoxelMod):**
+   - Motor central de voxelização (*VoxelMod*), responsável pela extrusão geométrica das camadas 2D em blocos 3D com malhas eficientes.
+3. **[bryanthaboi/gen1recomp](https://github.com/bryanthaboi/gen1recomp):**
+   - Recompilação nativa estática em C de Pokemon Gen 1 (excelente espelho metodológico para a nossa recompilação em C++ de Heroes Lore).
+4. **[blackwing182/DramaticShapeVoxelMod-test](https://github.com/blackwing182/DramaticShapeVoxelMod-test):**
+   - Fork de testes e instrumentação de renderização do DramaticShapeVoxelMod.
+5. **[linkfy/DramaticShapeVoxelModBackup](https://github.com/linkfy/DramaticShapeVoxelModBackup):**
+   - Snapshot e documentação de suporte do motor VoxelMod.
+6. **[scottcandy34/DramaticShapeVoxelMod-latest](https://github.com/scottcandy34/DramaticShapeVoxelMod-latest):**
+   - Versão revisada com patches e atualizações da comunidade do DramaticShapeVoxelMod.
+
