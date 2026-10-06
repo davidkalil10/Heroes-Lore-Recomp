@@ -648,20 +648,55 @@ static void drawOsd(int winW, int winH) {
     alpha = static_cast<Uint8>((timeLeft * 255) / 500);
   }
 
-  float fontScale = (winH >= 720) ? 0.60f : 0.45f;
-  int charW = static_cast<int>(22.0f * fontScale);
-  int charH = static_cast<int>(36.0f * fontScale);
+  // Identifica resolução da textura de fonte (suporta dinamicamente 22x36 ou 44x72)
+  int texW = 0, texH = 0;
+  if (s_texFontOsd) {
+    SDL_QueryTexture(s_texFontOsd, nullptr, nullptr, &texW, &texH);
+  }
+  int srcCellW = (texW > 0) ? (texW / 16) : 22;
+  int srcCellH = (texH > 0) ? (texH / 6) : 36;
+  float cellAspect = (float)srcCellW / (float)srcCellH; // ~0.611f
+
+  bool isPortrait = (winH > winW);
+  int minDim = std::min(winW, winH);
+
+  // Escala responsiva baseada na menor dimensão da tela:
+  // No Switch 720p: baseScale = 1.0f -> charH = 34px (+62% maior que os 21px anteriores)
+  // No Celular 1080p: baseScale = 1.5f -> charH = 51px (+142% maior que os 21px anteriores)
+  // No Celular 1440p: baseScale = 2.0f -> charH = 68px
+  float baseScale = std::max(1.0f, (float)minDim / 720.0f);
+  float targetCharH = std::round(34.0f * baseScale);
+  float targetCharW = std::round(targetCharH * cellAspect);
+
+  // Em telas estreitas (Modo Retrato / Portrait), ajusta dinamicamente a largura
+  // para garantir que mensagens longas caibam perfeitamente na largura do celular
+  float maxTextW = (float)winW * 0.90f - 48.0f;
+  float totalTextW = (float)s_osdMessage.length() * targetCharW;
+  if (totalTextW > maxTextW && s_osdMessage.length() > 0) {
+    targetCharW = maxTextW / (float)s_osdMessage.length();
+    targetCharH = targetCharW / cellAspect;
+    if (targetCharH < 22.0f) targetCharH = 22.0f;
+    if (targetCharW < 13.0f) targetCharW = 13.0f;
+  }
+
+  int charW = (int)targetCharW;
+  int charH = (int)targetCharH;
   int textW = (int)s_osdMessage.length() * charW;
-  int padX = 18, padY = 8;
+  int padX = (int)(22.0f * baseScale);
+  int padY = (int)(12.0f * baseScale);
   int bannerW = textW + padX * 2;
   int bannerH = charH + padY * 2;
   int bannerX = (winW - bannerW) / 2;
-  int bannerY = (winH >= 720) ? 28 : 14;
+
+  // Posição vertical: em modo retrato, fica seguro abaixo da barra de status/notch (6.5% de winH)
+  // em modo paisagem fica a 4.5% de winH
+  int bannerY = isPortrait ? std::max(56, (int)(winH * 0.065f)) : std::max(28, (int)(winH * 0.045f));
 
   SDL_SetRenderDrawBlendMode(s_renderer, SDL_BLENDMODE_BLEND);
 
-  // Sombra suave do banner
-  SDL_Rect shadowRect = { bannerX + 4, bannerY + 4, bannerW, bannerH };
+  // Sombra suave do banner (offset proporcional)
+  int shadowOffset = std::max(3, (int)(4.0f * baseScale));
+  SDL_Rect shadowRect = { bannerX + shadowOffset, bannerY + shadowOffset, bannerW, bannerH };
   SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, (Uint8)((alpha * 160) / 255));
   SDL_RenderFillRect(s_renderer, &shadowRect);
 
@@ -670,9 +705,14 @@ static void drawOsd(int winW, int winH) {
   SDL_SetRenderDrawColor(s_renderer, 14, 18, 26, (Uint8)((alpha * 235) / 255));
   SDL_RenderFillRect(s_renderer, &bgRect);
 
-  // Borda brilhante em cyan neon
+  // Borda brilhante em cyan neon (dupla se alta resolução)
   SDL_SetRenderDrawColor(s_renderer, 0, 210, 255, (Uint8)((alpha * 220) / 255));
   SDL_RenderDrawRect(s_renderer, &bgRect);
+  if (baseScale >= 1.3f) {
+    SDL_Rect innerBorder = { bannerX + 1, bannerY + 1, bannerW - 2, bannerH - 2 };
+    SDL_SetRenderDrawColor(s_renderer, 0, 180, 230, (Uint8)((alpha * 160) / 255));
+    SDL_RenderDrawRect(s_renderer, &innerBorder);
+  }
 
   // Texto centralizado
   if (s_texFontOsd) {
@@ -685,7 +725,7 @@ static void drawOsd(int winW, int winH) {
       int idx = c - 32;
       int col = idx % 16;
       int row = idx / 16;
-      SDL_Rect src = { col * 22, row * 36, 22, 36 };
+      SDL_Rect src = { col * srcCellW, row * srcCellH, srcCellW, srcCellH };
       SDL_Rect dst = { startX + (int)i * charW, startY, charW, charH };
       SDL_RenderCopy(s_renderer, s_texFontOsd, &src, &dst);
     }
@@ -1389,6 +1429,12 @@ bool Platform::pollEvents(VM& vm) {
       } else if (key == KEY_TOGGLE_ORIENTATION) {
         s_screenRotation = (s_screenRotation + 1) % 3;
         Platform::rumble(0.25f, 50);
+        const char* rotNames[] = {
+          "Orientacao: Paisagem Normal (1280x720)",
+          "Orientacao: Retrato Vertical (TATE 90)",
+          "Orientacao: Retrato Invertido (Flip Grip 270)"
+        };
+        Platform::showOsdMessage(rotNames[s_screenRotation]);
       } else if (key == KEY_TOGGLE_TOUCH_ASPECT) {
         Platform::toggleAspect(&vm);
         Platform::rumble(0.20f, 40);
@@ -1622,6 +1668,7 @@ void Platform::present() {
       GamepadLayout layout = calculateLayout(720, 1280);
       SDL_RenderCopy(s_renderer, s_screenTexture, nullptr, &layout.gameRect);
       drawGamepad(layout);
+      drawOsd(720, 1280);
 
       SDL_SetRenderTarget(s_renderer, nullptr);
       SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, 255);

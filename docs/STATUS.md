@@ -130,9 +130,12 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
     - Botão touch para alternar Velocidade (<kbd>FPS</kbd> / `btn_fps`) ao lado do botão de proporção.
     - Ícones gerados em alta fidelidade (`.rgba` e `.png`) presentes nos assets de todas as plataformas.
     - Permanecem acessíveis e visíveis mesmo se os direcionais estiverem ocultos, com suporte responsivo tanto em Retrato quanto em Paisagem (True Widescreen).
-  - [x] HUD On-Screen Display (OSD):
-    - Banner flutuante no topo da tela com visual moderno de vidro fosco, contorno cyan brilhante e fonte bitmap dedicada (`font_osd.rgba`).
-    - Exibe confirmação visual por 2.5s com fade out suave ao alternar qualquer ajuste.
+  - [x] HUD On-Screen Display (OSD) Responsivo em Alta Resolucao:
+    - Banner flutuante no topo da tela com visual moderno de vidro fosco, contorno cyan brilhante e fonte bitmap em alta fidelidade (`font_osd.rgba` 704x432 em celulas 44x72).
+    - Escalonamento dinamico baseado na menor dimensao da tela (`minDim`), garantindo legibilidade perfeita e ampliada tanto em smartphones com telas de alta densidade (1080p/1440p) quanto no Nintendo Switch (720p).
+    - Ajuste automatico de largura em telas estreitas (Modo Retrato) para evitar corte de texto pelas bordas, com margem vertical segura para notches e camera frontal.
+    - Suporte a renderizacao no Nintendo Switch em modos rotacionados (TATE 90° e 270° Flip Grip) e confirmacao visual ao alternar orientacao.
+    - Exibe confirmacao visual por 2.5s com fade out suave ao alternar qualquer ajuste.
   - [x] Persistência de Configurações:
     - Salva e restaura automaticamente as opções do usuário e o tamanho/posição da janela em `hl_settings.ini`.
 

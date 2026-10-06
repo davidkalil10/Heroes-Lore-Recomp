@@ -377,8 +377,8 @@ def create_bezel_slate(width=1920, height=1080):
     return img
 
 def create_font_osd():
-    # 96 caracteres ASCII: 32 (espaço) a 127
-    cell_w, cell_h = 22, 36
+    # 96 caracteres ASCII: 32 (espaco) a 127 em celulas 44x72 (alta resolucao para telas modernas, mobile e Switch)
+    cell_w, cell_h = 44, 72
     cols, rows = 16, 6
     img = Image.new('RGBA', (cols * cell_w, rows * cell_h), (0, 0, 0, 0))
 
@@ -386,7 +386,7 @@ def create_font_osd():
     if not os.path.exists(font_path):
         font_path = "C:/Windows/Fonts/arialbd.ttf"
     try:
-        font = ImageFont.truetype(font_path, 22)
+        font = ImageFont.truetype(font_path, 44)
     except:
         font = ImageFont.load_default()
 
@@ -403,11 +403,11 @@ def create_font_osd():
         tw = bbox[2] - bbox[0]
         th = bbox[3] - bbox[1]
         tx = (cell_w - tw) // 2
-        ty = (cell_h - th) // 2 - 1
+        ty = (cell_h - th) // 2 - 2
 
         # Sombra sutil escura
-        for ox in [-1, 0, 1]:
-            for oy in [-1, 0, 1]:
+        for ox in [-2, 0, 2]:
+            for oy in [-2, 0, 2]:
                 if ox != 0 or oy != 0:
                     d_cell.text((tx + ox, ty + oy), char, font=font, fill=(5, 8, 14, 230))
         # Caractere branco brilhante
@@ -418,20 +418,29 @@ def create_font_osd():
     return img
 
 def main():
-    out_dir = "assets/ui"
-    os.makedirs(out_dir, exist_ok=True)
+    dest_dirs = [
+        "assets/ui",
+        "android/app/src/main/assets/ui",
+        "reference/extracted/ui",
+        "build/assets/ui"
+    ]
+    for d in dest_dirs:
+        os.makedirs(d, exist_ok=True)
 
     print("Gerando Bezel Soltia (1920x1080)...")
     img_soltia = create_bezel_soltia(1920, 1080)
-    save_rgba(img_soltia, os.path.join(out_dir, "bezel_soltia.rgba"))
+    for d in ["assets/ui", "android/app/src/main/assets/ui", "build/assets/ui"]:
+        save_rgba(img_soltia, os.path.join(d, "bezel_soltia.rgba"))
 
     print("Gerando Bezel Slate (1920x1080)...")
     img_slate = create_bezel_slate(1920, 1080)
-    save_rgba(img_slate, os.path.join(out_dir, "bezel_slate.rgba"))
+    for d in ["assets/ui", "android/app/src/main/assets/ui", "build/assets/ui"]:
+        save_rgba(img_slate, os.path.join(d, "bezel_slate.rgba"))
 
-    print("Gerando Fonte OSD (512x288)...")
+    print("Gerando Fonte OSD (704x432)...")
     img_font = create_font_osd()
-    save_rgba(img_font, os.path.join(out_dir, "font_osd.rgba"))
+    for d in dest_dirs:
+        save_rgba(img_font, os.path.join(d, "font_osd.rgba"))
 
     print("Concluído!")
 

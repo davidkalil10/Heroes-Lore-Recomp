@@ -292,3 +292,12 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - Integrados na barra de ferramentas inferior, dispostos ao lado do botão de olho (`KEY_TOGGLE_TOUCH_UI`) e rotação de tela (`KEY_TOGGLE_ORIENTATION` no Switch).
   - Em modo Paisagem (Landscape), o cálculo de layout (`calculateLayout`) foi atualizado para reconhecer a largura expandida do True Widescreen (`568x320`), impedindo o colapso das margens virtuais e garantindo que os botões fiquem confortavelmente acessíveis nas extremidades laterais sem obstruir a ação.
   - Os ícones utilitários permanecem visíveis mesmo com o gamepad translúcido desativado, permitindo restaurar os controles ou alterar gráficos/velocidade a qualquer momento com um simples toque na tela.
+
+- **Escalonamento Responsivo e Legibilidade do Banner OSD:**
+  - *Problema:* As mensagens OSD eram renderizadas com tamanho fixo (`charH = 21px`), tornando-se minúsculas (~1.3 mm) em smartphones com telas de alta densidade de pixels (1080p, 1440p) e difíceis de ler no Switch. Além disso, em modo Retrato vertical no Switch (TATE), o OSD não era desenhado no target rotacionado.
+  - *Solução Arquitetural:*
+    1. **Textura de Fonte em Alta Definição (704x432):** Atualizado `tools/generate_bezel_textures.py` para gerar `font_osd.rgba` com células de 44x72 pixels (2x a resolução anterior) com antialiasing supersample e sombras ricas.
+    2. **Escalonamento Baseado na Menor Dimensão (`minDim`):** A altura do caractere é calculada como `34px * (minDim / 720.0f)`, resultando em ~34px no Switch (720p, +62% maior) e ~51px a ~68px em smartphones 1080p/1440p (+142% maior).
+    3. **Ajuste Dinâmico de Largura:** Em modo Retrato (Portrait), se o comprimento da mensagem ultrapassar 90% da largura da tela, a fonte reduz proporcionalmente de forma fluida para que o texto nunca seja cortado nas bordas.
+    4. **Margem Segura Vertical:** `bannerY` posicionado a 6.5% da altura em modo retrato para não colidir com o entalhe da câmera frontal (notch/punch-hole) do celular.
+    5. **Renderização Rotacionada no Switch:** Adicionada a chamada `drawOsd(720, 1280)` no framebuffer rotacionado `s_rotateTarget`, garantindo que o OSD apareça nítido e na orientação correta mesmo ao jogar com o console na vertical (TATE 90° e Flip Grip 270°).
