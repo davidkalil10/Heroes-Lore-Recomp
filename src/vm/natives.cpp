@@ -1,6 +1,7 @@
 // natives.cpp — implementação de métodos nativos da biblioteca padrão Java (java.lang, java.util, java.io)
 #include "vm.h"
 #include "../platform/platform.h"
+#include "../midp/midp.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -484,6 +485,13 @@ static void Thread_init(VM& vm, Value* args, Value*) {
 
 static void Thread_sleep(VM& vm, Value* args, Value*) {
   int64_t ms = args[0].l;
+  // Desvia o limitador de frame interno do J2ME (bs.java dorme ~50-75ms para forçar ~14 FPS).
+  // Isso transfere o controle integral da taxa de quadros (15, 30 ou 60 FPS) para o
+  // Platform::framePacerWait() nativo de alta precisão em C++.
+  if (ms > 0 && ms <= 80 && g_display && g_display->current) {
+    vm.sleepMs(0);
+    return;
+  }
   vm.sleepMs(ms);
 }
 

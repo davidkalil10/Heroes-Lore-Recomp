@@ -211,6 +211,71 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
     4. **Android:** Runner `ubuntu-latest` com Java 17 e NDK 26, gerando os APKs Release assinados (`universal` e `arm64-v8a`).
   - Integrado o step de release via `softprops/action-gh-release@v2`, que automaticamente coleta os binários das 4 plataformas e cria a release oficial no GitHub sempre que uma tag de versão (`v*`) for enviada ou acionada via `workflow_dispatch`.
 
+## Sessão 15 (Aspect Ratio, Molduras Temáticas / Bezels e Taxa de Quadros 30 vs 60 FPS)
+- **Geração de Bezels Temáticos Procedurais em Alta Resolução (1920x1080):**
+  - Jogos J2ME clássicos em resolução 240x320 possuem proporção vertical 3:4. Em monitores modernos de computador (16:9 / 16:10), Nintendo Switch e Steam Deck, a renderização centralizada deixa grandes barras pretas laterais (pillarbox).
+  - Desenvolvido o gerador `tools/generate_bezel_textures.py` que gera imagens widescreen 1920x1080 em formato binário raw `.rgba` e `.png`:
+    - `bezel_soltia`: Pilares de ardósia mística, medalhão heráldico da espada alada com halo azul-arcano, runas antigas luminosas, placa comemorativa entalhada em bronze e ouro com os créditos oficiais para David Kalil Braga (2026), e vinhetas com drop shadow e chanfros dourados para integração suave com a área 3:4 do jogo.
+    - `bezel_slate`: Versão minimalista em ardósia vulcânica e aço escovado com micro-chanfros sóbrios para jogadores que preferem discrição.
+    - `bezel_black`: Modo clássico para puristas de barras pretas.
+- **Eliminação de Glifos Não Mapeados (Tofu/Quadradinhos Unicode) via Desenho Geométrico:**
+  - Caracteres Unicode rúnicos nórdicos muitas vezes não estão implementados nas fontes TTF padrão do Windows/Linux/Android, resultando no símbolo de substituição quadrado (`□`).
+  - A solução foi implementar o traçado procedural geométrico das runas (Algiz, Tiwaz, Fehu, Sowilo, Gebo, Othala) diretamente via linhas e coordenadas matemáticas em Python, desenhadas como sulcos rúnicos com núcleo branco brilhante e brilho translúcido em cyan neon. Isso elimina qualquer dependência de fontes externas e garante renderização 100% perfeita em qualquer SO.
+- **Folha de Fonte Bitmap Dedicada para OSD e Isolamento de Célula:**
+  - Criada a textura `assets/ui/font_osd.rgba` (352x216) com os 96 caracteres ASCII (32 a 127) em células de 22x36 pixels.
+  - Para evitar vazamento vertical de sombras (bleed) entre linhas adjacentes, cada caractere é desenhado em uma imagem intermediária isolada (`cell_img = Image.new('RGBA', (cell_w, cell_h))`) e colado na grade com `paste()`.
+  - O renderizador nativo em C++ mapeia cada caractere diretamente via `SDL_RenderCopy` com escala suave, produzindo um HUD flutuante moderno em vidro fosco no topo da tela, com fade out automático após 2.5 segundos.
+- **Frame Pacer de Alta Precisão (30 FPS Nostalgia vs 60 FPS Fluidez Máxima):**
+  - Monitores modernos com refresh rates de 60Hz, 120Hz ou 144Hz podem introduzir oscilações caso dependam apenas de `SDL_Delay(8)`.
+  - Implementado o método `Platform::framePacerWait()` utilizando o relógio de alta frequência do hardware (`SDL_GetPerformanceCounter()` e `SDL_GetPerformanceFrequency()`).
+  - O algoritmo dorme via `SDL_Delay` pela maior parte do tempo restante do frame (deixando uma folga de 1.5ms) e realiza um spin-wait fino nos microssegundos finais via `SDL_Delay(0)`. Isso atinge precisão sub-milissegundo sem desperdício de CPU.
+  - O jogador pode alternar instantaneamente entre 30 FPS Clássico (tempo de quadro travado em 33.33ms para reproduzir com fidelidade absoluta a sensação e física do celular de 2007-2008) e 60 FPS Fluido (tempo de quadro em 16.66ms para máxima fluidez).
+- **Persistência Transparente em `hl_settings.ini`:**
+  - Todas as opções de exibição (`bezel_mode`, `target_fps`, `aspect_mode`, `fullscreen` e tamanho redimensionado de janela `window_w`, `window_h`) são salvas e restauradas automaticamente em `hl_settings.ini` no diretório retornado por `Platform::getStorageDir()`, garantindo que o jogo reabra exatamente como o usuário configurou.
+
+- **Descoberta do Limitador Interno Arcaico de 14 FPS em `bs.java` e Emancipação do Frame Pacer:**
+  - *Diagnóstico do Sintoma:* Ao alternar entre 30 e 60 FPS, nenhuma diferença era percebida visualmente.
+  - *Investigação do Bytecode:* Em `bs.java` (linhas 79-84), o método `b()` chama `a(this.var_long_a, this.var_int_d)`. Dentro dele, `l4 = System.currentTimeMillis() - var_long_a; if (l4 < var_int_d) Thread.sleep(var_int_d - l4)`. O valor `var_int_d` é inicializado como `1000 / var_int_c`, sendo que `var_int_c` vem da matriz original de taxas do celular: `var_int_arr_a = {8, 10, 14, 18}`. Por padrão, o jogo roda no índice 2 (`14 FPS`), o que força um `Thread.sleep` de ~71ms a cada quadro!
+  - Como o `paint()` da VM já consumia 71ms bloqueado no sleep Java, quando o controle retornava ao `main.cpp` e chamava `Platform::framePacerWait()`, o tempo decorrido já era superior tanto a 33.3ms (30 FPS) quanto a 16.6ms (60 FPS). Portanto, em ambos os modos, o jogo estava travado em ~14 FPS pelo próprio bytecode!
+  - *Solução Elegante:* Em `src/vm/natives.cpp` (`Thread_sleep`), identificamos sleeps de baixa duração (<= 80ms) durante a renderização do display e desviamos para `vm.sleepMs(0)`. Isso transfere 100% do controle de cadência para o `Platform::framePacerWait()` nativo em C++, com precisão de microssegundos via `SDL_GetPerformanceCounter()`. Agora o ciclo de opções oferece:
+    - **30 FPS (Modo Fluido Padrão / 33.3ms):** Resposta imediata, cadência equilibrada.
+    - **60 FPS (Modo Turbo / 16.6ms):** Fluidez máxima, 2x mais rápido para grind e exploração ágil.
+    - **15 FPS (Nostalgia J2ME 2007 / 66.6ms):** Reprodução autêntica da cadência lenta original do celular.
+
+- **Implementação do True Widescreen (Expansão Real de Viewport 568x320):**
+  - O usuário solicitou que o modo widescreen não esticasse os pixels (distorção anamórfica rejeitada), mas expandisse a visão lateral do mapa, revelando mais terreno sem deformação.
+  - *Engenharia da Resolução:* A altura nativa do jogo é 320p. A proporção 16:9 exata para altura 320 é $320 \times \frac{16}{9} \approx 568.88 \rightarrow 568$ pixels de largura.
+  - Em 568x320, o motor de mapa (`ae.java`) calcula dinamicamente $n8 = (568 - camX - 1) / 16$, passando a renderizar **35 colunas de tiles de 16x16** simultaneamente na tela, em comparação com as 15 colunas do modo 240p original!
+  - No modo True Widescreen, todos os pixels são perfeitamente quadrados (proporção 1:1, pixel-perfect). O jogador enxerga mais do cenário, monstros e caminhos nas duas extremidades laterais da tela.
+  - Em mapas de interiores pequenos (ex: casas com 17 colunas = 272px), o motor original em `ae.java` (linhas 547-556) já possui suporte embutido de centralização automática com preenchimento lateral limpo: `n2 = (n4 - this.var_int_c) / 2`.
+  - A sincronização em tempo real ao alternar via <kbd>F7</kbd> ou <kbd>F10</kbd> atualiza as variáveis estáticas e instâncias da VM (`r.g`, `r.i`, `r.h`, `r.j`, `as.var_int_a`, `as.b`, `as.c`, `as.var_int_d`, `as.n`, `as.o`, `as.p`, `var_boolean_e`, `f`, `g`, `h`), recriando a textura SDL sem engasgos.
+  - No HUD inferior de `as.java`, a quantidade de segmentos de borda de pedra se adapta via $n = (r.g - 74) / 6$ (desenhando 82 segmentos em 568px em vez de 27), enquanto poções e itens rápidos ficam perfeitamente ancorados no canto inferior direito (`r.g - 26`), e barras de HP/MP/EXP preenchem a largura total com elegância.
+
+- **Correção Crítica: Nomes de Campos CFR vs. Bytecode Real e Indexação de `fieldMap`:**
+  - *Diagnóstico do Bug da Faixa Preta:* Ao ativar o True Widescreen (568x320), a textura era redimensionada para 568x320, mas o jogo desenhava apenas os primeiros 240 pixels na esquerda e deixava o restante preto, deslocando a tela.
+  - *Causa Raiz:* Duas falhas silenciosas na função `setVmStaticInt`:
+    1. **Chave de `fieldMap` com Descritor de Tipo:** Na classe JVM (`ClassInfo::fieldMap`), a tabela de campos é indexada como `"nome:descritor"` (ex: `"g:I"` e `"a:I"`), e não pelo nome puro `"g"`. A busca direta por `"g"` retornava `end()`.
+    2. **Divergência entre CFR e Bytecode Original:** O decompiler CFR renomeou campos duplicados na descompilação (ex: chamou o campo estático `as.a` de `as.var_int_a`, `as.d` de `as.var_int_d` e o booleano de instância `as.e` de `var_boolean_e`). No bytecode binário real dos arquivos `.class` executados pela VM nativa, o nome original é literalmente `a`, `d` e `e`!
+    3. Como resultado, nenhuma variável estática em Java era atualizada; `r.g` e `as.a` continuavam travados em 240 pixels. O motor de mapa do jogo aplicava `setClip(0, 0, 240, 299)` e só renderizava 240 pixels de largura para o buffer, deixando as colunas 240 a 567 vazias.
+  - *Solução Definitiva:*
+    - `setVmStaticInt` e `setVmInstanceBool` foram refatorados para resolver nomes candidatos automaticamente (tanto a forma descompilada `var_int_a` quanto a forma pura de bytecode `a`), testando com sufixo de descritor (`:I`, `:Z`) e iterando os campos da classe.
+    - Sincronização em tempo real de `r.g` (568), `r.i` (284), `as.a` (568), `as.b` (299), `as.c` (276), `as.d` (149), `as.n` (82), `as.o` (501), `as.p` (562).
+    - Câmera reposicionada suavemente no centro pelo delta matemático (`deltaC = new_as_c - old_as_c; n.a += deltaC; n.c += deltaC;`) sem chamadas de bytecode externas ao loop de execução.
+    - Agora o mapa de tiles preenche os 568 pixels por completo (35 colunas de tiles) sem nenhuma barra preta e sem distorcer sprites.
+
+- **Eliminação do Crash ao Alternar F7 em Tempo de Execução:**
+  - *Sintoma:* Pressionar <kbd>F7</kbd> durante o jogo fechava o aplicativo imediatamente, mas ao reabrir o jogo ele iniciava na nova resolução já com as configurações salvas.
+  - *Causa Raiz:* O processamento de eventos do SDL (`Platform::pollEvents`) ocorre no início do laço de quadros de `main.cpp`, antes da ativação do contexto da thread principal (`tctx = &mainCtx`). Na versão inicial, tentávamos executar o método bytecode `n.g:()V` via `vm.invoke` dentro de `updateJavaViewportVariables`. Como `tctx` era `nullptr`, a checagem de sanidade da VM em `interp.cpp` disparava `fatal("invoke chamado sem ThreadCtx ativo no método: n.g")`, que executava `exit(2)`!
+  - *Solução Definitiva:*
+    1. Remoção de qualquer chamada a `vm.invoke` durante a captura de eventos.
+    2. O ajuste das coordenadas da câmera (`n.a` e `n.c`) é realizado matematicamente pelo delta de deslocamento do centro (`deltaC = new_as_c - old_as_c`). No quadro de renderização imediatamente posterior, o próprio método `as.paint()` (já rodando sob o contexto de thread ativo `mainCtx`) executa `n.g()` nativamente e recalcula as posições relativas com 100% de exatidão.
+    3. Escrita atômica de inteiros (`statics[index].i = val`) e atualização limpa sem invocar `gilLock()` reentrante (o mutex da GIL não é recursivo e causava deadlock se já estivesse retido pela thread).
+    4. A alternância entre **3:4 Original com Molduras** e **16:9 True Widescreen** agora ocorre em tempo real, instantaneamente, sem travamentos e com 100% de estabilidade.
+
+
+
+
+
 
 
 

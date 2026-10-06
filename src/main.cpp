@@ -225,18 +225,19 @@ int main(int argc, char** argv) {
     Platform::present();
 
     frameCount++;
-#ifndef __SWITCH__
+#if defined(HL_DEV_SCREENSHOTS) && !defined(__SWITCH__)
     if (frameCount == 1 || frameCount == 10 || frameCount == 30 || frameCount == 60 || frameCount == 120 ||
         frameCount == 160 || frameCount == 200 || frameCount == 260 || frameCount == 320) {
       char fname[64];
       snprintf(fname, sizeof(fname), "screenshot_frame_%d.bmp", frameCount);
-      saveBMP(fname, g_screenBuffer, 240, 320);
+      saveBMP(fname, g_screenBuffer, g_screenWidth, g_screenHeight);
       printf("[Frame %d] Salvo screenshot %s (current Canvas: %s)\n",
              frameCount, fname, (g_display && g_display->current) ? g_display->current->cls->name.c_str() : "none");
     }
 #endif
 
-    SDL_Delay(8);
+    // Controle de taxa de quadros de alta precisão (30 FPS Nostalgia vs 60 FPS Fluido)
+    Platform::framePacerWait();
   }
 
   boot_log("[Game] Encerrando graciosamente...\n");

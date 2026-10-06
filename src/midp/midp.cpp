@@ -31,7 +31,9 @@
 
 namespace hl {
 
-uint32_t g_screenBuffer[240 * 320];
+uint32_t g_screenBuffer[MAX_SCREEN_WIDTH * SCREEN_HEIGHT];
+int g_screenWidth = SCREEN_W_ORIGINAL;
+int g_screenHeight = SCREEN_HEIGHT;
 GraphicsObj* g_screenGraphics = nullptr;
 DisplayObj* g_display = nullptr;
 
@@ -54,8 +56,8 @@ PlayerObj::~PlayerObj() {
 void GraphicsObj::resetClip() {
   clipX = 0;
   clipY = 0;
-  clipW = target ? target->width : 240;
-  clipH = target ? target->height : 320;
+  clipW = target ? target->width : g_screenWidth;
+  clipH = target ? target->height : g_screenHeight;
 }
 
 void GraphicsObj::setColor(uint32_t rgb) {
@@ -87,8 +89,8 @@ void GraphicsObj::fillRect(int x, int y, int w, int h) {
   int y0 = std::max(y, clipY);
   int x1 = std::min(x + w, clipX + clipW);
   int y1 = std::min(y + h, clipY + clipH);
-  int tW = target ? target->width : 240;
-  int tH = target ? target->height : 320;
+  int tW = target ? target->width : g_screenWidth;
+  int tH = target ? target->height : g_screenHeight;
   uint32_t* dst = target ? target->pixels.data() : g_screenBuffer;
   x0 = std::max(0, std::min(x0, tW));
   x1 = std::max(0, std::min(x1, tW));
@@ -105,8 +107,8 @@ void GraphicsObj::fillRect(int x, int y, int w, int h) {
 void GraphicsObj::drawLine(int x0, int y0, int x1, int y1) {
   x0 += transX; y0 += transY;
   x1 += transX; y1 += transY;
-  int tW = target ? target->width : 240;
-  int tH = target ? target->height : 320;
+  int tW = target ? target->width : g_screenWidth;
+  int tH = target ? target->height : g_screenHeight;
   uint32_t* dst = target ? target->pixels.data() : g_screenBuffer;
 
   int dx = std::abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
@@ -156,8 +158,8 @@ void GraphicsObj::drawImage(ImageObj* img, int x, int y, int anchor) {
   destX += transX;
   destY += transY;
 
-  int tW = target ? target->width : 240;
-  int tH = target ? target->height : 320;
+  int tW = target ? target->width : g_screenWidth;
+  int tH = target ? target->height : g_screenHeight;
   uint32_t* dst = target ? target->pixels.data() : g_screenBuffer;
   const uint32_t* src = img->pixels.data();
 
@@ -220,8 +222,8 @@ static void Display_callSerially(VM&, Value* args, Value*) {
 // -------------------------------------------------------------
 // javax/microedition/lcdui/Displayable
 // -------------------------------------------------------------
-static void Displayable_getWidth(VM&, Value*, Value* ret) { ret[0].i = 240; }
-static void Displayable_getHeight(VM&, Value*, Value* ret) { ret[0].i = 320; }
+static void Displayable_getWidth(VM&, Value*, Value* ret) { ret[0].i = g_screenWidth; }
+static void Displayable_getHeight(VM&, Value*, Value* ret) { ret[0].i = g_screenHeight; }
 
 // -------------------------------------------------------------
 // javax/microedition/lcdui/Canvas

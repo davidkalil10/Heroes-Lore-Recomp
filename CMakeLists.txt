@@ -85,5 +85,9 @@ add_custom_command(TARGET heroes_lore POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/reference/extracted"
         "$<TARGET_FILE_DIR:heroes_lore>/assets"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+        "$<TARGET_FILE_DIR:heroes_lore>/assets"
 )
+
 

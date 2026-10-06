@@ -19,6 +19,16 @@ public:
   static bool shouldQuit();
   static void rumble(float strength = 0.5f, int durationMs = 150);
 
+  // Recursos Passo 7: Molduras Temáticas (Bezels), Aspect Ratio e FPS Limiter
+  static void toggleBezel();
+  static void toggleFps();
+  static void toggleAspect(VM* vm = nullptr);
+  static void updateViewport(VM& vm);
+  static void toggleFullscreen();
+  static void showOsdMessage(const std::string& msg);
+  static void framePacerWait();
+  static int getTargetFps();
+
   // Sistema de Arquivos / Assets Portável (PC, Android APK, Switch RomFS)
   static std::vector<uint8_t> readAsset(const std::string& path);
   static std::string getStorageDir();

@@ -128,6 +128,197 @@ static int mapControllerButton(Uint8 btn) {
   }
 }
 
+// =============================================================
+// Passo 7: Molduras Temáticas (Bezels), Aspect Ratio e FPS Limiter
+// =============================================================
+enum BezelMode {
+  BEZEL_SOLTIA = 0,
+  BEZEL_SLATE = 1,
+  BEZEL_BLACK = 2,
+  BEZEL_COUNT = 3
+};
+
+enum AspectMode {
+  ASPECT_ORIGINAL = 0,   // 3:4 Original com Molduras de Soltia
+  ASPECT_WIDESCREEN = 1, // 16:9 True Widescreen (Expansão Real de Viewport)
+  ASPECT_COUNT = 2
+};
+
+static BezelMode s_bezelMode = BEZEL_SOLTIA;
+static int s_targetFps = 15; // 15 (padrão nostalgia J2ME) ou 30 (turbo fluido)
+static AspectMode s_aspectMode = ASPECT_ORIGINAL;
+static bool s_isFullscreen = false;
+static int s_savedWinW = 0;
+static int s_savedWinH = 0;
+static uint64_t s_frameStartCounter = 0;
+
+static void setVmStaticInt(VM& vm, const std::string& className, const std::string& fieldName, int32_t val) {
+  auto it = vm.classes.find(className);
+  if (it == vm.classes.end()) return;
+  ClassInfo* cls = it->second;
+  FieldInfo* targetField = nullptr;
+
+  std::vector<std::string> candidateNames = { fieldName };
+  if (fieldName.rfind("var_int_", 0) == 0) {
+    candidateNames.push_back(fieldName.substr(8)); // "var_int_a" -> "a"
+  } else if (fieldName.rfind("var_", 0) == 0) {
+    candidateNames.push_back(fieldName.substr(4));
+  }
+
+  for (const auto& name : candidateNames) {
+    auto fit = cls->fieldMap.find(name + ":I");
+    if (fit != cls->fieldMap.end() && fit->second && fit->second->isStatic) {
+      targetField = fit->second;
+      break;
+    }
+    fit = cls->fieldMap.find(name);
+    if (fit != cls->fieldMap.end() && fit->second && fit->second->isStatic) {
+      targetField = fit->second;
+      break;
+    }
+    for (auto& pair : cls->fieldMap) {
+      if (pair.second && pair.second->name == name && pair.second->desc == "I" && pair.second->isStatic) {
+        targetField = pair.second;
+        break;
+      }
+    }
+    if (targetField) break;
+  }
+
+  if (targetField && targetField->isStatic && targetField->index >= 0 && targetField->index < (int)cls->statics.size()) {
+    int32_t oldVal = cls->statics[targetField->index].i;
+    cls->statics[targetField->index].i = val;
+    printf("[Viewport] %s.%s:I (%d -> %d)\n", className.c_str(), targetField->name.c_str(), oldVal, val);
+  }
+}
+
+static int32_t getVmStaticInt(VM& vm, const std::string& className, const std::string& fieldName, int32_t defVal = 0) {
+  auto it = vm.classes.find(className);
+  if (it == vm.classes.end()) return defVal;
+  ClassInfo* cls = it->second;
+  FieldInfo* targetField = nullptr;
+
+  std::vector<std::string> candidateNames = { fieldName };
+  if (fieldName.rfind("var_int_", 0) == 0) candidateNames.push_back(fieldName.substr(8));
+  else if (fieldName.rfind("var_", 0) == 0) candidateNames.push_back(fieldName.substr(4));
+
+  for (const auto& name : candidateNames) {
+    auto fit = cls->fieldMap.find(name + ":I");
+    if (fit != cls->fieldMap.end() && fit->second && fit->second->isStatic) {
+      targetField = fit->second;
+      break;
+    }
+    for (auto& pair : cls->fieldMap) {
+      if (pair.second && pair.second->name == name && pair.second->desc == "I" && pair.second->isStatic) {
+        targetField = pair.second;
+        break;
+      }
+    }
+    if (targetField) break;
+  }
+  if (targetField && targetField->isStatic && targetField->index >= 0 && targetField->index < (int)cls->statics.size()) {
+    return cls->statics[targetField->index].i;
+  }
+  return defVal;
+}
+
+static void setVmInstanceBool(Object* obj, const std::string& fieldName, bool val) {
+  if (!obj || obj->kind != K_INST || !obj->cls) return;
+  Instance* inst = static_cast<Instance*>(obj);
+  ClassInfo* cls = obj->cls;
+  FieldInfo* targetField = nullptr;
+
+  std::vector<std::string> candidateNames = { fieldName };
+  if (fieldName.rfind("var_boolean_", 0) == 0) {
+    candidateNames.push_back(fieldName.substr(12)); // "var_boolean_e" -> "e"
+  } else if (fieldName.rfind("var_", 0) == 0) {
+    candidateNames.push_back(fieldName.substr(4));
+  }
+
+  for (const auto& name : candidateNames) {
+    auto fit = cls->fieldMap.find(name + ":Z");
+    if (fit != cls->fieldMap.end() && fit->second && !fit->second->isStatic) {
+      targetField = fit->second;
+      break;
+    }
+    fit = cls->fieldMap.find(name);
+    if (fit != cls->fieldMap.end() && fit->second && !fit->second->isStatic) {
+      targetField = fit->second;
+      break;
+    }
+    for (auto& pair : cls->fieldMap) {
+      if (pair.second && pair.second->name == name && pair.second->desc == "Z" && !pair.second->isStatic) {
+        targetField = pair.second;
+        break;
+      }
+    }
+    if (targetField) break;
+  }
+
+  if (targetField && !targetField->isStatic && targetField->index >= 0 && targetField->index < (int)inst->f.size()) {
+    inst->f[targetField->index].i = val ? 1 : 0;
+  }
+}
+
+static void updateJavaViewportVariables(VM& vm) {
+  // 1. Classe r (base de Canvas, compartilhada por todo o motor J2ME)
+  setVmStaticInt(vm, "r", "g", g_screenWidth);
+  setVmStaticInt(vm, "r", "i", g_screenWidth / 2);
+  setVmStaticInt(vm, "r", "h", g_screenHeight);
+  setVmStaticInt(vm, "r", "j", g_screenHeight / 2);
+
+  // 2. Classe as (Canvas principal do jogo e HUD)
+  // No bytecode original: a = var_int_a, b = b, c = c, d = var_int_d, n = n, o = o, p = p
+  int32_t oldAsc = getVmStaticInt(vm, "as", "c", g_screenWidth / 2 - 8);
+  int32_t newAsc = g_screenWidth / 2 - 8;
+  int32_t deltaC = newAsc - oldAsc;
+
+  setVmStaticInt(vm, "as", "a", g_screenWidth);
+  setVmStaticInt(vm, "as", "var_int_a", g_screenWidth);
+  setVmStaticInt(vm, "as", "b", g_screenHeight - 21);
+  setVmStaticInt(vm, "as", "c", newAsc);
+  setVmStaticInt(vm, "as", "d", (g_screenHeight - 21) / 2);
+  setVmStaticInt(vm, "as", "var_int_d", (g_screenHeight - 21) / 2);
+  setVmStaticInt(vm, "as", "n", (g_screenWidth - 74) / 6);
+  setVmStaticInt(vm, "as", "o", g_screenWidth - 67);
+  setVmStaticInt(vm, "as", "p", g_screenWidth - 6);
+
+  // 3. Força redesenho completo de HUD no Canvas ativo
+  if (g_display && g_display->current) {
+    setVmInstanceBool(g_display->current, "e", true); // var_boolean_e
+    setVmInstanceBool(g_display->current, "var_boolean_e", true);
+    setVmInstanceBool(g_display->current, "f", true);
+    setVmInstanceBool(g_display->current, "g", true);
+    setVmInstanceBool(g_display->current, "h", true);
+  }
+
+  // 4. Se estiver em jogo ativo, desloca a câmera pelo delta do centro da tela sem invocar bytecode
+  if (deltaC != 0) {
+    int32_t camX = getVmStaticInt(vm, "n", "a");
+    int32_t prevCamX = getVmStaticInt(vm, "n", "c");
+    setVmStaticInt(vm, "n", "a", camX + deltaC);
+    setVmStaticInt(vm, "n", "c", prevCamX + deltaC);
+  }
+
+  // 5. Redefine o clip do Graphics principal
+  if (g_screenGraphics) {
+    g_screenGraphics->resetClip();
+  }
+}
+
+void Platform::updateViewport(VM& vm) {
+  updateJavaViewportVariables(vm);
+}
+
+static SDL_Texture* s_texBezelSoltia = nullptr;
+static SDL_Texture* s_texBezelSlate = nullptr;
+static SDL_Texture* s_texFontOsd = nullptr;
+
+static std::string s_osdMessage = "";
+static uint32_t s_osdExpireTime = 0;
+
+static void loadSettings();
+
 bool Platform::init(int scale) {
 #ifdef __SWITCH__
   Result rc = romfsInit();
@@ -167,8 +358,9 @@ bool Platform::init(int scale) {
         SDL_WINDOW_FULLSCREEN);
   }
 #else
-  int winW = 240 * scale;
-  int winH = 320 * scale;
+  loadSettings();
+  int winW = (s_savedWinW >= 240) ? s_savedWinW : 960;
+  int winH = (s_savedWinH >= 320) ? s_savedWinH : 720;
 
   s_window = SDL_CreateWindow(
       "Heroes Lore: Wind of Soltia (Native Recomp)",
@@ -211,12 +403,15 @@ bool Platform::init(int scale) {
     return false;
   }
 
-  // Textura streaming de 240x320 com aspect ratio e posicionamento dinâmico em present()
+  // Textura streaming dinâmica com resolução nativa (240x320 clássico ou 568x320 widescreen)
+  g_screenWidth = (s_aspectMode == ASPECT_WIDESCREEN) ? SCREEN_W_WIDESCREEN : SCREEN_W_ORIGINAL;
+  g_screenHeight = SCREEN_HEIGHT;
+
   s_screenTexture = SDL_CreateTexture(
       s_renderer,
       SDL_PIXELFORMAT_ARGB8888,
       SDL_TEXTUREACCESS_STREAMING,
-      240, 320);
+      g_screenWidth, g_screenHeight);
   if (!s_screenTexture) {
     fprintf(stderr, "Erro ao criar textura de tela: %s\n", SDL_GetError());
     return false;
@@ -253,6 +448,16 @@ bool Platform::init(int scale) {
       }
     }
   }
+
+  // Carrega preferências do usuário (Bezel, FPS, Aspect, Fullscreen)
+  loadSettings();
+#ifndef __SWITCH__
+  if (s_isFullscreen) {
+    SDL_SetWindowFullscreen(s_window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+  }
+#endif
+  s_frameStartCounter = SDL_GetPerformanceCounter();
+  Platform::showOsdMessage("Heroes Lore [F5: Moldura | F6: FPS | F7: Widescreen | F11: Tela Cheia]");
 
   return true;
 }
@@ -358,6 +563,122 @@ static SDL_Texture* loadRgbaTexture(const char* name) {
   return tex;
 }
 
+static void loadSettings() {
+  std::string path = Platform::getStorageDir() + "/hl_settings.ini";
+  FILE* f = fopen(path.c_str(), "r");
+  if (!f) return;
+  char line[256];
+  while (fgets(line, sizeof(line), f)) {
+    int val = 0;
+    if (sscanf(line, "bezel_mode=%d", &val) == 1) {
+      if (val >= 0 && val < BEZEL_COUNT) s_bezelMode = static_cast<BezelMode>(val);
+    } else if (sscanf(line, "target_fps=%d", &val) == 1) {
+      if (val == 15 || val == 30) s_targetFps = val;
+      else s_targetFps = 15;
+    } else if (sscanf(line, "aspect_mode=%d", &val) == 1) {
+      if (val >= 0 && val < ASPECT_COUNT) s_aspectMode = static_cast<AspectMode>(val);
+    } else if (sscanf(line, "fullscreen=%d", &val) == 1) {
+      s_isFullscreen = (val != 0);
+    } else if (sscanf(line, "window_w=%d", &val) == 1) {
+      if (val >= 240) s_savedWinW = val;
+    } else if (sscanf(line, "window_h=%d", &val) == 1) {
+      if (val >= 320) s_savedWinH = val;
+    }
+  }
+  fclose(f);
+}
+
+static void saveSettings() {
+  std::string path = Platform::getStorageDir() + "/hl_settings.ini";
+  FILE* f = fopen(path.c_str(), "w");
+  if (!f) return;
+  int curW = s_savedWinW, curH = s_savedWinH;
+  if (s_window && !s_isFullscreen) {
+    int w = 0, h = 0;
+    SDL_GetWindowSize(s_window, &w, &h);
+    if (w >= 240 && h >= 320) {
+      curW = w;
+      curH = h;
+    }
+  }
+  fprintf(f, "[Video]\n");
+  fprintf(f, "bezel_mode=%d\n", static_cast<int>(s_bezelMode));
+  fprintf(f, "target_fps=%d\n", s_targetFps);
+  fprintf(f, "aspect_mode=%d\n", static_cast<int>(s_aspectMode));
+  fprintf(f, "fullscreen=%d\n", s_isFullscreen ? 1 : 0);
+  if (curW > 0 && curH > 0) {
+    fprintf(f, "window_w=%d\n", curW);
+    fprintf(f, "window_h=%d\n", curH);
+  }
+  fclose(f);
+}
+
+static void loadBezelTextures() {
+  if (!s_renderer) return;
+  if (!s_texFontOsd) {
+    s_texFontOsd = loadRgbaTexture("font_osd");
+  }
+  if (s_bezelMode == BEZEL_SOLTIA && !s_texBezelSoltia) {
+    s_texBezelSoltia = loadRgbaTexture("bezel_soltia");
+  } else if (s_bezelMode == BEZEL_SLATE && !s_texBezelSlate) {
+    s_texBezelSlate = loadRgbaTexture("bezel_slate");
+  }
+}
+
+static void drawOsd(int winW, int winH) {
+  if (s_osdMessage.empty() || SDL_GetTicks() >= s_osdExpireTime || !s_renderer) return;
+
+  uint32_t now = SDL_GetTicks();
+  uint32_t timeLeft = s_osdExpireTime - now;
+  Uint8 alpha = 255;
+  if (timeLeft < 500) {
+    alpha = static_cast<Uint8>((timeLeft * 255) / 500);
+  }
+
+  float fontScale = (winH >= 720) ? 0.60f : 0.45f;
+  int charW = static_cast<int>(22.0f * fontScale);
+  int charH = static_cast<int>(36.0f * fontScale);
+  int textW = (int)s_osdMessage.length() * charW;
+  int padX = 18, padY = 8;
+  int bannerW = textW + padX * 2;
+  int bannerH = charH + padY * 2;
+  int bannerX = (winW - bannerW) / 2;
+  int bannerY = (winH >= 720) ? 28 : 14;
+
+  SDL_SetRenderDrawBlendMode(s_renderer, SDL_BLENDMODE_BLEND);
+
+  // Sombra suave do banner
+  SDL_Rect shadowRect = { bannerX + 4, bannerY + 4, bannerW, bannerH };
+  SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, (Uint8)((alpha * 160) / 255));
+  SDL_RenderFillRect(s_renderer, &shadowRect);
+
+  // Fundo escuro do banner (Frosted Dark Glass)
+  SDL_Rect bgRect = { bannerX, bannerY, bannerW, bannerH };
+  SDL_SetRenderDrawColor(s_renderer, 14, 18, 26, (Uint8)((alpha * 235) / 255));
+  SDL_RenderFillRect(s_renderer, &bgRect);
+
+  // Borda brilhante em cyan neon
+  SDL_SetRenderDrawColor(s_renderer, 0, 210, 255, (Uint8)((alpha * 220) / 255));
+  SDL_RenderDrawRect(s_renderer, &bgRect);
+
+  // Texto centralizado
+  if (s_texFontOsd) {
+    SDL_SetTextureAlphaMod(s_texFontOsd, alpha);
+    int startX = bannerX + padX;
+    int startY = bannerY + padY;
+    for (size_t i = 0; i < s_osdMessage.length(); i++) {
+      char c = s_osdMessage[i];
+      if (c < 32 || c > 126) c = ' ';
+      int idx = c - 32;
+      int col = idx % 16;
+      int row = idx / 16;
+      SDL_Rect src = { col * 22, row * 36, 22, 36 };
+      SDL_Rect dst = { startX + (int)i * charW, startY, charW, charH };
+      SDL_RenderCopy(s_renderer, s_texFontOsd, &src, &dst);
+    }
+  }
+}
+
 static void loadGamepadTextures() {
   if (s_gamepadTexturesLoaded || !s_renderer) return;
   s_texDpadBase = loadRgbaTexture("dpad_base");
@@ -376,6 +697,7 @@ static void loadGamepadTextures() {
   s_texBtnEyeClosed = loadRgbaTexture("btn_eye_closed");
   s_texBtnRotate = loadRgbaTexture("btn_rotate");
   s_texBtnGlow = loadRgbaTexture("btn_glow");
+  loadBezelTextures();
   s_gamepadTexturesLoaded = true;
 }
 
@@ -720,6 +1042,16 @@ bool Platform::pollEvents(VM& vm) {
       return false;
     }
 
+    else if (ev.type == SDL_WINDOWEVENT) {
+      if (ev.window.event == SDL_WINDOWEVENT_RESIZED || ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+        if (!s_isFullscreen) {
+          s_savedWinW = ev.window.data1;
+          s_savedWinH = ev.window.data2;
+          saveSettings();
+        }
+      }
+    }
+
     // Gerenciamento de conexão quente de Gamepads (Hotplug)
     if (ev.type == SDL_CONTROLLERDEVICEADDED) {
       int idx = ev.cdevice.which;
@@ -747,6 +1079,16 @@ bool Platform::pollEvents(VM& vm) {
 
     // Botões do Gamepad
     else if (ev.type == SDL_CONTROLLERBUTTONDOWN) {
+      if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_LEFTSTICK) {
+        Platform::toggleBezel();
+        continue;
+      } else if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_RIGHTSTICK) {
+        Platform::toggleFps();
+        continue;
+      } else if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE) {
+        Platform::toggleAspect(&vm);
+        continue;
+      }
       int key = mapControllerButton(ev.cbutton.button);
       if (key != 0 && g_display && g_display->current) {
         if (isDirectionKey(key)) {
@@ -856,6 +1198,20 @@ bool Platform::pollEvents(VM& vm) {
 
     // Teclado
     else if (ev.type == SDL_KEYDOWN) {
+      if (ev.key.keysym.sym == SDLK_F5 || ev.key.keysym.sym == SDLK_F9) {
+        if (!ev.key.repeat) Platform::toggleBezel();
+        continue;
+      } else if (ev.key.keysym.sym == SDLK_F6 || ev.key.keysym.sym == SDLK_F8) {
+        if (!ev.key.repeat) Platform::toggleFps();
+        continue;
+      } else if (ev.key.keysym.sym == SDLK_F7 || ev.key.keysym.sym == SDLK_F10) {
+        if (!ev.key.repeat) Platform::toggleAspect(&vm);
+        continue;
+      } else if (ev.key.keysym.sym == SDLK_F11 ||
+                 (ev.key.keysym.sym == SDLK_RETURN && (ev.key.keysym.mod & KMOD_ALT))) {
+        if (!ev.key.repeat) Platform::toggleFullscreen();
+        continue;
+      }
       int key = mapKey(ev.key.keysym.sym);
       if (key == -101) {
         if (!ev.key.repeat) {
@@ -1152,12 +1508,12 @@ void Platform::present() {
   void* pixels = nullptr;
   int pitch = 0;
   if (SDL_LockTexture(s_screenTexture, nullptr, &pixels, &pitch) == 0) {
-    for (int y = 0; y < 320; y++) {
-      memcpy((uint8_t*)pixels + y * pitch, g_screenBuffer + y * 240, 240 * sizeof(uint32_t));
+    for (int y = 0; y < g_screenHeight; y++) {
+      memcpy((uint8_t*)pixels + y * pitch, g_screenBuffer + y * g_screenWidth, g_screenWidth * sizeof(uint32_t));
     }
     SDL_UnlockTexture(s_screenTexture);
   } else {
-    SDL_UpdateTexture(s_screenTexture, nullptr, g_screenBuffer, 240 * sizeof(uint32_t));
+    SDL_UpdateTexture(s_screenTexture, nullptr, g_screenBuffer, g_screenWidth * sizeof(uint32_t));
   }
 
   int winW = 0, winH = 0;
@@ -1199,29 +1555,52 @@ void Platform::present() {
   }
 #endif
 
-  SDL_SetRenderDrawColor(s_renderer, 10, 12, 16, 255);
+  SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, 255);
   SDL_RenderClear(s_renderer);
 
+  // Calcula geometria da tela de jogo com escala perfeitamente quadrada (pixel-perfect) sem distorção
+  float scaleX = (float)winW / (float)g_screenWidth;
+  float scaleY = (float)winH / (float)g_screenHeight;
+  float scale = std::min(scaleX, scaleY);
+  int dstW = (int)((float)g_screenWidth * scale);
+  int dstH = (int)((float)g_screenHeight * scale);
+  SDL_Rect dstGame = { (winW - dstW) / 2, (winH - dstH) / 2, dstW, dstH };
+
+  // Renderiza moldura temática nas laterais (pillarbox) se houver espaço
+  if (s_aspectMode == ASPECT_ORIGINAL && dstGame.x > 0) {
+    SDL_Texture* activeBezel = nullptr;
+    if (s_bezelMode == BEZEL_SOLTIA) activeBezel = s_texBezelSoltia;
+    else if (s_bezelMode == BEZEL_SLATE) activeBezel = s_texBezelSlate;
+
+    if (activeBezel) {
+      // Textura base de 1920x1080: coluna esquerda = [0..555], coluna direita = [1365..1920]
+      SDL_Rect srcLeft = { 0, 0, 555, 1080 };
+      SDL_Rect dstLeft = { 0, 0, dstGame.x, winH };
+      SDL_RenderCopy(s_renderer, activeBezel, &srcLeft, &dstLeft);
+
+      SDL_Rect srcRight = { 1365, 0, 555, 1080 };
+      SDL_Rect dstRight = { dstGame.x + dstGame.w, 0, winW - (dstGame.x + dstGame.w), winH };
+      SDL_RenderCopy(s_renderer, activeBezel, &srcRight, &dstRight);
+    }
+  }
+
+  // Renderiza o buffer do jogo J2ME 240x320
+  SDL_RenderCopy(s_renderer, s_screenTexture, nullptr, &dstGame);
+
 #if defined(__ANDROID__) || defined(__SWITCH__)
-  GamepadLayout layout = calculateLayout(winW, winH);
-  SDL_RenderCopy(s_renderer, s_screenTexture, nullptr, &layout.gameRect);
-  drawGamepad(layout);
+  if (s_touchOverlayEnabled) {
+    GamepadLayout layout = calculateLayout(winW, winH);
+    drawGamepad(layout);
+  }
 #else
   if (s_touchOverlayEnabled) {
     GamepadLayout layout = calculateLayout(winW, winH);
-    SDL_RenderCopy(s_renderer, s_screenTexture, nullptr, &layout.gameRect);
     drawGamepad(layout);
-  } else {
-    // Modo Desktop / Sem Touch: aspecto 240:320 centralizado limpo
-    float scaleX = (float)winW / 240.0f;
-    float scaleY = (float)winH / 320.0f;
-    float scale = std::min(scaleX, scaleY);
-    int dstW = (int)(240.0f * scale);
-    int dstH = (int)(320.0f * scale);
-    SDL_Rect dstGame = { (winW - dstW) / 2, (winH - dstH) / 2, dstW, dstH };
-    SDL_RenderCopy(s_renderer, s_screenTexture, nullptr, &dstGame);
   }
 #endif
+
+  // Desenha banner de notificação OSD
+  drawOsd(winW, winH);
 
   SDL_RenderPresent(s_renderer);
 }
@@ -1249,6 +1628,9 @@ void Platform::shutdown() {
   if (s_texBtnEyeClosed) { SDL_DestroyTexture(s_texBtnEyeClosed); s_texBtnEyeClosed = nullptr; }
   if (s_texBtnRotate) { SDL_DestroyTexture(s_texBtnRotate); s_texBtnRotate = nullptr; }
   if (s_texBtnGlow) { SDL_DestroyTexture(s_texBtnGlow); s_texBtnGlow = nullptr; }
+  if (s_texBezelSoltia) { SDL_DestroyTexture(s_texBezelSoltia); s_texBezelSoltia = nullptr; }
+  if (s_texBezelSlate) { SDL_DestroyTexture(s_texBezelSlate); s_texBezelSlate = nullptr; }
+  if (s_texFontOsd) { SDL_DestroyTexture(s_texFontOsd); s_texFontOsd = nullptr; }
   s_gamepadTexturesLoaded = false;
   if (s_screenTexture) { SDL_DestroyTexture(s_screenTexture); s_screenTexture = nullptr; }
   if (s_renderer) { SDL_DestroyRenderer(s_renderer); s_renderer = nullptr; }
@@ -1258,6 +1640,108 @@ void Platform::shutdown() {
 #ifdef __SWITCH__
   romfsExit();
 #endif
+}
+
+void Platform::toggleBezel() {
+  s_bezelMode = static_cast<BezelMode>((s_bezelMode + 1) % BEZEL_COUNT);
+  saveSettings();
+  loadBezelTextures();
+  const char* names[] = {
+    "Moldura: Soltia Ancestral",
+    "Moldura: Ardosia Escura",
+    "Moldura: Preto Classico"
+  };
+  showOsdMessage(names[s_bezelMode]);
+}
+
+void Platform::toggleFps() {
+  s_targetFps = (s_targetFps == 15) ? 30 : 15;
+  saveSettings();
+  if (s_targetFps == 15) {
+    showOsdMessage("Taxa de Quadros: 15 FPS (Padrao Original J2ME)");
+  } else {
+    showOsdMessage("Taxa de Quadros: 30 FPS (Modo Turbo / Fluido)");
+  }
+}
+
+int Platform::getTargetFps() {
+  return s_targetFps;
+}
+
+void Platform::toggleAspect(VM* pVm) {
+  s_aspectMode = static_cast<AspectMode>((s_aspectMode + 1) % ASPECT_COUNT);
+  g_screenWidth = (s_aspectMode == ASPECT_WIDESCREEN) ? SCREEN_W_WIDESCREEN : SCREEN_W_ORIGINAL;
+  g_screenHeight = SCREEN_HEIGHT;
+  saveSettings();
+
+  if (s_renderer) {
+    if (s_screenTexture) SDL_DestroyTexture(s_screenTexture);
+    s_screenTexture = SDL_CreateTexture(
+        s_renderer,
+        SDL_PIXELFORMAT_ARGB8888,
+        SDL_TEXTUREACCESS_STREAMING,
+        g_screenWidth, g_screenHeight);
+    if (s_screenTexture) {
+      SDL_SetTextureBlendMode(s_screenTexture, SDL_BLENDMODE_NONE);
+    }
+  }
+
+  if (pVm) {
+    updateJavaViewportVariables(*pVm);
+  }
+
+  memset(g_screenBuffer, 0, sizeof(g_screenBuffer));
+
+  if (s_aspectMode == ASPECT_ORIGINAL) {
+    showOsdMessage("Proporcao: 3:4 Original (Molduras Soltia)");
+  } else {
+    showOsdMessage("Proporcao: 16:9 True Widescreen (Mais Mapa)");
+  }
+}
+
+void Platform::toggleFullscreen() {
+#ifndef __SWITCH__
+  if (!s_window) return;
+  s_isFullscreen = !s_isFullscreen;
+  SDL_SetWindowFullscreen(s_window, s_isFullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+  saveSettings();
+  showOsdMessage(s_isFullscreen ? "Tela Cheia: Ativada" : "Tela Cheia: Modo Janela");
+#endif
+}
+
+void Platform::showOsdMessage(const std::string& msg) {
+  s_osdMessage = msg;
+  s_osdExpireTime = SDL_GetTicks() + 2500;
+  printf("[OSD] %s\n", msg.c_str());
+}
+
+void Platform::framePacerWait() {
+  if (s_frameStartCounter == 0) {
+    s_frameStartCounter = SDL_GetPerformanceCounter();
+    return;
+  }
+
+  uint64_t freq = SDL_GetPerformanceFrequency();
+  double targetSec = 1.0 / static_cast<double>(s_targetFps);
+  uint64_t targetCounts = static_cast<uint64_t>(targetSec * static_cast<double>(freq));
+
+  uint64_t now = SDL_GetPerformanceCounter();
+  uint64_t elapsedCounts = now - s_frameStartCounter;
+
+  if (elapsedCounts < targetCounts) {
+    double remainingSec = static_cast<double>(targetCounts - elapsedCounts) / static_cast<double>(freq);
+    double remainingMs = remainingSec * 1000.0;
+    if (remainingMs > 2.0) {
+      SDL_Delay(static_cast<Uint32>(remainingMs - 1.5));
+    }
+    while (true) {
+      now = SDL_GetPerformanceCounter();
+      if ((now - s_frameStartCounter) >= targetCounts) break;
+      SDL_Delay(0);
+    }
+  }
+
+  s_frameStartCounter = SDL_GetPerformanceCounter();
 }
 
 void Platform::rumble(float strength, int durationMs) {
@@ -1299,9 +1783,21 @@ std::vector<uint8_t> Platform::readAsset(const std::string& path) {
     rw = SDL_RWFromFile(alt.c_str(), "rb");
   }
 
-  // 4. Tenta prefixando "reference/extracted/"
+  // 4. Tenta prefixando "../assets/"
+  if (!rw) {
+    std::string alt = "../assets/" + clean;
+    rw = SDL_RWFromFile(alt.c_str(), "rb");
+  }
+
+  // 5. Tenta prefixando "reference/extracted/"
   if (!rw) {
     std::string alt = "reference/extracted/" + clean;
+    rw = SDL_RWFromFile(alt.c_str(), "rb");
+  }
+
+  // 6. Tenta prefixando "../reference/extracted/"
+  if (!rw) {
+    std::string alt = "../reference/extracted/" + clean;
     rw = SDL_RWFromFile(alt.c_str(), "rb");
   }
 

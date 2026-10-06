@@ -102,10 +102,35 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
     - **Android:** compila com Gradle + NDK 26 nativo (utilizando o NDK 26.1 e Build-Tools 34.0.0 pré-instalados na imagem do GitHub Actions, com cache de Gradle e repositórios SDL2/SDL2_mixer) gerando os APKs `heroes_lore_android_universal.apk` e `heroes_lore_android_arm64.apk`.
   - [x] Publicação automatizada de GitHub Release com todos os binários anexados ao criar tags de versão (`v*`) ou por disparo manual (`workflow_dispatch`).
 
+- [x] Passo 7 — True Widescreen (16:9), Molduras Temáticas (Bezels) e Taxa de Quadros (15 vs 30 FPS):
+  - [x] Molduras Temáticas Widescreen (Bezels) de Alta Fidelidade:
+    - Textura procedural rica `bezel_soltia` (1920x1080) com pilares ancestrais de ardósia, runas nórdicas gravadas (Algiz, Tiwaz, Fehu, Sowilo, Gebo, Othala) emitindo brilho ciano, medalhão da espada alada e placa comemorativa de ouro e bronze com créditos oficiais para David Kalil Braga (2026).
+    - Textura minimalista `bezel_slate` em ardósia vulcânica e aço escovado com chanfros de iluminação suave.
+    - Modo clássico de barras pretas puras (`bezel_black`) para puristas.
+    - Alternância rápida via tecla <kbd>F5</kbd> ou clique do analógico esquerdo (<kbd>L3</kbd>).
+  - [x] Aspect Ratio & Modos de Visualização:
+    - **Proporção 3:4 Original (240x320):** Escala com pixels perfeitos 1:1 e molduras temáticas de Soltia preenchendo as abas laterais em telas widescreen (16:9 / 16:10).
+    - **16:9 True Widescreen (568x320 - Expansão Real de Viewport):** Renderiza **35 colunas de tiles de 16x16** (em vez de 15), ampliando a visão do mapa e revelando mais terreno sem esticar pixels (100% quadrado).
+    - Alternância rápida via tecla <kbd>F7</kbd> / <kbd>F10</kbd> (teclado) ou botão GUIDE (gamepad).
+    - Alternância de Tela Cheia com <kbd>F11</kbd> ou <kbd>Alt+Enter</kbd>.
+  - [x] Seletor de Taxa de Quadros de Alta Precisão (Hardware Frame Pacer):
+    - **15 FPS (Padrão Original J2ME / ~66.6ms):** Reprodução fiel e autêntica da cadência clássica do celular de 2007.
+    - **30 FPS (Modo Turbo / Fluido / ~33.3ms):** Movimentação e combates ágeis sem acelerar a física além da conta.
+    - Modo 60 FPS descontinuado para evitar aceleração indesejada da física/animações atreladas a ticks.
+    - Frame pacer ultra-preciso via `SDL_GetPerformanceCounter()` com espera inteligente (`SDL_Delay` + spin-wait sub-milissegundo).
+    - Alternância rápida via tecla <kbd>F6</kbd> / <kbd>F8</kbd> ou clique do analógico direito (<kbd>R3</kbd>).
+  - [x] Controles de Gamepad Otimizados:
+    - Botão <kbd>SELECT</kbd> / <kbd>BACK</kbd> / <kbd>-</kbd> exclusivo e incondicional para o **Minimapa** (`tecla 0`).
+  - [x] HUD On-Screen Display (OSD):
+    - Banner flutuante no topo da tela com visual moderno de vidro fosco, contorno cyan brilhante e fonte bitmap dedicada (`font_osd.rgba`).
+    - Exibe confirmação visual por 2.5s com fade out suave ao alternar qualquer ajuste.
+  - [x] Persistência de Configurações:
+    - Salva e restaura automaticamente as opções do usuário e o tamanho/posição da janela em `hl_settings.ini`.
+
 ## Próximos passos (Roadmap)
-- [ ] Passo 7: Aspect Ratio & Taxa de Quadros (Widescreen, Molduras Temáticas / Bezels e seletor 30 FPS Clássico vs 60 FPS Fluido).
 - [ ] Passo 8: Cloud Save & Sincronização Cruzada (PC <-> Celular <-> Switch).
 - [ ] Passo 9: Seletor de Idiomas / Localização (PT-BR, EN, ES).
 - [ ] Passo 10: Port Imersivo VR / Realidade Mista para Meta Quest (OpenXR, Voxel/Diorama 3D Tabletop & Primeira Pessoa 360°). Detalhado em [`docs/VR_QUEST_CONCEPT.md`](VR_QUEST_CONCEPT.md).
+
 
 

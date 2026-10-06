@@ -71,8 +71,15 @@ struct VolumeControlObj : Object {
   void trace(std::vector<Object*>& o) override { if (player) o.push_back(player); }
 };
 
+constexpr int SCREEN_W_ORIGINAL = 240;
+constexpr int SCREEN_W_WIDESCREEN = 568; // 16:9 exato para altura 320 (320 * 16 / 9 = 568.88)
+constexpr int SCREEN_HEIGHT = 320;
+constexpr int MAX_SCREEN_WIDTH = 640;
+
 // Framebuffer principal compartilhado com a plataforma SDL2
-extern uint32_t g_screenBuffer[240 * 320];
+extern uint32_t g_screenBuffer[MAX_SCREEN_WIDTH * SCREEN_HEIGHT];
+extern int g_screenWidth;
+extern int g_screenHeight;
 extern GraphicsObj* g_screenGraphics;
 extern DisplayObj* g_display;
 extern Object* g_serialRunnable;
