@@ -271,11 +271,24 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
     2. O ajuste das coordenadas da câmera (`n.a` e `n.c`) é realizado matematicamente pelo delta de deslocamento do centro (`deltaC = new_as_c - old_as_c`). No quadro de renderização imediatamente posterior, o próprio método `as.paint()` (já rodando sob o contexto de thread ativo `mainCtx`) executa `n.g()` nativamente e recalcula as posições relativas com 100% de exatidão.
     3. Escrita atômica de inteiros (`statics[index].i = val`) e atualização limpa sem invocar `gilLock()` reentrante (o mutex da GIL não é recursivo e causava deadlock se já estivesse retido pela thread).
     4. A alternância entre **3:4 Original com Molduras** e **16:9 True Widescreen** agora ocorre em tempo real, instantaneamente, sem travamentos e com 100% de estabilidade.
+- **Arquitetura de Combos de Gamepad e Mapeamento Conflit-Free:**
+  - *Desafio:* O botão <kbd>SELECT</kbd> (`BACK`) é vital para abrir e fechar o Minimapa (`tecla 0`). Se ele fosse mapeado para alternar modos com pressionamento simples, ou se disparasse a tecla `0` no `DOWN`, qualquer combo (<kbd>SELECT + START</kbd> ou <kbd>SELECT + R3</kbd>) abriria o minimapa involuntariamente antes de executar o combo.
+  - *Solução Elegante com Máquina de Estados de Teclas:*
+    1. No evento `SDL_CONTROLLERBUTTONDOWN` de `SDL_CONTROLLER_BUTTON_BACK`, marcamos `s_selectButtonHeld = true; s_selectUsedInCombo = false;` e **não enviamos a tecla para o jogo**.
+    2. Se outro botão configurado for pressionado enquanto `s_selectButtonHeld` estiver ativo:
+       - <kbd>START</kbd>: executa `Platform::toggleAspect(&vm)` (True Widescreen <-> 3:4 Original) e seta `s_selectUsedInCombo = true; s_startUsedInCombo = true;`. O jogo não abre o menu.
+       - <kbd>R3</kbd> (`RIGHTSTICK`): executa `Platform::toggleBezel()` (Soltia <-> Ardósia <-> Preto) e seta `s_selectUsedInCombo = true;`.
+    3. No clique isolado de <kbd>R3</kbd> (sem Select): executa `Platform::toggleFps()` (15 FPS Padrão <-> 30 FPS Turbo).
+    4. No evento `SDL_CONTROLLERBUTTONUP` de `SDL_CONTROLLER_BUTTON_BACK`:
+       - `s_selectButtonHeld = false;`
+       - Se `!s_selectUsedInCombo`: significa que o jogador deu um toque rápido e isolado no Select para consultar o Minimapa. Enviamos atomicamente `keyPressed(48)` e `keyReleased(48)`.
+       - Se `s_selectUsedInCombo`: o botão fez parte de um combo, e nenhum evento do minimapa é disparado!
+    5. O clique no analógico esquerdo (<kbd>L3</kbd>) permanece mapeado diretamente para o Minimapa (`tecla 0`), oferecendo acesso imediato com uma só mão.
 
-
-
-
-
-
-
-
+- **Botões Virtuais Touchscreen Adaptativos (Android e Switch):**
+  - Desenvolvidas novas texturas em alta resolução com supersampling 4x via `tools/generate_gamepad_textures.py`:
+    - `btn_aspect` (96x96): Moldura de monitor 16:9 em cyan neon com texto "16:9".
+    - `btn_fps` (96x96): Mostrador de velocímetro esportivo em tom âmbar neon com texto "FPS".
+  - Integrados na barra de ferramentas inferior, dispostos ao lado do botão de olho (`KEY_TOGGLE_TOUCH_UI`) e rotação de tela (`KEY_TOGGLE_ORIENTATION` no Switch).
+  - Em modo Paisagem (Landscape), o cálculo de layout (`calculateLayout`) foi atualizado para reconhecer a largura expandida do True Widescreen (`568x320`), impedindo o colapso das margens virtuais e garantindo que os botões fiquem confortavelmente acessíveis nas extremidades laterais sem obstruir a ação.
+  - Os ícones utilitários permanecem visíveis mesmo com o gamepad translúcido desativado, permitindo restaurar os controles ou alterar gráficos/velocidade a qualquer momento com um simples toque na tela.

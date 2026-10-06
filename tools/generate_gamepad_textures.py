@@ -359,11 +359,85 @@ def make_rotate_icon(final_size=96):
 
     return img.resize((final_size, final_size), Image.Resampling.LANCZOS)
 
+def make_aspect_icon(final_size=96):
+    s = 4
+    size = final_size * s
+    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    cx, cy = size // 2, size // 2
+    r_outer = size // 2 - 6 * s
+
+    # Sombra
+    for i in range(8 * s, 0, -2 * s):
+        d.ellipse([cx - r_outer - i, cy - r_outer - i, cx + r_outer + i, cy + r_outer + i],
+                  fill=(0, 0, 0, int(15 * (1.0 - i / (8 * s)))))
+
+    # Base circular de vidro escuro
+    d.ellipse([cx - r_outer, cy - r_outer, cx + r_outer, cy + r_outer],
+              fill=(20, 24, 34, 230), outline=(0, 190, 240, 230), width=3*s)
+    # Chanfro superior
+    d.arc([cx - r_outer + 2*s, cy - r_outer + 2*s, cx + r_outer - 2*s, cy + r_outer - 2*s],
+          210, 330, fill=(160, 215, 255, 180), width=2*s)
+
+    # Frame widescreen (16:9)
+    fw = int(r_outer * 1.10)
+    fh = int(fw * (9.0 / 16.0))
+    d.rounded_rectangle([cx - fw // 2, cy - fh // 2, cx + fw // 2, cy + fh // 2],
+                        radius=4*s, fill=(12, 16, 24, 230), outline=(0, 210, 255, 240), width=2*s)
+
+    # Texto "16:9" no interior
+    font_size = int(fh * 0.58)
+    font = ImageFont.truetype(FONT_PATH, font_size)
+    txt = "16:9"
+    bbox = d.textbbox((0, 0), txt, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    d.text((cx - tw // 2 + s, cy - th // 2 - bbox[1] + s), txt, fill=(0, 0, 0, 240), font=font)
+    d.text((cx - tw // 2, cy - th // 2 - bbox[1]), txt, fill=(255, 255, 255, 255), font=font)
+
+    return img.resize((final_size, final_size), Image.Resampling.LANCZOS)
+
+def make_fps_icon(final_size=96):
+    s = 4
+    size = final_size * s
+    img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    cx, cy = size // 2, size // 2
+    r_outer = size // 2 - 6 * s
+
+    # Sombra
+    for i in range(8 * s, 0, -2 * s):
+        d.ellipse([cx - r_outer - i, cy - r_outer - i, cx + r_outer + i, cy + r_outer + i],
+                  fill=(0, 0, 0, int(15 * (1.0 - i / (8 * s)))))
+
+    # Base circular de vidro escuro com outline ambar turbo
+    d.ellipse([cx - r_outer, cy - r_outer, cx + r_outer, cy + r_outer],
+              fill=(20, 24, 34, 230), outline=(255, 170, 40, 230), width=3*s)
+    # Chanfro superior
+    d.arc([cx - r_outer + 2*s, cy - r_outer + 2*s, cx + r_outer - 2*s, cy + r_outer - 2*s],
+          210, 330, fill=(255, 220, 160, 180), width=2*s)
+
+    # Arco de velocimetro (150 a 390 graus)
+    r_arc = int(r_outer * 0.72)
+    d.arc([cx - r_arc, cy - r_arc - 2*s, cx + r_arc, cy + r_arc - 2*s],
+          150, 390, fill=(255, 140, 30, 240), width=3*s)
+
+    # Texto "FPS" no centro
+    font_size = int(r_outer * 0.50)
+    font = ImageFont.truetype(FONT_PATH, font_size)
+    txt = "FPS"
+    bbox = d.textbbox((0, 0), txt, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    d.text((cx - tw // 2 + s, cy - th // 2 - bbox[1] + 3*s), txt, fill=(0, 0, 0, 240), font=font)
+    d.text((cx - tw // 2, cy - th // 2 - bbox[1] + 2*s), txt, fill=(255, 240, 200, 255), font=font)
+
+    return img.resize((final_size, final_size), Image.Resampling.LANCZOS)
+
 def main():
     dest_dirs = [
         "android/app/src/main/assets/ui",
         "assets/ui",
-        "reference/extracted/ui"
+        "reference/extracted/ui",
+        "build/assets/ui",
     ]
 
     textures = {
@@ -382,6 +456,8 @@ def main():
         "btn_eye_open": make_eye_icon(96, False),
         "btn_eye_closed": make_eye_icon(96, True),
         "btn_rotate": make_rotate_icon(96),
+        "btn_aspect": make_aspect_icon(96),
+        "btn_fps": make_fps_icon(96),
         "btn_glow": make_glow_overlay(128),
     }
 

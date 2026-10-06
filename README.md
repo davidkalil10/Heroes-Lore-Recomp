@@ -28,17 +28,20 @@ Os binários compilados oficiais e prontos para jogar de cada plataforma estão 
 ## 🌟 Destaques do Projeto
 
 - **Fidelidade Matemática e Lógica 1:1:** O jogo executa a partir dos binários `.class` originais do JAR, garantindo que a física, colisões, progressão de nível e IA de chefes sejam idênticos ao jogo original de celular.
-- **Renderização Pixel-Perfect com Integer Scaling:** Resolução clássica de 240x320 apresentada de forma nítida em qualquer monitor ou tela de alta resolução (Full HD, 4K, 720p), preservando o pixel-art original sem borrões.
+- **True Widescreen (16:9 — 568x320):** Expansão real da área de visão do mapa, exibindo até **35 colunas de tiles simultaneamente** (em comparação com 15 colunas do original de 240p), pixel-perfect e sem qualquer distorção anamórfica de sprites.
+- **Molduras Temáticas Clássicas (Bezels):** Para quem prefere a nostalgia da proporção 3:4 original, estão disponíveis artes laterais dedicadas (*Soltia Ancestral*, *Ardósia Escura* e *Preto Clássico*).
+- **Limitador de Taxa de Quadros Preciso:** Alterne instantaneamente entre **15 FPS** (cadência clássica J2ME com frame pacer preciso) e **30 FPS Turbo** (movimentação e combates com fluidez aprimorada).
+- **HUD On-Screen Display (OSD):** Banner informativo flutuante estilo console moderno com visual em vidro fosco (*frosted glass*) que confirma as alterações em tempo real.
 - **Sintetizador MIDI Nativo de Alta Fidelidade:** Trilhas sonoras e efeitos MIDI executados em tempo real utilizando TinySoundFont (`tsf`) com o banco orquestrado SoundFont TimGM6mb embutido.
-- **Persistência Completa (Save & Load):** Suporte nativo ao subsistema J2ME RMS (*Record Management System*) com gravação e leitura em tempo real dos 3 slots de personagens (`_k`, `_s`, `_w`) e estado global (`_o`).
+- **Persistência Completa (Save & Load):** Suporte nativo ao subsistema J2ME RMS (*Record Management System*) com gravação e leitura em tempo real dos 3 slots de personagens (`_k`, `_s`, `_w`) e estado global (`_o`), além de salvar configurações em `hl_settings.ini`.
 - **Controles Modernizados:** Suporte plug-and-play para controles de Xbox, PlayStation, Switch Pro Controller, teclado de PC (WASD + Espaço ou Teclado Numérico) e touchscreen capacitivo.
 - **Vibração Háptica (Rumble):** Feedback de impacto nos ataques e habilidades em controles compatíveis (Joy-Cons, DualSense, Xbox Controller).
 
 ---
 
-## 🎮 Controles no Teclado e Gamepad
+## 🎮 Controles no Teclado, Gamepad e Touchscreen
 
-O mapeamento foi planejado com ergonomia moderna para controles USB/Bluetooth e teclado, mantendo também atalhos para os números clássicos do teclado do celular:
+O mapeamento foi planejado com ergonomia moderna para controles USB/Bluetooth, teclado e tela sensível ao toque, mantendo compatibilidade total com os atalhos originais do celular J2ME:
 
 ### 🕹️ Gamepad (Xbox, PlayStation, Switch Pro, 8BitDo, Steam Deck)
 
@@ -47,17 +50,18 @@ O mapeamento foi planejado com ergonomia moderna para controles USB/Bluetooth e 
 | **Movimentação (360° Contínua)** | <kbd>D-Pad</kbd> ou <kbd>Analógico Esquerdo</kbd> | <kbd>D-Pad</kbd> ou <kbd>Analógico Esquerdo</kbd> | <kbd>D-Pad</kbd> ou <kbd>Analógico Esquerdo</kbd> |
 | **Atacar (Arma) / Confirmar ('5')** | <kbd>A</kbd> | <kbd>✕</kbd> | <kbd>A</kbd> |
 | **Status / Cancelar (RSK)** | <kbd>B</kbd> | <kbd>○</kbd> | <kbd>B</kbd> |
-| **Menu Principal / Inventário (CLR)** | <kbd>Start</kbd> | <kbd>Options</kbd> | <kbd>+</kbd> |
-| **Abrir / Fechar Minimapa ('0')** | <kbd>Select</kbd> / <kbd>Back</kbd> / <kbd>L3</kbd> | <kbd>Share</kbd> / <kbd>Touchpad</kbd> / <kbd>L3</kbd> | <kbd>R3</kbd> |
+| **Menu Principal / Inventário (CLR)** | <kbd>Start</kbd> *(isolado)* | <kbd>Options</kbd> *(isolado)* | <kbd>+</kbd> *(isolado)* |
+| **Abrir / Fechar Minimapa ('0')** | <kbd>Select</kbd> *(toque rápido)* ou <kbd>L3</kbd> | <kbd>Share/Touchpad</kbd> *(toque rápido)* ou <kbd>L3</kbd> | <kbd>-</kbd> *(toque rápido)* ou <kbd>L3</kbd> |
 | **Ataque 1 do Guardião ('1')** | <kbd>X</kbd> | <kbd>□</kbd> | <kbd>X</kbd> |
 | **Ataque 2 do Guardião ('3')** | <kbd>Y</kbd> | <kbd>△</kbd> | <kbd>Y</kbd> |
 | **Ataque Secundário / Habilidade ('7')**| <kbd>LB</kbd> (L1) | <kbd>L1</kbd> | <kbd>L</kbd> |
 | **Usar Poção / Item Rápido ('9')** | <kbd>RB</kbd> (R1) | <kbd>R1</kbd> | <kbd>R</kbd> |
 | **Alternar Poção $\leftarrow$ Anterior**| <kbd>LT</kbd> (Gatilho Esquerdo) | <kbd>L2</kbd> | <kbd>ZL</kbd> |
 | **Alternar Poção $\rightarrow$ Seguinte**| <kbd>RT</kbd> (Gatilho Direito) | <kbd>R2</kbd> | <kbd>ZR</kbd> |
-| **Rotacionar Orientação da Tela** *(Switch)*| — | — | <kbd>-</kbd> (Minus) |
-| **Ocultar / Reexibir Botões Virtuais** *(Switch)*| — | — | <kbd>L3</kbd> |
-| **Vibração / Haptics** | Rumble em combate | Rumble em combate | Rumble em combate |
+| 🖥️ **Proporção (3:4 <-> 16:9 Widescreen)**| <kbd>Select</kbd> + <kbd>Start</kbd> | <kbd>Share</kbd> + <kbd>Options</kbd> | <kbd>-</kbd> + <kbd>+</kbd> |
+| 🖼️ **Moldura (Soltia / Ardósia / Preto)**| <kbd>Select</kbd> + <kbd>R3</kbd> | <kbd>Share</kbd> + <kbd>R3</kbd> | <kbd>-</kbd> + <kbd>R3</kbd> |
+| ⚡ **Velocidade (15 FPS <-> 30 FPS Turbo)**| <kbd>R3</kbd> *(clique isolado)* | <kbd>R3</kbd> *(clique isolado)* | <kbd>R3</kbd> *(clique isolado)* |
+| 📳 **Vibração / Haptics** | Rumble dinâmico | Rumble dinâmico | Rumble dinâmico |
 
 ---
 
@@ -70,16 +74,31 @@ O mapeamento foi planejado com ergonomia moderna para controles USB/Bluetooth e 
 | **Mover para a Esquerda** | <kbd>A</kbd> ou <kbd>←</kbd> | <kbd>Num 4</kbd> | `LEFT` / `4` |
 | **Mover para a Direita** | <kbd>D</kbd> ou <kbd>→</kbd> | <kbd>Num 6</kbd> | `RIGHT` / `6` |
 | **Atacar (Arma) / Confirmar / Interagir** | <kbd>Espaço</kbd>, <kbd>Enter</kbd>, <kbd>J</kbd>, <kbd>Z</kbd> | <kbd>Num 5</kbd> | `FIRE` / `5` |
-| **Menu Principal / Inventário** | <kbd>Tab</kbd>, <kbd>Esc</kbd>, <kbd>F1</kbd> | — | `CLR` (-8) |
+| **Menu Principal / Inventário** | <kbd>Tab</kbd>, <kbd>Esc</kbd>, <kbd>F1</kbd>, <kbd>C</kbd> | — | `CLR` (-8) |
 | **Status / Cancelar / Fechar** | <kbd>F2</kbd>, <kbd>Backspace</kbd> | — | `RSK` (-7) |
 | **Ataque 1 do Guardião** | <kbd>Q</kbd> ou <kbd>U</kbd> | <kbd>Num 1</kbd> | `1` |
 | **Ataque 2 do Guardião** | <kbd>E</kbd> ou <kbd>I</kbd> | <kbd>Num 3</kbd> | `3` |
 | **Ataque Secundário / Habilidade** | <kbd>K</kbd> ou <kbd>X</kbd> | <kbd>Num 7</kbd> | `7` |
-| **Usar Poção / Item Rápido** | <kbd>L</kbd> ou <kbd>C</kbd> | <kbd>Num 9</kbd> | `9` |
+| **Usar Poção / Item Rápido** | <kbd>L</kbd> ou <kbd>V</kbd> | <kbd>Num 9</kbd> | `9` |
 | **Poção Anterior (Esquerda)** | <kbd>[</kbd> ou <kbd>,</kbd> | — | `35` (3×) |
 | **Próxima Poção (Direita)** | <kbd>]</kbd>, <kbd>.</kbd> ou <kbd>#</kbd> | <kbd>#</kbd> (Numpad) | `#` |
 | **Abrir/Fechar Minimapa** | <kbd>M</kbd>, <kbd>R</kbd>, <kbd>O</kbd> ou <kbd>0</kbd> | <kbd>Num 0</kbd> | `0` |
 | **Atalhos Rápidos** | <kbd>*</kbd> | <kbd>*</kbd> (Numpad) | `*` |
+| 🖼️ **Alternar Moldura (Bezel)** | <kbd>F5</kbd> ou <kbd>F9</kbd> | — | — |
+| ⚡ **Alternar FPS (15 <-> 30 Turbo)** | <kbd>F6</kbd> ou <kbd>F8</kbd> | — | — |
+| 🖥️ **Alternar Widescreen (3:4 <-> 16:9)** | <kbd>F7</kbd> ou <kbd>F10</kbd> | — | — |
+| 📺 **Tela Cheia (Fullscreen)** | <kbd>F11</kbd> ou <kbd>Alt + Enter</kbd> | — | — |
+
+---
+
+### 📱 Controles Virtuais Touchscreen (Celular Android / Nintendo Switch)
+
+Na tela sensível ao toque, além do D-Pad direcional analógico e dos botões ergonômicos de combate e menu, uma barra utilitária fica disponível no canto inferior:
+- **Botão Olho (`👁️`):** Oculta ou reexibe os botões na tela (ideal para jogar com gamepad ou assistir cutscenes limpas).
+- **Botão 16:9 (`btn_aspect`):** Alterna em tempo real entre a proporção 3:4 clássica e o modo True Widescreen expandido.
+- **Botão FPS (`btn_fps`):** Alterna instantaneamente entre 15 FPS (nostalgia original) e 30 FPS (turbo ágil).
+- **Botão Rotação (`🔄`, no Switch):** Alterna entre orientação horizontal (Paisagem 1280x720) e vertical (Retrato TATE 90° e 270° Flip Grip).
+- Os botões utilitários permanecem visíveis mesmo com o gamepad translúcido desativado, permitindo restaurar os controles ou alterar gráficos/velocidade a qualquer momento.
 
 ---
 

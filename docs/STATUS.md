@@ -118,9 +118,18 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
     - **30 FPS (Modo Turbo / Fluido / ~33.3ms):** Movimentação e combates ágeis sem acelerar a física além da conta.
     - Modo 60 FPS descontinuado para evitar aceleração indesejada da física/animações atreladas a ticks.
     - Frame pacer ultra-preciso via `SDL_GetPerformanceCounter()` com espera inteligente (`SDL_Delay` + spin-wait sub-milissegundo).
-    - Alternância rápida via tecla <kbd>F6</kbd> / <kbd>F8</kbd> ou clique do analógico direito (<kbd>R3</kbd>).
-  - [x] Controles de Gamepad Otimizados:
-    - Botão <kbd>SELECT</kbd> / <kbd>BACK</kbd> / <kbd>-</kbd> exclusivo e incondicional para o **Minimapa** (`tecla 0`).
+    - Alternância rápida via tecla <kbd>F6</kbd> / <kbd>F8</kbd>, clique do analógico <kbd>R3</kbd>, ou botão touch na barra inferior.
+  - [x] Controles de Gamepad Otimizados com Atalhos de Combos:
+    - **Proporção (Aspect Ratio: 3:4 Original <-> 16:9 True Widescreen):** <kbd>SELECT + START</kbd>.
+    - **Moldura Temática (Bezel: Soltia <-> Ardósia <-> Preto):** <kbd>SELECT + R3</kbd>.
+    - **Velocidade (FPS: 15 Padrão <-> 30 Turbo):** <kbd>R3</kbd> (clique isolado do analógico direito).
+    - **Minimapa:** <kbd>SELECT</kbd> (ao soltar isolado sem combo) e <kbd>L3</kbd> (clique do analógico esquerdo).
+    - **Menu Principal:** <kbd>START</kbd> (ao pressionar isolado sem combo).
+  - [x] Botões Virtuais Touchscreen (Celular Android / Nintendo Switch):
+    - Botão touch para alternar Proporção (<kbd>16:9</kbd> / `btn_aspect`) ao lado do botão de olho.
+    - Botão touch para alternar Velocidade (<kbd>FPS</kbd> / `btn_fps`) ao lado do botão de proporção.
+    - Ícones gerados em alta fidelidade (`.rgba` e `.png`) presentes nos assets de todas as plataformas.
+    - Permanecem acessíveis e visíveis mesmo se os direcionais estiverem ocultos, com suporte responsivo tanto em Retrato quanto em Paisagem (True Widescreen).
   - [x] HUD On-Screen Display (OSD):
     - Banner flutuante no topo da tela com visual moderno de vidro fosco, contorno cyan brilhante e fonte bitmap dedicada (`font_osd.rgba`).
     - Exibe confirmação visual por 2.5s com fade out suave ao alternar qualquer ajuste.
