@@ -990,6 +990,7 @@ static void PrintStream_println_str(VM&, Value* args, Value*) {
 
 static void aj_draw_native(VM& vm, Value* args, Value*);
 static void bl_a_native(VM& vm, Value* args, Value* ret);
+static void bl_draw_native(VM& vm, Value* args, Value*);
 
 // -------------------------------------------------------------
 // Registro de todos os métodos nativos
@@ -1163,6 +1164,9 @@ void VM::registerNatives() {
 
   // Menu 'Sobre' (Wind of Soltia) - hook para verificação de atualização OTA via tecla '5' / Action
   reg("bl.a:(II)Z", bl_a_native);
+
+  // Menu 'Sobre' (Wind of Soltia) - renderização centrada em True Widescreen 16:9 sem cortes
+  reg("bl.a:(Ljavax/microedition/lcdui/Graphics;II)V", bl_draw_native);
 }
 
 // -------------------------------------------------------------
@@ -1229,11 +1233,11 @@ static void aj_draw_native(VM& vm, Value* args, Value*) {
 // -------------------------------------------------------------
 static void bl_a_native(VM& vm, Value* args, Value* ret) {
   Object* self = args[0].o;
-  int n2 = args[1].i; // GameAction
-  int n3 = args[2].i; // KeyCode
+  int n2 = args[1].i; // GameAction ou arg1
+  int n3 = args[2].i; // KeyCode ou arg2
 
-  // Tecla '5' (53), Enter ou Fire (8 / -5) aciona checagem de atualizações OTA
-  if (n3 == 53 || n3 == -5 || n2 == 8) {
+  // Qualquer variante da tecla '5' (53), Enter (13), Fire (8 / -5) ou Action (1) dispara a checagem OTA
+  if (n3 == 53 || n2 == 53 || n3 == 8 || n2 == 8 || n3 == -5 || n2 == -5 || n3 == 13 || n2 == 13 || n3 == 1 || n2 == 1) {
     Platform::checkForUpdates();
     ret[0].i = 1;
     return;
@@ -1301,6 +1305,132 @@ static void bl_a_native(VM& vm, Value* args, Value* ret) {
   }
 
   ret[0].i = 1;
+}
+
+// -------------------------------------------------------------
+// bl: Renderização da Tela 'Sobre' / Créditos (Wind of Soltia)
+// -------------------------------------------------------------
+static void bl_draw_native(VM& vm, Value* args, Value*) {
+  Object* selfObj = args[0].o;
+  if (!selfObj || selfObj->kind != K_INST) return;
+  Instance* inst = static_cast<Instance*>(selfObj);
+
+  Object* gObj = args[1].o;
+  if (!gObj || gObj->kind != K_GRAPHICS) return;
+  GraphicsObj* g = static_cast<GraphicsObj*>(gObj);
+
+  // Calcula coordenadas perfeitamente centradas na largura e altura ativas (240x320 ou 568x320)
+  const int scrollW = 201;
+  int n2 = (g_screenWidth - scrollW) / 2;
+  int n3 = (g_screenHeight - 244) / 2;
+  if (n3 < 6) n3 = 6;
+  int centerX = n2 + (scrollW / 2);
+
+  // 1. Fundo roxo medieval de Soltia preenchendo a tela inteira (0x3F1F3F)
+  g->setColor(0x3F1F3F);
+  g->fillRect(0, 0, g_screenWidth, g_screenHeight);
+
+  // 2. Aba superior com placa 'SOBRE' (bf.c)
+  ClassInfo* bfClass = vm.findClass("bf");
+  Method* mBfC = bfClass ? vm.findMethod(bfClass, "c:(Ljavax/microedition/lcdui/Graphics;II)V") : nullptr;
+  if (mBfC) {
+    Value cArgs[3]; cArgs[0].o = gObj; cArgs[1].i = n2; cArgs[2].i = n3; Value cRet[2];
+    vm.invoke(mBfC, cArgs, cRet);
+  }
+
+  // 3. Título 'SOBRE' (string id 9) desenhado no centro exato do pergaminho
+  ClassInfo* bhClass = vm.findClass("bh");
+  Method* mBhA = bhClass ? vm.findMethod(bhClass, "a:(Ljavax/microedition/lcdui/Graphics;III)V") : nullptr;
+  if (mBhA) {
+    Value tArgs[4]; tArgs[0].o = gObj; tArgs[1].i = 9; tArgs[2].i = centerX; tArgs[3].i = n3 + 5; Value tRet[2];
+    vm.invoke(mBhA, tArgs, tRet);
+  }
+
+  // 4. Pergaminho principal (bf.b com 4 repetições para abrigar todas as 10 linhas confortavelmente)
+  Method* mBfB = bfClass ? vm.findMethod(bfClass, "b:(Ljavax/microedition/lcdui/Graphics;III)V") : nullptr;
+  if (mBfB) {
+    Value bArgs[4]; bArgs[0].o = gObj; bArgs[1].i = n2; bArgs[2].i = n3 + 20; bArgs[3].i = 4; Value bRet[2];
+    vm.invoke(mBfB, bArgs, bRet);
+  }
+
+  int textN2 = n2 + 12;
+  int textN3 = n3 + 42;
+
+  // 5. Setas de rolagem de página se houver mais de 1 página
+  FieldInfo* fByteA = vm.findField(inst->cls, "a:B");
+  FieldInfo* fByteB = vm.findField(inst->cls, "b:B");
+  int pageCount = (fByteA && fByteA->index >= 0 && fByteA->index < (int)inst->f.size()) ? inst->f[fByteA->index].i : 1;
+  int curPage   = (fByteB && fByteB->index >= 0 && fByteB->index < (int)inst->f.size()) ? inst->f[fByteB->index].i : 0;
+
+  ClassInfo* ceClass = vm.findClass("ce");
+  if (pageCount > 1 && ceClass) {
+    if (curPage > 0) {
+      FieldInfo* fImgL = vm.findField(ceClass, "l:Ljavax/microedition/lcdui/Image;");
+      if (fImgL && fImgL->isStatic && fImgL->index >= 0 && fImgL->index < (int)ceClass->statics.size()) {
+        ImageObj* imgL = static_cast<ImageObj*>(ceClass->statics[fImgL->index].o);
+        if (imgL) g->drawImage(imgL, textN2 + 62 + 13, textN3 - 6, 20);
+      }
+    }
+    if (curPage < pageCount - 1) {
+      FieldInfo* fImgO = vm.findField(ceClass, "o:Ljavax/microedition/lcdui/Image;");
+      if (fImgO && fImgO->isStatic && fImgO->index >= 0 && fImgO->index < (int)ceClass->statics.size()) {
+        ImageObj* imgO = static_cast<ImageObj*>(ceClass->statics[fImgO->index].o);
+        if (imgO) g->drawImage(imgO, textN2 + 62 + 13, textN3 + 114 + 26 + 40, 20);
+      }
+    }
+  }
+
+  // 6. Indicador de página [1/1] no canto superior direito do pergaminho (r.d)
+  ClassInfo* rClass = vm.findClass("r");
+  Method* mRD = rClass ? vm.findMethod(rClass, "d:(Ljavax/microedition/lcdui/Graphics;IIII)V") : nullptr;
+  if (mRD) {
+    Value dArgs[5];
+    dArgs[0].o = gObj;
+    dArgs[1].i = n2 + scrollW - 25;
+    dArgs[2].i = textN3 - 8;
+    dArgs[3].i = curPage + 1;
+    dArgs[4].i = pageCount;
+    Value dRet[2];
+    vm.invoke(mRD, dArgs, dRet);
+  }
+
+  // 7. Texto dos créditos perfeitamente centralizado no pergaminho (bh.b)
+  FieldInfo* fCharArrA = vm.findField(inst->cls, "a:[C");
+  FieldInfo* fShortArrA = vm.findField(inst->cls, "a:[S");
+  Array* charArr = (fCharArrA && fCharArrA->index >= 0 && fCharArrA->index < (int)inst->f.size()) ? static_cast<Array*>(inst->f[fCharArrA->index].o) : nullptr;
+  Array* shortArr = (fShortArrA && fShortArrA->index >= 0 && fShortArrA->index < (int)inst->f.size()) ? static_cast<Array*>(inst->f[fShortArrA->index].o) : nullptr;
+
+  if (charArr && shortArr && curPage >= 0 && curPage < shortArr->len) {
+    int s3 = shortArr->as<int16_t>()[curPage];
+    int s2 = (curPage == pageCount - 1) ? charArr->len : shortArr->as<int16_t>()[curPage + 1];
+    if (charArr->len > 0 && charArr->as<uint16_t>()[0] == '!' && s3 == 0) s3 = 1;
+
+    g->setColor(0);
+    Method* mBhB = bhClass ? vm.findMethod(bhClass, "b:(Ljavax/microedition/lcdui/Graphics;IIII[CIII)V") : nullptr;
+    if (mBhB) {
+      Value bTextArgs[9];
+      bTextArgs[0].o = gObj;
+      bTextArgs[1].i = centerX;
+      bTextArgs[2].i = textN3 + 22;
+      bTextArgs[3].i = 176;
+      bTextArgs[4].i = 1;
+      bTextArgs[5].o = charArr;
+      bTextArgs[6].i = s3;
+      bTextArgs[7].i = 0;
+      bTextArgs[8].i = s2 - s3;
+      Value bTextRet[2];
+      vm.invoke(mBhB, bTextArgs, bTextRet);
+    }
+  }
+
+  // 8. Softkey de voltar (bh.a)
+  Method* mBhSoftkey = bhClass ? vm.findMethod(bhClass, "a:(Ljavax/microedition/lcdui/Graphics;[C[C)V") : nullptr;
+  if (mBhSoftkey) {
+    FieldInfo* fCharArrE = vm.findField(bhClass, "e:[C");
+    Object* eObj = (fCharArrE && fCharArrE->isStatic && fCharArrE->index >= 0 && fCharArrE->index < (int)bhClass->statics.size()) ? bhClass->statics[fCharArrE->index].o : nullptr;
+    Value sArgs[3]; sArgs[0].o = gObj; sArgs[1].o = nullptr; sArgs[2].o = eObj; Value sRet[2];
+    vm.invoke(mBhSoftkey, sArgs, sRet);
+  }
 }
 
 }  // namespace hl

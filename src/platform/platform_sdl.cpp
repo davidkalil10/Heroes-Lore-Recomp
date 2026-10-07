@@ -1591,6 +1591,28 @@ bool Platform::pollEvents(VM& vm) {
       }
     }
 
+    // Cliques de mouse no PC Desktop (Botão esquerdo dispara Ação/Confirmar '5')
+    else if (ev.type == SDL_MOUSEBUTTONDOWN) {
+      if (ev.button.button == SDL_BUTTON_LEFT && g_display && g_display->current) {
+        vm.gilLock();
+        try {
+          Value args[1]; args[0].i = 53; Value ret[2];
+          vm.invokeVirtual(g_display->current, "keyPressed:(I)V", args, 1, ret);
+        } catch (...) {}
+        vm.gilUnlock();
+      }
+    }
+    else if (ev.type == SDL_MOUSEBUTTONUP) {
+      if (ev.button.button == SDL_BUTTON_LEFT && g_display && g_display->current) {
+        vm.gilLock();
+        try {
+          Value args[1]; args[0].i = 53; Value ret[2];
+          vm.invokeVirtual(g_display->current, "keyReleased:(I)V", args, 1, ret);
+        } catch (...) {}
+        vm.gilUnlock();
+      }
+    }
+
     // Toques na tela (Touchscreen Mobile / Virtual Controller)
     else if (ev.type == SDL_FINGERDOWN) {
       int winW = 0, winH = 0;

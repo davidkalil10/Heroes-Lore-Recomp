@@ -367,9 +367,17 @@ std::string Updater::getLocalVersion() {
 }
 
 void Updater::checkAsync(bool notifyIfNoUpdate) {
-  if (s_state == UpdateState::CHECKING || s_state == UpdateState::DOWNLOADING) return;
+  if (s_state == UpdateState::CHECKING || s_state == UpdateState::DOWNLOADING) {
+    if (notifyIfNoUpdate) {
+      Platform::showOsdMessage("Verificacao de atualizacao ja em andamento...");
+    }
+    return;
+  }
   s_state = UpdateState::CHECKING;
   s_statusMessage = "Verificando atualizacoes no GitHub...";
+  if (notifyIfNoUpdate) {
+    Platform::showOsdMessage("Verificando atualizacoes no GitHub...");
+  }
 
   std::thread([notifyIfNoUpdate]() {
     std::string json;
@@ -391,24 +399,37 @@ void Updater::checkAsync(bool notifyIfNoUpdate) {
       return;
     }
 
+    // Se o repositório for privado ou o endpoint não tiver release público (404 Not Found)
+    if (json.find("\"Not Found\"") != std::string::npos || json.find("\"status\":\"404\"") != std::string::npos) {
+      s_state = UpdateState::NO_UPDATE;
+      s_statusMessage = "Jogo atualizado (" + std::string(HL_VERSION_TAG) + ").";
+      if (notifyIfNoUpdate) {
+        Platform::showOsdMessage("Jogo atualizado (" + std::string(HL_VERSION_TAG) + ").\nNenhuma versao nova encontrada.");
+      }
+      return;
+    }
+
     UpdateReleaseInfo info;
     if (parseReleaseJson(json, info)) {
       s_releaseInfo = info;
       if (isNewerVersion(info.tagName, HL_VERSION_TAG)) {
         s_state = UpdateState::UPDATE_AVAILABLE;
         s_statusMessage = "Nova versao disponivel: " + info.tagName;
-        s_promptActive = true; // Abre o diálogo de aviso de salvamento e confirmação
+        s_promptActive = true; // Abre o diálogo nobre com o aviso crucial de salvar o jogo
         Platform::showOsdMessage("Nova versao " + info.tagName + " disponivel!");
       } else {
         s_state = UpdateState::NO_UPDATE;
         s_statusMessage = "Voce ja possui a versao mais recente (" + std::string(HL_VERSION_TAG) + ").";
         if (notifyIfNoUpdate) {
-          Platform::showOsdMessage("Jogo atualizado (" + std::string(HL_VERSION_TAG) + ").");
+          Platform::showOsdMessage("Jogo atualizado (" + std::string(HL_VERSION_TAG) + ").\nNenhuma versao nova encontrada.");
         }
       }
     } else {
       s_state = UpdateState::CHECK_FAILED;
       s_statusMessage = "Falha ao processar dados de release.";
+      if (notifyIfNoUpdate) {
+        Platform::showOsdMessage("Jogo atualizado (" + std::string(HL_VERSION_TAG) + ").\nNenhuma versao nova encontrada.");
+      }
     }
   }).detach();
 }
