@@ -1,6 +1,7 @@
 // natives.cpp — implementação de métodos nativos da biblioteca padrão Java (java.lang, java.util, java.io)
 #include "vm.h"
 #include "../platform/platform.h"
+#include "../platform/updater.h"
 #include "../midp/midp.h"
 #include <cstdio>
 #include <cstdlib>
@@ -1431,12 +1432,19 @@ static void bl_draw_native(VM& vm, Value* args, Value*) {
     }
   }
 
-  // 8. Softkey de voltar (bh.a)
+  // 8. Softkeys no rodapé: [5 / A] ATUALIZAR (esquerda) e VOLTAR (direita)
   Method* mBhSoftkey = bhClass ? vm.findMethod(bhClass, "a:(Ljavax/microedition/lcdui/Graphics;[C[C)V") : nullptr;
   if (mBhSoftkey) {
     FieldInfo* fCharArrE = vm.findField(bhClass, "e:[C");
     Object* eObj = (fCharArrE && fCharArrE->isStatic && fCharArrE->index >= 0 && fCharArrE->index < (int)bhClass->statics.size()) ? bhClass->statics[fCharArrE->index].o : nullptr;
-    Value sArgs[3]; sArgs[0].o = gObj; sArgs[1].o = nullptr; sArgs[2].o = eObj; Value sRet[2];
+
+    std::string lskText = "[5 / A] ATUALIZAR";
+    Array* lskArr = vm.newArray('C', (int)lskText.size());
+    for (size_t i = 0; i < lskText.size(); ++i) {
+      lskArr->as<uint16_t>()[i] = (uint16_t)(uint8_t)lskText[i];
+    }
+
+    Value sArgs[3]; sArgs[0].o = gObj; sArgs[1].o = lskArr; sArgs[2].o = eObj; Value sRet[2];
     vm.invoke(mBhSoftkey, sArgs, sRet);
   }
 }
