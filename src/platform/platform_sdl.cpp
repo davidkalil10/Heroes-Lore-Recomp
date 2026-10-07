@@ -40,7 +40,11 @@
 #else
   #include <switch.h>
 #endif
+#endif
+
+#if defined(__SWITCH__) || defined(__linux__) || defined(__unix__)
 #include <sys/stat.h>
+#include <sys/types.h>
 #endif
 
 namespace hl {
