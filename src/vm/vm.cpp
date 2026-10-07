@@ -279,6 +279,12 @@ ClassInfo* VM::findClass(const std::string& name) {
     c->declared[m->name + ":" + m->desc] = m.get();
     c->methods.push_back(std::move(m));
   }
+  for (auto& mPtr : c->methods) {
+    auto nit = natives.find(c->name + "." + mPtr->name + ":" + mPtr->desc);
+    if (nit != natives.end()) {
+      mPtr->native = nit->second;
+    }
+  }
   return c;
 }
 

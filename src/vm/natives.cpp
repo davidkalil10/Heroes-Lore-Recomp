@@ -988,6 +988,8 @@ static void PrintStream_println_str(VM&, Value* args, Value*) {
   printf("%s\n", getStrUtf8(args[1].o).c_str());
 }
 
+static void aj_draw_native(VM& vm, Value* args, Value*);
+
 // -------------------------------------------------------------
 // Registro de todos os métodos nativos
 // -------------------------------------------------------------
@@ -1154,6 +1156,68 @@ void VM::registerNatives() {
   // java/io/PrintStream
   reg("java/io/PrintStream.println:(Ljava/lang/Object;)V", PrintStream_println_obj);
   reg("java/io/PrintStream.println:(Ljava/lang/String;)V", PrintStream_println_str);
+
+  // Otimização e correção de viewport widescreen para o motor de jogo
+  reg("aj.a:(Ljavax/microedition/lcdui/Graphics;II)V", aj_draw_native);
+}
+
+// -------------------------------------------------------------
+// aj: Cenário / Objetos decorativos do mapa (Wind of Soltia)
+// -------------------------------------------------------------
+static void aj_draw_native(VM& vm, Value* args, Value*) {
+  Object* selfObj = args[0].o;
+  if (!selfObj || selfObj->kind != K_INST || !selfObj->cls || selfObj->cls->name != "aj") return;
+  Instance* inst = static_cast<Instance*>(selfObj);
+
+  Object* gObj = args[1].o;
+  if (!gObj || gObj->kind != K_GRAPHICS) return;
+  GraphicsObj* g = static_cast<GraphicsObj*>(gObj);
+
+  int n2 = args[2].i;
+  int n3 = args[3].i;
+
+  static int s_idx_img = -1;
+  static int s_idx_cS = -1;
+  static int s_idx_cB = -1;
+  static int s_idx_dS = -1;
+  static int s_idx_dB = -1;
+
+  if (s_idx_img == -1 && selfObj->cls) {
+    FieldInfo* f = vm.findField(selfObj->cls, "a:Ljavax/microedition/lcdui/Image;");
+    if (f) s_idx_img = f->index;
+    f = vm.findField(selfObj->cls, "c:S");
+    if (f) s_idx_cS = f->index;
+    f = vm.findField(selfObj->cls, "c:B");
+    if (f) s_idx_cB = f->index;
+    f = vm.findField(selfObj->cls, "d:S");
+    if (f) s_idx_dS = f->index;
+    f = vm.findField(selfObj->cls, "d:B");
+    if (f) s_idx_dB = f->index;
+  }
+
+  int16_t cS = (s_idx_cS >= 0 && s_idx_cS < (int)inst->f.size()) ? (int16_t)inst->f[s_idx_cS].i : 0;
+  int8_t  cB = (s_idx_cB >= 0 && s_idx_cB < (int)inst->f.size()) ? (int8_t)inst->f[s_idx_cB].i : 0;
+  int16_t dS = (s_idx_dS >= 0 && s_idx_dS < (int)inst->f.size()) ? (int16_t)inst->f[s_idx_dS].i : 0;
+  int8_t  dB = (s_idx_dB >= 0 && s_idx_dB < (int)inst->f.size()) ? (int8_t)inst->f[s_idx_dB].i : 0;
+
+  Object* imgObj = (s_idx_img >= 0 && s_idx_img < (int)inst->f.size()) ? inst->f[s_idx_img].o : nullptr;
+  if (!imgObj || imgObj->kind != K_IMAGE) return;
+  ImageObj* img = static_cast<ImageObj*>(imgObj);
+
+  int n4 = n2 + cS + cB;
+  int n5 = n3 + dS + dB;
+
+  // Culling dinâmico baseado na largura e altura reais da tela atual (evita corte em widescreen)
+  int minX = -(img->width >> 1);
+  int maxX = g_screenWidth + (img->width >> 1);
+  int minY = 0;
+  int maxY = g_screenHeight + img->height;
+
+  if (n4 < minX || n4 > maxX || n5 < minY || n5 > maxY) {
+    return;
+  }
+
+  g->drawImage(img, n4, n5, 33);
 }
 
 }  // namespace hl

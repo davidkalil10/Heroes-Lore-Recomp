@@ -391,8 +391,8 @@ static void updateJavaViewportVariables(VM& vm) {
           if (!f.isStatic && f.isRef && f.desc == "Ljavax/microedition/lcdui/Image;") {
             if (f.index >= 0 && f.index < (int)inst->f.size()) {
               Object* imgO = inst->f[f.index].o;
-              if (imgO && imgO->kind == K_OBJECT) {
-                ImageObj* img = reinterpret_cast<ImageObj*>(imgO);
+              if (imgO && imgO->kind == K_IMAGE) {
+                ImageObj* img = static_cast<ImageObj*>(imgO);
                 if (img->width > 0) imgW = img->width;
                 if (img->height > 0) imgH = img->height;
               }
