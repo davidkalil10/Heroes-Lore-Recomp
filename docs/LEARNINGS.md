@@ -383,4 +383,21 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
     - `titleX = n2 + (scrollW / 2)` (ou `g_screenWidth / 2`)
   - A faixa vermelha e os títulos ficam perfeitamente centralizados e alinhados em qualquer proporção de tela (3:4 clássico, 16:9 Widescreen, 16:10, 21:9 Ultrawide).
 
+## Sessão 11 (Isolamento de Touchscreen vs. Emulação Sintética de Mouse no SDL2)
+
+- **Causa Raiz de Cliques Fantasmas de Ataque/Confirmação no Touch (Android e Switch):**
+  - No SDL2, em plataformas móveis e consoles com touchscreen (Android e Nintendo Switch), a biblioteca por padrão sintetiza eventos de mouse (`SDL_MOUSEBUTTONDOWN` e `SDL_MOUSEBUTTONUP`) para cada toque físico na tela (`SDL_FINGERDOWN`).
+  - O código de clique de mouse adicionado recentemente disparava a tecla '5' (53 / Ação / Ataque) para qualquer `SDL_MOUSEBUTTONDOWN`.
+  - Como resultado, **qualquer toque no D-Pad virtual, nas setas ou na tela emitia a tecla 5 simultaneamente**, fazendo com que o herói atacasse/interagisse em vez de apenas andar suavemente.
+- **Correção Definitiva e Isolamento de Plataforma:**
+  1. Configuração explícita das hints do SDL2 em `Platform::init`:
+     `SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");`
+     `SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");`
+     Desativa na raiz a geração de eventos sintéticos cruzados.
+  2. Isolamento condicional por plataforma do tratador de mouse:
+     Envolvido por `#if !defined(__ANDROID__) && !defined(__SWITCH__)`, garantindo que binários mobile e de console sequer compilem o código de mouse.
+  3. Verificação de ID de dispositivo:
+     `if (ev.button.which != SDL_TOUCH_MOUSEID)`, blindando o desktop PC contra qualquer toque sintetizado.
+
+
 
