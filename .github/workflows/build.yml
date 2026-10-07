@@ -205,13 +205,14 @@ jobs:
           key: ${{ runner.os }}-sdl2-2.30.12-mixer-2.8.0
 
       - name: Fetch Third-Party SDL2 and SDL2_mixer
-        if: steps.cache-sdl.outputs.cache-hit != 'true'
         run: |
           mkdir -p third_party
-          if [ ! -d "third_party/SDL2" ]; then
+          if [ ! -f "third_party/SDL2/include/SDL.h" ]; then
+            rm -rf third_party/SDL2
             git clone --depth 1 --branch release-2.30.12 https://github.com/libsdl-org/SDL.git third_party/SDL2
           fi
-          if [ ! -d "third_party/SDL2_mixer" ]; then
+          if [ ! -f "third_party/SDL2_mixer/include/SDL_mixer.h" ]; then
+            rm -rf third_party/SDL2_mixer
             git clone --depth 1 --branch release-2.8.0 https://github.com/libsdl-org/SDL_mixer.git third_party/SDL2_mixer
           fi
 
