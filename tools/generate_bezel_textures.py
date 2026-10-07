@@ -307,21 +307,20 @@ def create_bezel_soltia(width=1920, height=1080):
     right_labels = [
         "DAVID KALIL BRAGA (2026)",
         "EA MOBILE / OPEN MIND TEAM",
-        "ASPECT RATIO: 3:4 ORIGINAL",
-        "TAXA: 30 FPS / 60 FPS [F6]",
-        "MOLDURA: TEMATICA [F5]"
+        "PROPORCAO: 3:4 ORIGINAL",
+        "AUDIO: GENERAL MIDI SF2",
+        "FIDELIDADE PIXEL-PERFECT"
     ]
     r_start_y = logo_y + plaque_h + 30
     for idx, lbl in enumerate(right_labels):
         bbox_l = draw.textbbox((0, 0), lbl, font=font_credit)
         wl = bbox_l[2] - bbox_l[0]
-        # Borda sutil nos itens de comando
-        if "[" in lbl:
-            draw.text((right_cx - wl // 2, r_start_y + idx * 36), lbl, font=font_credit, fill=(0, 210, 255, 220))
-        elif "DAVID" in lbl:
+        if "DAVID" in lbl:
             draw.text((right_cx - wl // 2, r_start_y + idx * 36), lbl, font=font_credit, fill=(245, 210, 110, 240))
-        else:
+        elif "EA MOBILE" in lbl:
             draw.text((right_cx - wl // 2, r_start_y + idx * 36), lbl, font=font_credit, fill=(160, 185, 215, 210))
+        else:
+            draw.text((right_cx - wl // 2, r_start_y + idx * 36), lbl, font=font_credit, fill=(0, 210, 255, 220))
 
     # 3. Chanfro de Profundidade e Sombra Suave na junção com o jogo (Inner Shadow)
     # Borda esquerda da tela do jogo (lado esquerdo)
@@ -421,7 +420,6 @@ def main():
     dest_dirs = [
         "assets/ui",
         "android/app/src/main/assets/ui",
-        "reference/extracted/ui",
         "build/assets/ui"
     ]
     for d in dest_dirs:
@@ -429,12 +427,12 @@ def main():
 
     print("Gerando Bezel Soltia (1920x1080)...")
     img_soltia = create_bezel_soltia(1920, 1080)
-    for d in ["assets/ui", "android/app/src/main/assets/ui", "build/assets/ui"]:
+    for d in dest_dirs:
         save_rgba(img_soltia, os.path.join(d, "bezel_soltia.rgba"))
 
     print("Gerando Bezel Slate (1920x1080)...")
     img_slate = create_bezel_slate(1920, 1080)
-    for d in ["assets/ui", "android/app/src/main/assets/ui", "build/assets/ui"]:
+    for d in dest_dirs:
         save_rgba(img_slate, os.path.join(d, "bezel_slate.rgba"))
 
     print("Gerando Fonte OSD (704x432)...")
