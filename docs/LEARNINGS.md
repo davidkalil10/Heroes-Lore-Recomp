@@ -509,8 +509,18 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - *Causa Raiz:* `resolveSwitchNroPath()` validava `fopen(execPath, "rb")` e, caso o arquivo abrisse via diretório de trabalho relativo (ex: `"heroes_lore.nro"`), retornava o nome puro sem o prefixo `sdmc:/`. No Switch, o runtime C não possui permissão de gravação em caminhos relativos sem devoptab explícito, falhando no `fopen(..., "wb")`.
   - *Solução:* Todos os caminhos candidatos em `resolveSwitchNroPath()` agora iniciam obrigatoriamente com `sdmc:/`. A gravação tenta a cópia direta e, caso falhe por lock de arquivo, utiliza rotação atômica via `.old` e `rename` com rollback de segurança.
 
-- **Ciclo de Validação v1.0.9:**
-  - Publicação da release v1.0.9 para conferência do novo pipeline de atualização nos dispositivos que receberam o código da v1.0.8 (Windows substituindo toda a pasta assets e executável; Switch gravando em `sdmc:/` e reiniciando pelo hbmenu).
+- **Ciclo de Validação v1.0.9 e Diagnóstico de Falha ao Gravar Atualização (Sessão 16):**
+  - *Sintoma:* Ao baixar a v1.0.9 no PC (pasta `teste build` com espaços), o atualizador acusava "Falha ao gravar arquivo de atualizacao". No Switch, o mesmo erro ocorria.
+  - *Causa Raiz Windows:*
+    1. A função `system()` invoca internamente `cmd.exe /c "tar.exe -xf "..." -C "...""`. Quando o caminho contém espaços (ex: `teste build`), o algoritmo de parsing de aspas do `cmd.exe` remove as primeiras e últimas aspas, corrompendo os argumentos do `tar.exe` com o erro `tar.exe: Error opening archive: Failed to open ' C:\Users\...'`.
+    2. Além disso, o pacote `.zip` contém DLLs (`SDL2.dll`, `SDL2_mixer.dll`) que estão carregadas na memória do processo ativo do jogo. O Windows bloqueia a sobreposição direta de DLLs em execução com `ERROR_SHARING_VIOLATION`.
+  - *Solução Windows:*
+    1. Eliminação total do `cmd.exe /c`: a execução de `tar.exe` e `powershell.exe` agora é realizada diretamente via `CreateProcessA` (com flag `CREATE_NO_WINDOW`), recebendo a linha de comando sem manipulação de aspas.
+    2. Extração para diretório isolado (`appDir/_update_extract/`), onde nenhum arquivo está bloqueado em memória.
+    3. Atualização atômica: renomeia `heroes_lore.exe` para `.old`, move o novo executável, sincroniza a árvore `assets/` via `robocopy /E /MOVE` e renomeia/move quaisquer DLLs novas.
+  - *Causa Raiz & Solução Switch:*
+    1. O console estava rodando a build antiga (v1.0.6) que nunca havia conseguido substituir o NRO antes.
+    2. Identificado também que `romfsInit()` em `platform_sdl.cpp` mantém o descritor do NRO aberto para ler assets da partição embutida. Em `applyUpdate()`, adicionada a chamada preventiva `romfsExit()` para liberar imediatamente qualquer lock de arquivo no SD antes da cópia ou rotação atômica.
 
 
 

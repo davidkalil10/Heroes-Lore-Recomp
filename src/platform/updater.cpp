@@ -783,6 +783,9 @@ bool Updater::applyUpdate() {
   std::string tmpFile = storage + "/" + s_releaseInfo.assetName + ".download";
 
 #if defined(__SWITCH__)
+  // Libera qualquer descritor mantido aberto pela libnx no NRO para permitir gravação/substituição
+  romfsExit();
+
   std::string targetNro = resolveSwitchNroPath();
   boot_log("[Updater-Switch] Substituindo NRO alvo: %s (a partir de %s)\n", targetNro.c_str(), tmpFile.c_str());
 
@@ -857,23 +860,81 @@ bool Updater::applyUpdate() {
       appDir = targetExe.substr(0, lastSlash);
     }
 
-    // Renomeia o executavel ativo para .old ANTES de descompactar,
-    // liberando heroes_lore.exe para extracao sem erro de sharing violation
-    std::string oldExe = targetExe + ".old";
-    remove(oldExe.c_str());
-    MoveFileA(targetExe.c_str(), oldExe.c_str());
+    std::string extractDir = appDir + "/_update_extract";
+    CreateDirectoryA(extractDir.c_str(), NULL);
 
-    std::string cmd = "tar.exe -xf \"" + tmpFile + "\" -C \"" + appDir + "\"";
-    int res = system(cmd.c_str());
-    if (res != 0) {
-      cmd = "powershell -Command \"Expand-Archive -Force -Path '" + tmpFile + "' -DestinationPath '" + appDir + "'\"";
-      res = system(cmd.c_str());
+    // Lambda para executar processos ocultos diretamente via CreateProcessA (sem cmd.exe para evitar corrupção de aspas)
+    auto runSilently = [](const std::string& command, DWORD timeoutMs) -> bool {
+      STARTUPINFOA si;
+      ZeroMemory(&si, sizeof(si));
+      si.cb = sizeof(si);
+      si.dwFlags = STARTF_USESHOWWINDOW;
+      si.wShowWindow = SW_HIDE;
+      PROCESS_INFORMATION pi;
+      ZeroMemory(&pi, sizeof(pi));
+      std::vector<char> buf(command.begin(), command.end());
+      buf.push_back('\0');
+      if (!CreateProcessA(NULL, buf.data(), NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+        return false;
+      }
+      WaitForSingleObject(pi.hProcess, timeoutMs);
+      DWORD exitCode = 1;
+      GetExitCodeProcess(pi.hProcess, &exitCode);
+      CloseHandle(pi.hProcess);
+      CloseHandle(pi.hThread);
+      return (exitCode == 0);
+    };
+
+    // 1. Tenta extrair para a pasta isolada com tar.exe
+    std::string tarCmd = "tar.exe -xf \"" + tmpFile + "\" -C \"" + extractDir + "\"";
+    bool ok = runSilently(tarCmd, 60000);
+    if (!ok) {
+      // 2. Fallback: PowerShell Expand-Archive
+      std::string psCmd = "powershell.exe -NoProfile -NonInteractive -Command \"Expand-Archive -Force -LiteralPath '" + tmpFile + "' -DestinationPath '" + extractDir + "'\"";
+      ok = runSilently(psCmd, 90000);
     }
+
+    if (ok) {
+      // 1. Atualiza heroes_lore.exe
+      std::string newExe = extractDir + "/heroes_lore.exe";
+      std::string oldExe = targetExe + ".old";
+      remove(oldExe.c_str());
+      MoveFileA(targetExe.c_str(), oldExe.c_str());
+      MoveFileA(newExe.c_str(), targetExe.c_str());
+
+      // 2. Mescla a pasta assets/ atualizada
+      std::string newAssets = extractDir + "/assets";
+      std::string targetAssets = appDir + "/assets";
+      std::string roboCmd = "robocopy.exe \"" + newAssets + "\" \"" + targetAssets + "\" /E /MOVE /NFL /NDL /NJH /NJS";
+      runSilently(roboCmd, 30000);
+
+      // 3. Atualiza DLLs se houver novas
+      WIN32_FIND_DATAA fd;
+      HANDLE hFind = FindFirstFileA((extractDir + "/*.dll").c_str(), &fd);
+      if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+          std::string dllName = fd.cFileName;
+          std::string srcDll = extractDir + "/" + dllName;
+          std::string dstDll = appDir + "/" + dllName;
+          std::string oldDll = dstDll + ".old";
+          remove(oldDll.c_str());
+          MoveFileA(dstDll.c_str(), oldDll.c_str());
+          MoveFileA(srcDll.c_str(), dstDll.c_str());
+        } while (FindNextFileA(hFind, &fd));
+        FindClose(hFind);
+      }
+
+      // Limpeza da pasta de extração temporária
+      std::string cleanCmd = "powershell.exe -NoProfile -NonInteractive -Command \"Remove-Item -Recurse -Force -LiteralPath '" + extractDir + "'\"";
+      runSilently(cleanCmd, 15000);
+    }
+
     remove(tmpFile.c_str());
-    if (res == 0) {
+    if (ok) {
       Platform::showOsdMessage("Atualizacao concluida! Reinicie o jogo.");
       return true;
     } else {
+      std::string oldExe = targetExe + ".old";
       MoveFileA(oldExe.c_str(), targetExe.c_str());
       return false;
     }
