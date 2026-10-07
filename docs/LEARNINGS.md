@@ -419,4 +419,11 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
     2. A referência da classe `SDLActivity` é resolvida via `SDL_AndroidGetActivity()` + `GetObjectClass` (ou `FindClass` na thread principal) e salva como `NewGlobalRef` (`s_activityClass`), permitindo seu uso seguro e instantâneo em qualquer thread de background sem novas buscas.
     3. Todas as chamadas JNI foram blindadas com `env->ExceptionCheck() / ExceptionClear()`, evitando que exceções não tratadas causem abort no ART.
     4. O `ApkFileProvider` no `AndroidManifest.xml` foi corrigido para `android:exported="false"`, atendendo às restrições estritas de segurança do Android 12+.
+- **Resolução de Crash Instantâneo no Boot do Nintendo Switch (Substituição de std::thread por SDL_CreateThread):**
+  - *Diagnóstico:* Ao iniciar o jogo no Nintendo Switch, o console fechava imediatamente o software antes de exibir qualquer imagem ("ameaça abrir e fecha").
+  - *Causa Raiz:* Em `updater.cpp`, as funções assíncronas `checkAsync` e `startDownload` utilizavam `std::thread`. No ambiente bare-metal do devkitA64 / libnx, o runtime do GCC 15 `aarch64-none-elf` não suporta `std::thread` diretamente e dispara `std::terminate() / abort()`. Como `Platform::init` chamava `Updater::checkAsync(false)` no boot, o Switch abortava instantaneamente.
+  - *Correção Definitiva:*
+    1. Substituído o uso de `std::thread` pela API nativa de threads do SDL2: `SDL_CreateThreadWithStackSize(..., 1024 * 1024, ...)` e `SDL_DetachThread()`, que utiliza o suporte nativo do kernel do Switch (`threadCreate/threadStart`) via libnx com 1MB de stack dedicado.
+    2. A inicialização de sockets da libnx (`socketInitializeDefault()`) foi protegida para verificar o retorno de sucesso (`R_SUCCEEDED(rc)`), evitando falhas caso o console esteja offline ou em modo avião.
+    3. Removido o cabeçalho `<thread>` de `updater.cpp`.
 

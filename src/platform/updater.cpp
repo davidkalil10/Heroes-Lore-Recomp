@@ -6,10 +6,19 @@
 #include <cstring>
 #include <cmath>
 #include <algorithm>
-#include <thread>
 #include <mutex>
 #include <atomic>
 #include <sstream>
+
+#if defined(__has_include)
+  #if __has_include(<SDL2/SDL.h>)
+    #include <SDL2/SDL.h>
+  #else
+    #include <SDL.h>
+  #endif
+#else
+  #include <SDL.h>
+#endif
 
 #if defined(_WIN32)
   #ifndef WIN32_LEAN_AND_MEAN
@@ -285,6 +294,10 @@ static bool winHttpDownloadFile(const std::string& url, const std::string& outPa
 #endif
 
 #if defined(__SWITCH__) || (defined(__linux__) && !defined(__ANDROID__))
+#if defined(__SWITCH__)
+static bool s_socketInitialized = false;
+#endif
+
 // Callback de escrita de dados com libcurl
 static size_t curlWriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
   size_t total = size * nmemb;
@@ -308,6 +321,9 @@ static int curlProgressCallback(void*, curl_off_t dltotal, curl_off_t dlnow, cur
 }
 
 static std::string curlHttpGet(const std::string& url) {
+#if defined(__SWITCH__)
+  if (!s_socketInitialized) return "";
+#endif
   CURL* curl = curl_easy_init();
   if (!curl) return "";
   std::string response;
@@ -316,6 +332,7 @@ static std::string curlHttpGet(const std::string& url) {
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+  curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
   curl_easy_setopt(curl, CURLOPT_TIMEOUT, 6L);
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
@@ -326,6 +343,9 @@ static std::string curlHttpGet(const std::string& url) {
 }
 
 static bool curlDownloadFile(const std::string& url, const std::string& outPath) {
+#if defined(__SWITCH__)
+  if (!s_socketInitialized) return false;
+#endif
   FILE* fp = fopen(outPath.c_str(), "wb");
   if (!fp) return false;
 
@@ -337,6 +357,7 @@ static bool curlDownloadFile(const std::string& url, const std::string& outPath)
   curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
   curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+  curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteFileCallback);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
   curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, curlProgressCallback);
@@ -471,8 +492,11 @@ static void androidInstallApk(const std::string& apkPath) {
 
 void Updater::init() {
 #if defined(__SWITCH__)
-  socketInitializeDefault();
-  curl_global_init(CURL_GLOBAL_ALL);
+  Result rc = socketInitializeDefault();
+  if (R_SUCCEEDED(rc)) {
+    s_socketInitialized = true;
+    curl_global_init(CURL_GLOBAL_ALL);
+  }
 #elif defined(__linux__) && !defined(__ANDROID__)
   curl_global_init(CURL_GLOBAL_ALL);
 #elif defined(__ANDROID__)
@@ -484,8 +508,11 @@ void Updater::init() {
 
 void Updater::shutdown() {
 #if defined(__SWITCH__)
-  curl_global_cleanup();
-  socketExit();
+  if (s_socketInitialized) {
+    curl_global_cleanup();
+    socketExit();
+    s_socketInitialized = false;
+  }
 #elif defined(__linux__) && !defined(__ANDROID__)
   curl_global_cleanup();
 #elif defined(__ANDROID__)
@@ -506,6 +533,69 @@ std::string Updater::getLocalVersion() {
   return HL_VERSION_TAG;
 }
 
+struct CheckUpdateThreadArgs {
+  bool notifyIfNoUpdate;
+};
+
+static int runCheckUpdateThread(void* data) {
+  CheckUpdateThreadArgs* args = static_cast<CheckUpdateThreadArgs*>(data);
+  bool notifyIfNoUpdate = args ? args->notifyIfNoUpdate : false;
+  delete args;
+
+  std::string json;
+#if defined(_WIN32)
+  json = winHttpGet(L"api.github.com", L"/repos/davidkalil10/Heroes-Lore-Recomp/releases/latest");
+#elif defined(__SWITCH__) || (defined(__linux__) && !defined(__ANDROID__))
+  json = curlHttpGet("https://api.github.com/repos/davidkalil10/Heroes-Lore-Recomp/releases/latest");
+#elif defined(__ANDROID__)
+  json = androidHttpGet("https://api.github.com/repos/davidkalil10/Heroes-Lore-Recomp/releases/latest");
+#endif
+
+  std::lock_guard<std::mutex> lock(s_updaterMutex);
+  if (json.empty()) {
+    s_state = UpdateState::CHECK_FAILED;
+    s_statusMessage = "Nao foi possivel conectar ao GitHub.";
+    if (notifyIfNoUpdate) {
+      Platform::showOsdMessage("Atualizacao: Sem conexao com a internet.");
+    }
+    return 0;
+  }
+
+  // Se o repositório for privado ou o endpoint não tiver release público (404 Not Found)
+  if (json.find("\"Not Found\"") != std::string::npos || json.find("\"status\":\"404\"") != std::string::npos) {
+    s_state = UpdateState::NO_UPDATE;
+    s_statusMessage = "Jogo atualizado (" + std::string(HL_VERSION_TAG) + ").";
+    if (notifyIfNoUpdate) {
+      Platform::showOsdMessage("Jogo atualizado (" + std::string(HL_VERSION_TAG) + ").\nNenhuma versao nova encontrada.");
+    }
+    return 0;
+  }
+
+  UpdateReleaseInfo info;
+  if (parseReleaseJson(json, info)) {
+    s_releaseInfo = info;
+    if (isNewerVersion(info.tagName, HL_VERSION_TAG)) {
+      s_state = UpdateState::UPDATE_AVAILABLE;
+      s_statusMessage = "Nova versao disponivel: " + info.tagName;
+      s_promptActive = true; // Abre o diálogo nobre com o aviso crucial de salvar o jogo
+      Platform::showOsdMessage("Nova versao " + info.tagName + " disponivel!");
+    } else {
+      s_state = UpdateState::NO_UPDATE;
+      s_statusMessage = "Voce ja possui a versao mais recente (" + std::string(HL_VERSION_TAG) + ").";
+      if (notifyIfNoUpdate) {
+        Platform::showOsdMessage("Jogo atualizado (" + std::string(HL_VERSION_TAG) + ").\nNenhuma versao nova encontrada.");
+      }
+    }
+  } else {
+    s_state = UpdateState::CHECK_FAILED;
+    s_statusMessage = "Falha ao processar dados de release.";
+    if (notifyIfNoUpdate) {
+      Platform::showOsdMessage("Jogo atualizado (" + std::string(HL_VERSION_TAG) + ").\nNenhuma versao nova encontrada.");
+    }
+  }
+  return 0;
+}
+
 void Updater::checkAsync(bool notifyIfNoUpdate) {
   if (s_state == UpdateState::CHECKING || s_state == UpdateState::DOWNLOADING) {
     if (notifyIfNoUpdate) {
@@ -519,59 +609,52 @@ void Updater::checkAsync(bool notifyIfNoUpdate) {
     Platform::showOsdMessage("Verificando atualizacoes no GitHub...");
   }
 
-  std::thread([notifyIfNoUpdate]() {
-    std::string json;
+  CheckUpdateThreadArgs* args = new CheckUpdateThreadArgs{notifyIfNoUpdate};
+  SDL_Thread* th = SDL_CreateThreadWithStackSize(runCheckUpdateThread, "HL_CheckUpdate", 1024 * 1024, args);
+  if (!th) {
+    th = SDL_CreateThread(runCheckUpdateThread, "HL_CheckUpdate", args);
+  }
+  if (th) {
+    SDL_DetachThread(th);
+  } else {
+    delete args;
+    s_state = UpdateState::CHECK_FAILED;
+  }
+}
+
+struct DownloadThreadArgs {
+  std::string downloadUrl;
+  std::string assetName;
+};
+
+static int runDownloadThread(void* data) {
+  DownloadThreadArgs* args = static_cast<DownloadThreadArgs*>(data);
+  std::string downloadUrl = args->downloadUrl;
+  std::string assetName = args->assetName;
+  delete args;
+
+  std::string destPath = Platform::getStorageDir() + "/" + assetName + ".download";
+  bool ok = false;
 #if defined(_WIN32)
-    json = winHttpGet(L"api.github.com", L"/repos/davidkalil10/Heroes-Lore-Recomp/releases/latest");
+  ok = winHttpDownloadFile(downloadUrl, destPath);
 #elif defined(__SWITCH__) || (defined(__linux__) && !defined(__ANDROID__))
-    json = curlHttpGet("https://api.github.com/repos/davidkalil10/Heroes-Lore-Recomp/releases/latest");
+  ok = curlDownloadFile(downloadUrl, destPath);
 #elif defined(__ANDROID__)
-    json = androidHttpGet("https://api.github.com/repos/davidkalil10/Heroes-Lore-Recomp/releases/latest");
+  ok = androidDownloadFile(downloadUrl, destPath);
 #endif
 
-    std::lock_guard<std::mutex> lock(s_updaterMutex);
-    if (json.empty()) {
-      s_state = UpdateState::CHECK_FAILED;
-      s_statusMessage = "Nao foi possivel conectar ao GitHub.";
-      if (notifyIfNoUpdate) {
-        Platform::showOsdMessage("Atualizacao: Sem conexao com a internet.");
-      }
-      return;
-    }
-
-    // Se o repositório for privado ou o endpoint não tiver release público (404 Not Found)
-    if (json.find("\"Not Found\"") != std::string::npos || json.find("\"status\":\"404\"") != std::string::npos) {
-      s_state = UpdateState::NO_UPDATE;
-      s_statusMessage = "Jogo atualizado (" + std::string(HL_VERSION_TAG) + ").";
-      if (notifyIfNoUpdate) {
-        Platform::showOsdMessage("Jogo atualizado (" + std::string(HL_VERSION_TAG) + ").\nNenhuma versao nova encontrada.");
-      }
-      return;
-    }
-
-    UpdateReleaseInfo info;
-    if (parseReleaseJson(json, info)) {
-      s_releaseInfo = info;
-      if (isNewerVersion(info.tagName, HL_VERSION_TAG)) {
-        s_state = UpdateState::UPDATE_AVAILABLE;
-        s_statusMessage = "Nova versao disponivel: " + info.tagName;
-        s_promptActive = true; // Abre o diálogo nobre com o aviso crucial de salvar o jogo
-        Platform::showOsdMessage("Nova versao " + info.tagName + " disponivel!");
-      } else {
-        s_state = UpdateState::NO_UPDATE;
-        s_statusMessage = "Voce ja possui a versao mais recente (" + std::string(HL_VERSION_TAG) + ").";
-        if (notifyIfNoUpdate) {
-          Platform::showOsdMessage("Jogo atualizado (" + std::string(HL_VERSION_TAG) + ").\nNenhuma versao nova encontrada.");
-        }
-      }
-    } else {
-      s_state = UpdateState::CHECK_FAILED;
-      s_statusMessage = "Falha ao processar dados de release.";
-      if (notifyIfNoUpdate) {
-        Platform::showOsdMessage("Jogo atualizado (" + std::string(HL_VERSION_TAG) + ").\nNenhuma versao nova encontrada.");
-      }
-    }
-  }).detach();
+  std::lock_guard<std::mutex> lock(s_updaterMutex);
+  if (ok) {
+    s_state = UpdateState::DOWNLOAD_COMPLETE;
+    s_downloadProgress = 1.0f;
+    s_statusMessage = "Download concluido! Aplicando...";
+    Updater::applyUpdate();
+  } else {
+    s_state = UpdateState::DOWNLOAD_FAILED;
+    s_statusMessage = "Falha no download da atualizacao.";
+    Platform::showOsdMessage("Falha no download da atualizacao.");
+  }
+  return 0;
 }
 
 void Updater::startDownload() {
@@ -582,32 +665,17 @@ void Updater::startDownload() {
   s_totalBytes = s_releaseInfo.assetSize;
   s_statusMessage = "Baixando atualizacao: " + s_releaseInfo.assetName;
 
-  std::string downloadUrl = s_releaseInfo.assetUrl;
-  std::string assetName = s_releaseInfo.assetName;
-
-  std::thread([downloadUrl, assetName]() {
-    std::string destPath = Platform::getStorageDir() + "/" + assetName + ".download";
-    bool ok = false;
-#if defined(_WIN32)
-    ok = winHttpDownloadFile(downloadUrl, destPath);
-#elif defined(__SWITCH__) || (defined(__linux__) && !defined(__ANDROID__))
-    ok = curlDownloadFile(downloadUrl, destPath);
-#elif defined(__ANDROID__)
-    ok = androidDownloadFile(downloadUrl, destPath);
-#endif
-
-    std::lock_guard<std::mutex> lock(s_updaterMutex);
-    if (ok) {
-      s_state = UpdateState::DOWNLOAD_COMPLETE;
-      s_downloadProgress = 1.0f;
-      s_statusMessage = "Download concluido! Aplicando...";
-      applyUpdate();
-    } else {
-      s_state = UpdateState::DOWNLOAD_FAILED;
-      s_statusMessage = "Falha no download da atualizacao.";
-      Platform::showOsdMessage("Falha no download da atualizacao.");
-    }
-  }).detach();
+  DownloadThreadArgs* args = new DownloadThreadArgs{s_releaseInfo.assetUrl, s_releaseInfo.assetName};
+  SDL_Thread* th = SDL_CreateThreadWithStackSize(runDownloadThread, "HL_Download", 1024 * 1024, args);
+  if (!th) {
+    th = SDL_CreateThread(runDownloadThread, "HL_Download", args);
+  }
+  if (th) {
+    SDL_DetachThread(th);
+  } else {
+    delete args;
+    s_state = UpdateState::DOWNLOAD_FAILED;
+  }
 }
 
 bool Updater::applyUpdate() {
