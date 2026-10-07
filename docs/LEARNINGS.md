@@ -509,5 +509,8 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - *Causa Raiz:* `resolveSwitchNroPath()` validava `fopen(execPath, "rb")` e, caso o arquivo abrisse via diretório de trabalho relativo (ex: `"heroes_lore.nro"`), retornava o nome puro sem o prefixo `sdmc:/`. No Switch, o runtime C não possui permissão de gravação em caminhos relativos sem devoptab explícito, falhando no `fopen(..., "wb")`.
   - *Solução:* Todos os caminhos candidatos em `resolveSwitchNroPath()` agora iniciam obrigatoriamente com `sdmc:/`. A gravação tenta a cópia direta e, caso falhe por lock de arquivo, utiliza rotação atômica via `.old` e `rename` com rollback de segurança.
 
+- **Ciclo de Validação v1.0.9:**
+  - Publicação da release v1.0.9 para conferência do novo pipeline de atualização nos dispositivos que receberam o código da v1.0.8 (Windows substituindo toda a pasta assets e executável; Switch gravando em `sdmc:/` e reiniciando pelo hbmenu).
+
 
 
