@@ -484,6 +484,8 @@ bool Platform::init(int scale) {
 
   // Configura hints antes de criar renderizador e texturas
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0"); // Pixel-perfect nearest neighbor
+  SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");   // Desativa cliques de mouse sintéticos ao tocar na tela
+  SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");   // Desativa toques sintéticos a partir de mouse
 
 #ifdef _WIN32
   // Prioriza direct3d11 no Windows para estabilidade moderna de GPU
@@ -1591,9 +1593,10 @@ bool Platform::pollEvents(VM& vm) {
       }
     }
 
-    // Cliques de mouse no PC Desktop (Botão esquerdo dispara Ação/Confirmar '5')
+#if !defined(__ANDROID__) && !defined(__SWITCH__)
+    // Cliques de mouse no PC Desktop (ignora toques sintetizados de touchscreen)
     else if (ev.type == SDL_MOUSEBUTTONDOWN) {
-      if (ev.button.button == SDL_BUTTON_LEFT && g_display && g_display->current) {
+      if (ev.button.which != SDL_TOUCH_MOUSEID && ev.button.button == SDL_BUTTON_LEFT && g_display && g_display->current) {
         vm.gilLock();
         try {
           Value args[1]; args[0].i = 53; Value ret[2];
@@ -1603,7 +1606,7 @@ bool Platform::pollEvents(VM& vm) {
       }
     }
     else if (ev.type == SDL_MOUSEBUTTONUP) {
-      if (ev.button.button == SDL_BUTTON_LEFT && g_display && g_display->current) {
+      if (ev.button.which != SDL_TOUCH_MOUSEID && ev.button.button == SDL_BUTTON_LEFT && g_display && g_display->current) {
         vm.gilLock();
         try {
           Value args[1]; args[0].i = 53; Value ret[2];
@@ -1612,6 +1615,7 @@ bool Platform::pollEvents(VM& vm) {
         vm.gilUnlock();
       }
     }
+#endif
 
     // Toques na tela (Touchscreen Mobile / Virtual Controller)
     else if (ev.type == SDL_FINGERDOWN) {
