@@ -51,6 +51,9 @@ endif()
 
 if (WIN32)
     target_link_libraries(heroes_lore PRIVATE winhttp)
+elseif (UNIX AND NOT ANDROID AND NOT APPLE)
+    find_package(CURL REQUIRED)
+    target_link_libraries(heroes_lore PRIVATE CURL::libcurl)
 endif()
 
 if (WIN32)

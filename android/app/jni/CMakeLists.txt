@@ -37,6 +37,7 @@ add_library(main SHARED
     "${PROJECT_ROOT}/src/midp/midp.cpp"
     "${PROJECT_ROOT}/src/platform/platform_sdl.cpp"
     "${PROJECT_ROOT}/src/platform/midi_synth.cpp"
+    "${PROJECT_ROOT}/src/platform/updater.cpp"
 )
 
 target_include_directories(main PRIVATE

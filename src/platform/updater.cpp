@@ -41,7 +41,6 @@ static std::atomic<size_t> s_totalBytes{0};
 static std::string s_statusMessage = "";
 static std::mutex s_updaterMutex;
 static bool s_promptActive = false;
-static bool s_hasCheckedOnBoot = false;
 
 extern SDL_Renderer* s_renderer;
 
@@ -286,7 +285,6 @@ static size_t curlWriteCallback(void* contents, size_t size, size_t nmemb, void*
 }
 
 static size_t curlWriteFileCallback(void* contents, size_t size, size_t nmemb, void* userp) {
-  size_t total = size * nmemb;
   FILE* fp = static_cast<FILE*>(userp);
   return fwrite(contents, size, nmemb, fp);
 }
