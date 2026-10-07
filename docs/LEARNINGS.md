@@ -316,18 +316,19 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
     6. **Suporte a Múltiplas Linhas (`\n`) e Quebra Inteligente de Palavras:** O banner agora divide textos por quebra explícita (`\n`) ou quebra automática por palavras (`word-wrap`), centralizando cada linha de forma independente no banner. Isso impede que notificações informativas sofram encolhimento de fonte para caber em uma única linha.
     7. **Mensagens Iniciais Concisas e Otimizadas por Plataforma:** A mensagem inicial foi customizada para cada ambiente (Android: `"Heroes Lore: Wind of Soltia\nPort Nativo Mobile [PT-BR]"`), eliminando referências irrelevantes a teclas de teclado de PC (`F5-F7`) em telas sensíveis ao toque e garantindo que o texto já nasça no tamanho grande e cristalino desde o primeiro frame.
 
-- **Resolução de Desaparecimento de Objetos de Cenário (`aj`) no Widescreen:**
-  - *Sintoma:* Ao alternar para a proporção 16:9 True Widescreen (568x320), diversos objetos decorativos do cenário (camas, mesas, plantas, estantes, baús de baús/lareiras) sumiam da tela, reaparecendo apenas ao voltar para o modo 3:4 original.
+- **Resolução Definitiva de Desaparecimento de Objetos de Cenário (`aj`) no Widescreen:**
+  - *Sintoma:* Ao alternar para a proporção 16:9 True Widescreen (568x320), diversos objetos decorativos do cenário (camas, mesas, plantas, estantes, baús, lareiras) sumiam da tela, reaparecendo apenas ao voltar para o modo 3:4 original.
   - *Causa Raiz no Bytecode J2ME:* A classe `aj` (responsável por objetos estáticos de cenário carregados pelo mapa `ae`) pré-calculava seus limites de culling de tela em campos de instância no construtor:
     `this.b = (short)(as.a + (img.getWidth() >> 1));` (limite direito)
     `this.e = (short)(as.b + img.getHeight());` (limite inferior)
     Durante a renderização (`aj.a(Graphics, int, int)`), ela executava:
     `if (n4 < this.var_short_a || n4 > this.b || n5 < 0 || n5 > this.e) return;`
     Como o mapa era carregado originalmente em 240x320, `this.b` recebia `240 + half_w` (~256px). Quando o jogador mudava a proporção para widescreen e a câmera ou o centro da tela se expandiam para 568px, qualquer objeto cuja coordenada na tela `n4` fosse maior que 256px era sumariamente descartado pelo teste `n4 > this.b`!
-  - *Solução Arquitetural:*
-    1. Criada a função helper `setVmInstanceShort()` para escrita segura de campos `short` (`S`) em instâncias de objetos.
-    2. Durante `updateJavaViewportVariables()`, a VM itera por todos os objetos alocados (`vm.allObjs`): para cada instância pertencente à classe `aj`, localiza sua imagem e recalcula dinamicamente `this.b = (short)(g_screenWidth + (imgW >> 1))` e `this.e = (short)((g_screenHeight - 21) + imgH)`.
-    3. Com isso, os limites de visibilidade se adaptam instantaneamente aos 568 pixels do modo widescreen e são restaurados aos 240 pixels no modo clássico, garantindo que 100% do cenário seja renderizado sem qualquer corte.
+  - *Solução Arquitetural Definitiva (Hook Nativo C++):*
+    1. A abordagem de tentar atualizar os campos privados de memória em `vm.allObjs` era frágil: dependia de varredura prévia de memória e não cobria instâncias criadas dinamicamente ao trocar de sala ou carregar saves já em modo widescreen.
+    2. A VM (`VM::findClass()`) passou a suportar vinculação automática de métodos de classes carregadas do JAR com funções nativas C++ de alta performance registradas em `natives`.
+    3. Foi implementado o método nativo `aj_draw_native` para `aj.a:(Ljavax/microedition/lcdui/Graphics;II)V` em `src/vm/natives.cpp`. Ele lê as coordenadas mundiais e imagem da instância através de índices em cache e aplica culling dinâmico contra a largura e altura reais ativas da tela (`g_screenWidth`, `g_screenHeight`), chamando diretamente `g->drawImage()`.
+    4. Esta solução tem complexidade $O(1)$, zero overhead de interpretação de bytecode e funciona de forma 100% perfeita em qualquer cenário e plataforma (PC, Switch e Android).
 
 - **Harmonização e Redesign Heráldico do Painel Lateral da Moldura (`bezel_soltia`):**
   - *Problema:* Após a remoção dos atalhos de PC, as mensagens informativas ficaram empilhadas em linhas densas (`idx * 36px`) diretamente abaixo da placa do título, gerando uma sensação de layout espremido com grandes áreas vazias e desconexas nas bordas verticais.
