@@ -34,9 +34,17 @@ android {
             universalApk true
         }
     }
+    signingConfigs {
+        release {
+            storeFile file('heroes_lore.keystore')
+            storePassword 'heroeslore'
+            keyAlias 'heroeslore'
+            keyPassword 'heroeslore'
+        }
+    }
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

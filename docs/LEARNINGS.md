@@ -289,9 +289,21 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - Desenvolvidas novas texturas em alta resolução com supersampling 4x via `tools/generate_gamepad_textures.py`:
     - `btn_aspect` (96x96): Moldura de monitor 16:9 em cyan neon com texto "16:9".
     - `btn_fps` (96x96): Mostrador de velocímetro esportivo em tom âmbar neon com texto "FPS".
-  - Integrados na barra de ferramentas inferior, dispostos ao lado do botão de olho (`KEY_TOGGLE_TOUCH_UI`) e rotação de tela (`KEY_TOGGLE_ORIENTATION` no Switch).
+  - Posicionamento ergonômico no canto inferior direito da tela (espelhando a barra utilitária esquerda do botão de olho), tanto no modo Retrato quanto no modo Paisagem. Esse arranjo elimina poluição visual na mão esquerda e impede toques acidentais durante o combate ou navegação com direcionais.
   - Em modo Paisagem (Landscape), o cálculo de layout (`calculateLayout`) foi atualizado para reconhecer a largura expandida do True Widescreen (`568x320`), impedindo o colapso das margens virtuais e garantindo que os botões fiquem confortavelmente acessíveis nas extremidades laterais sem obstruir a ação.
   - Os ícones utilitários permanecem visíveis mesmo com o gamepad translúcido desativado, permitindo restaurar os controles ou alterar gráficos/velocidade a qualquer momento com um simples toque na tela.
+
+- **Diagnóstico e Correção de Deslocamento de Menus Modais no Aspect Ratio:**
+  - *Problema:* Se o jogador alternasse a proporção (ex: 16:9 True Widescreen <-> 3:4 Original) com uma tela modal aberta (como o menu de Status/Itens), a janela do menu aparecia cortada e deslocada para a direita, normalizando apenas ao fechar e reabrir.
+  - *Causa Raiz:* Classes modais baseadas em `cb` (`ai`: Status/Itens/Equipamentos, `bp`: Loja, `bf`: Baú, `ax`: Refino, `aa`: Forja) calculam suas coordenadas X e Y apenas no construtor estático (`var_int_a = r.i - 100`, `b = r.j - 122`) com base no centro da tela `r.i`. Ao alternar a resolução, `r.i` mudava (de 120 para 284 ou vice-versa), mas as variáveis estáticas dos menus permaneciam com os valores da resolução anterior. Além disso, a hierarquia de janelas `cb` usa flags de dirty repainting (`var_boolean_a` e `var_boolean_b`) que impediam o redesenho imediato das coordenadas atualizadas.
+  - *Solução Arquitetural:*
+    1. Em `updateJavaViewportVariables()`, todas as classes modais têm seus campos estáticos de coordenadas (`a:I` e `b:I`) recalculados para o novo centro `(g_screenWidth / 2) - 100` e `(g_screenHeight / 2) - 122`.
+    2. Foi implementado o varredor recursivo `invalidateCbHierarchy()`, que localiza o objeto ativo singleton (`ai.a`, `bp.a`, etc.) e percorre em cadeia todas as subjanelas/abas filhas (`b:Lcb;`), setando suas flags booleanas de sujeira (`a:Z` e `b:Z` em `cb`) como `true`.
+    3. Com isso, os menus se reposicionam instantaneamente no centro exato da tela ao alternar o aspect ratio, com 0% de deslocamento ou artefato visual.
+
+- **Resolução do Conflito de Pacotes no APK Android (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`):**
+  - *Causa Raiz:* O `android/app/build.gradle` utilizava `signingConfig signingConfigs.debug`. Em ambientes de CI efêmeros como o GitHub Actions (`ubuntu-latest`), a cada nova execução um runner limpo é instanciado. O Gradle gerava um arquivo `debug.keystore` novo a cada build, produzindo certificados com chaves RSA e impressões digitais SHA-1 distintas. O Android Package Manager bloqueia a instalação de APKs com assinaturas diferentes sobre o mesmo `packageId` por segurança, disparando erro de "conflito de pacote" e forçando o usuário a desinstalar o app prévio.
+  - *Solução Definitiva:* Criado um keystore dedicado de release permanente (`android/app/heroes_lore.keystore`, com validade de 10.000 dias) versionado no repositório e configurado explicitamente em `signingConfigs.release`. A partir deste commit, todos os APKs compilados no GitHub Actions compartilharão a mesma assinatura estática, permitindo atualizações sucessivas sem desinstalação e preservando os saves locais.
 
 - **Escalonamento Responsivo e Legibilidade do Banner OSD:**
   - *Problema:* As mensagens OSD eram renderizadas com tamanho fixo (`charH = 21px`), tornando-se minúsculas (~1.3 mm) em smartphones com telas de alta densidade de pixels (1080p, 1440p) e difíceis de ler no Switch. Além disso, em modo Retrato vertical no Switch (TATE), o OSD não era desenhado no target rotacionado.

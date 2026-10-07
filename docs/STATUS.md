@@ -126,10 +126,14 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
     - **Minimapa:** <kbd>SELECT</kbd> (ao soltar isolado sem combo) e <kbd>L3</kbd> (clique do analógico esquerdo).
     - **Menu Principal:** <kbd>START</kbd> (ao pressionar isolado sem combo).
   - [x] Botões Virtuais Touchscreen (Celular Android / Nintendo Switch):
-    - Botão touch para alternar Proporção (<kbd>16:9</kbd> / `btn_aspect`) ao lado do botão de olho.
-    - Botão touch para alternar Velocidade (<kbd>FPS</kbd> / `btn_fps`) ao lado do botão de proporção.
+    - Botão touch para alternar Proporção (<kbd>16:9</kbd> / `btn_aspect`) e Velocidade (<kbd>FPS</kbd> / `btn_fps`) posicionados ergonomicamente no canto inferior direito da tela (espelhando a barra utilitária esquerda).
     - Ícones gerados em alta fidelidade (`.rgba` e `.png`) presentes nos assets de todas as plataformas.
     - Permanecem acessíveis e visíveis mesmo se os direcionais estiverem ocultos, com suporte responsivo tanto em Retrato quanto em Paisagem (True Widescreen).
+  - [x] Correção de Sincronização e Centralização de Menus Modais no Aspect Ratio:
+    - Atualização imediata das coordenadas `x, y` centralizadas de todas as janelas modais (`ai`: Status/Item/Equip, `bp`: Loja, `bf`: Armazenamento, `ax`: Refino, `aa`: Forja) ao alternar entre 3:4 e 16:9 True Widescreen.
+    - Invalidação recursiva das flags de repintura na hierarquia `cb` (`var_boolean_a`, `var_boolean_b`, `var_cb_b`), garantindo posicionamento 100% centrado sem deslocamentos visuais mesmo com menus abertos.
+  - [x] Assinatura Estática do APK Android (Resolução do Conflito de Pacote):
+    - Configurado keystore dedicado permanente (`android/app/heroes_lore.keystore`) em `signingConfigs.release`, garantindo que todas as compilações (locais ou via GitHub Actions) usem sempre a mesma chave e permitam instalação direta como atualização sem necessidade de desinstalar o jogo.
   - [x] HUD On-Screen Display (OSD) Responsivo em Alta Resolucao:
     - Banner flutuante no topo da tela com visual moderno de vidro fosco, contorno cyan brilhante e fonte bitmap em alta fidelidade (`font_osd.rgba` 704x432 em celulas 44x72).
     - Escalonamento dinamico baseado na menor dimensao da tela (`minDim`), garantindo legibilidade perfeita e ampliada tanto em smartphones com telas de alta densidade (1080p/1440p) quanto no Nintendo Switch (720p).

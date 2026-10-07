@@ -93,12 +93,14 @@ O mapeamento foi planejado com ergonomia moderna para controles USB/Bluetooth, t
 
 ### 📱 Controles Virtuais Touchscreen (Celular Android / Nintendo Switch)
 
-Na tela sensível ao toque, além do D-Pad direcional analógico e dos botões ergonômicos de combate e menu, uma barra utilitária fica disponível no canto inferior:
-- **Botão Olho (`👁️`):** Oculta ou reexibe os botões na tela (ideal para jogar com gamepad ou assistir cutscenes limpas).
-- **Botão 16:9 (`btn_aspect`):** Alterna em tempo real entre a proporção 3:4 clássica e o modo True Widescreen expandido.
-- **Botão FPS (`btn_fps`):** Alterna instantaneamente entre 15 FPS (nostalgia original) e 30 FPS (turbo ágil).
-- **Botão Rotação (`🔄`, no Switch):** Alterna entre orientação horizontal (Paisagem 1280x720) e vertical (Retrato TATE 90° e 270° Flip Grip).
-- Os botões utilitários permanecem visíveis mesmo com o gamepad translúcido desativado, permitindo restaurar os controles ou alterar gráficos/velocidade a qualquer momento.
+Na tela sensível ao toque, além do D-Pad direcional analógico e dos botões ergonômicos de combate e menu, utilitários práticos ficam disponíveis na base da tela:
+- **Canto Inferior Esquerdo:**
+  - **Botão Olho (`👁️`):** Oculta ou reexibe os botões na tela (ideal para jogar com gamepad ou assistir cutscenes limpas).
+  - **Botão Rotação (`🔄`, no Switch):** Alterna entre orientação horizontal (Paisagem 1280x720) e vertical (Retrato TATE 90° e 270° Flip Grip).
+- **Canto Inferior Direito (Espelhado e Ergonômico):**
+  - **Botão 16:9 (`btn_aspect`):** Alterna em tempo real entre a proporção 3:4 clássica e o modo True Widescreen expandido.
+  - **Botão FPS (`btn_fps`):** Alterna instantaneamente entre 15 FPS (nostalgia original) e 30 FPS (turbo ágil).
+- Os botões utilitários permanecem acessíveis mesmo com o gamepad translúcido desativado, permitindo restaurar os controles ou alterar gráficos/velocidade a qualquer momento.
 
 ---
 

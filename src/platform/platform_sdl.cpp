@@ -166,19 +166,9 @@ static void setVmStaticInt(VM& vm, const std::string& className, const std::stri
   }
 
   for (const auto& name : candidateNames) {
-    auto fit = cls->fieldMap.find(name + ":I");
-    if (fit != cls->fieldMap.end() && fit->second && fit->second->isStatic) {
-      targetField = fit->second;
-      break;
-    }
-    fit = cls->fieldMap.find(name);
-    if (fit != cls->fieldMap.end() && fit->second && fit->second->isStatic) {
-      targetField = fit->second;
-      break;
-    }
-    for (auto& pair : cls->fieldMap) {
-      if (pair.second && pair.second->name == name && pair.second->desc == "I" && pair.second->isStatic) {
-        targetField = pair.second;
+    for (auto& f : cls->fields) {
+      if (f.name == name && f.desc == "I" && f.isStatic) {
+        targetField = &f;
         break;
       }
     }
@@ -203,14 +193,9 @@ static int32_t getVmStaticInt(VM& vm, const std::string& className, const std::s
   else if (fieldName.rfind("var_", 0) == 0) candidateNames.push_back(fieldName.substr(4));
 
   for (const auto& name : candidateNames) {
-    auto fit = cls->fieldMap.find(name + ":I");
-    if (fit != cls->fieldMap.end() && fit->second && fit->second->isStatic) {
-      targetField = fit->second;
-      break;
-    }
-    for (auto& pair : cls->fieldMap) {
-      if (pair.second && pair.second->name == name && pair.second->desc == "I" && pair.second->isStatic) {
-        targetField = pair.second;
+    for (auto& f : cls->fields) {
+      if (f.name == name && f.desc == "I" && f.isStatic) {
+        targetField = &f;
         break;
       }
     }
@@ -235,28 +220,68 @@ static void setVmInstanceBool(Object* obj, const std::string& fieldName, bool va
     candidateNames.push_back(fieldName.substr(4));
   }
 
-  for (const auto& name : candidateNames) {
-    auto fit = cls->fieldMap.find(name + ":Z");
-    if (fit != cls->fieldMap.end() && fit->second && !fit->second->isStatic) {
-      targetField = fit->second;
-      break;
-    }
-    fit = cls->fieldMap.find(name);
-    if (fit != cls->fieldMap.end() && fit->second && !fit->second->isStatic) {
-      targetField = fit->second;
-      break;
-    }
-    for (auto& pair : cls->fieldMap) {
-      if (pair.second && pair.second->name == name && pair.second->desc == "Z" && !pair.second->isStatic) {
-        targetField = pair.second;
-        break;
+  // Percorre toda a hierarquia de classes (incluindo superclasses como cb)
+  for (ClassInfo* cur = cls; cur; cur = cur->super) {
+    for (const auto& name : candidateNames) {
+      for (auto& f : cur->fields) {
+        if (f.name == name && f.desc == "Z" && !f.isStatic) {
+          targetField = &f;
+          break;
+        }
       }
+      if (targetField) break;
     }
     if (targetField) break;
   }
 
   if (targetField && !targetField->isStatic && targetField->index >= 0 && targetField->index < (int)inst->f.size()) {
     inst->f[targetField->index].i = val ? 1 : 0;
+  }
+}
+
+static Object* getVmStaticObjectByDesc(VM& vm, const std::string& className, const std::string& fieldName, const std::string& desc) {
+  auto it = vm.classes.find(className);
+  if (it == vm.classes.end()) return nullptr;
+  ClassInfo* cls = it->second;
+
+  std::vector<std::string> candidateNames = { fieldName };
+  if (fieldName.rfind("var_", 0) == 0) {
+    candidateNames.push_back(fieldName.substr(4));
+  }
+
+  for (const auto& name : candidateNames) {
+    for (auto& f : cls->fields) {
+      if (f.name == name && f.desc == desc && f.isStatic && f.isRef) {
+        if (f.index >= 0 && f.index < (int)cls->statics.size()) {
+          return cls->statics[f.index].o;
+        }
+      }
+    }
+  }
+  return nullptr;
+}
+
+static void invalidateCbHierarchy(Object* obj) {
+  while (obj && obj->kind == K_INST) {
+    setVmInstanceBool(obj, "a", true);
+    setVmInstanceBool(obj, "var_boolean_a", true);
+    setVmInstanceBool(obj, "b", true);
+    setVmInstanceBool(obj, "var_boolean_b", true);
+
+    Object* nextCb = nullptr;
+    Instance* inst = static_cast<Instance*>(obj);
+    for (ClassInfo* cur = inst->cls; cur; cur = cur->super) {
+      for (auto& f : cur->fields) {
+        if (!f.isStatic && f.isRef && f.desc == "Lcb;" && (f.name == "b" || f.name == "var_cb_b")) {
+          if (f.index >= 0 && f.index < (int)inst->f.size()) {
+            nextCb = inst->f[f.index].o;
+            break;
+          }
+        }
+      }
+      if (nextCb) break;
+    }
+    obj = nextCb;
   }
 }
 
@@ -300,7 +325,29 @@ static void updateJavaViewportVariables(VM& vm) {
     setVmStaticInt(vm, "n", "c", prevCamX + deltaC);
   }
 
-  // 5. Redefine o clip do Graphics principal
+  // 5. Se houver menus/diálogos modais abertos (ai: Status/Item/Equip, bp: Loja, bf: Baú, ax: Refino, aa: Forja),
+  // atualiza suas coordenadas X e Y centralizadas para que não fiquem deslocados ao alternar a proporção
+  int32_t menuX = (g_screenWidth / 2) - 100;
+  int32_t menuY = (g_screenHeight / 2) - 122;
+
+  const char* menuClasses[] = { "ai", "bp", "bf", "ax", "aa" };
+  for (const char* mcls : menuClasses) {
+    setVmStaticInt(vm, mcls, "a", menuX);
+    setVmStaticInt(vm, mcls, "var_int_a", menuX);
+    setVmStaticInt(vm, mcls, "b", menuY);
+    setVmStaticInt(vm, mcls, "var_int_b", menuY);
+
+    std::string desc = std::string("L") + mcls + ";";
+    Object* inst = getVmStaticObjectByDesc(vm, mcls, "a", desc);
+    if (!inst) {
+      inst = getVmStaticObjectByDesc(vm, mcls, std::string("var_") + mcls + "_a", desc);
+    }
+    if (inst) {
+      invalidateCbHierarchy(inst);
+    }
+  }
+
+  // 6. Redefine o clip do Graphics principal
   if (g_screenGraphics) {
     g_screenGraphics->resetClip();
   }
@@ -790,7 +837,7 @@ static GamepadLayout calculateLayout(int winW, int winH) {
     layout.gameRect = { gameX, gameY, gameW, gameH };
     layout.controllerBgRect = { 0, 0, 0, 0 }; // Sem fundo opaco, overlay translúcido sobre o jogo!
 
-    // Botão de Ocultar/Reexibir Controles Virtuais e Utilitarios no canto inferior esquerdo
+    // Botão de Ocultar/Reexibir Controles Virtuais no canto inferior esquerdo
     int rToggle = (int)(winW * 0.050f);
     int toggleX = (int)(winW * 0.08f);
     int toggleY = winH - (int)(winW * 0.08f);
@@ -805,11 +852,10 @@ static GamepadLayout calculateLayout(int winW, int winH) {
     layout.buttons.push_back({ KEY_TOGGLE_ORIENTATION, curUtilX, toggleY, rToggle, rToggle * 2, rToggle * 2, s_texBtnRotate });
 #endif
 
-    curUtilX += stepToggle;
-    layout.buttons.push_back({ KEY_TOGGLE_TOUCH_ASPECT, curUtilX, toggleY, rToggle, rToggle * 2, rToggle * 2, s_texBtnAspect });
-
-    curUtilX += stepToggle;
-    layout.buttons.push_back({ KEY_TOGGLE_TOUCH_FPS, curUtilX, toggleY, rToggle, rToggle * 2, rToggle * 2, s_texBtnFps });
+    // Utilitários de Proporção (16:9) e Taxa de Quadros (FPS) no canto inferior direito
+    int rightUtilX = winW - (int)(winW * 0.08f);
+    layout.buttons.push_back({ KEY_TOGGLE_TOUCH_FPS, rightUtilX, toggleY, rToggle, rToggle * 2, rToggle * 2, s_texBtnFps });
+    layout.buttons.push_back({ KEY_TOGGLE_TOUCH_ASPECT, rightUtilX - stepToggle, toggleY, rToggle, rToggle * 2, rToggle * 2, s_texBtnAspect });
 
     if (s_touchOverlayEnabled) {
       // D-Pad e Cluster de Acao subidos para winW * 0.42f (ergonomia perfeita e abre espaco inferior limpo)
@@ -869,7 +915,7 @@ static GamepadLayout calculateLayout(int winW, int winH) {
     int controlRightW = (rightW >= (int)(winW * 0.20f)) ? rightW : (int)(winW * 0.26f);
     int controlRightX = winW - controlRightW;
 
-    // Botao de Ocultar/Reexibir Controles Virtuais e Utilitarios no canto inferior esquerdo
+    // Botao de Ocultar/Reexibir Controles Virtuais no canto inferior esquerdo
     int rToggleLand = (int)(winH * 0.055f);
     int toggleX = (int)(controlLeftW * 0.16f);
     int toggleY = winH - (int)(winH * 0.09f);
@@ -884,11 +930,10 @@ static GamepadLayout calculateLayout(int winW, int winH) {
     layout.buttons.push_back({ KEY_TOGGLE_ORIENTATION, curUtilXLand, toggleY, rToggleLand, rToggleLand * 2, rToggleLand * 2, s_texBtnRotate });
 #endif
 
-    curUtilXLand += stepToggleLand;
-    layout.buttons.push_back({ KEY_TOGGLE_TOUCH_ASPECT, curUtilXLand, toggleY, rToggleLand, rToggleLand * 2, rToggleLand * 2, s_texBtnAspect });
-
-    curUtilXLand += stepToggleLand;
-    layout.buttons.push_back({ KEY_TOGGLE_TOUCH_FPS, curUtilXLand, toggleY, rToggleLand, rToggleLand * 2, rToggleLand * 2, s_texBtnFps });
+    // Utilitários de Proporção (16:9) e Taxa de Quadros (FPS) no canto inferior direito
+    int rightLandX = winW - (int)(controlRightW * 0.16f);
+    layout.buttons.push_back({ KEY_TOGGLE_TOUCH_FPS, rightLandX, toggleY, rToggleLand, rToggleLand * 2, rToggleLand * 2, s_texBtnFps });
+    layout.buttons.push_back({ KEY_TOGGLE_TOUCH_ASPECT, rightLandX - stepToggleLand, toggleY, rToggleLand, rToggleLand * 2, rToggleLand * 2, s_texBtnAspect });
 
     if (s_touchOverlayEnabled) {
       // D-Pad na coluna esquerda (grande e confortavel)
