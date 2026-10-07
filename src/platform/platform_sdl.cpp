@@ -504,10 +504,12 @@ bool Platform::init(int scale) {
   }
 #endif
   s_frameStartCounter = SDL_GetPerformanceCounter();
-#ifdef __SWITCH__
-  Platform::showOsdMessage("Heroes Lore [R3: FPS | Sel+Start: 16:9 | Sel+R3: Moldura]");
+#if defined(__ANDROID__)
+  Platform::showOsdMessage("Heroes Lore: Wind of Soltia\nPort Nativo Mobile [PT-BR]");
+#elif defined(__SWITCH__)
+  Platform::showOsdMessage("Heroes Lore: Wind of Soltia\n[R3: FPS | Sel+Start: 16:9 | Sel+R3: Moldura]");
 #else
-  Platform::showOsdMessage("Heroes Lore [F5-F7 | Pad: R3=FPS, Sel+Start=16:9, Sel+R3=Moldura]");
+  Platform::showOsdMessage("Heroes Lore: Wind of Soltia\n[F5: Moldura | F6: FPS | F7: 16:9 | F11: Tela Cheia]");
 #endif
 
   return true;
@@ -715,24 +717,70 @@ static void drawOsd(int winW, int winH) {
   float targetCharH = std::round(34.0f * baseScale);
   float targetCharW = std::round(targetCharH * cellAspect);
 
-  // Em telas estreitas (Modo Retrato / Portrait), ajusta dinamicamente a largura
-  // para garantir que mensagens longas caibam perfeitamente na largura do celular
+  // 1. Divide a mensagem em linhas (por quebra explícita \n ou quebra automática de palavras)
+  std::vector<std::string> rawLines;
+  size_t startPos = 0;
+  while (startPos < s_osdMessage.length()) {
+    size_t nlPos = s_osdMessage.find('\n', startPos);
+    if (nlPos == std::string::npos) {
+      rawLines.push_back(s_osdMessage.substr(startPos));
+      break;
+    }
+    rawLines.push_back(s_osdMessage.substr(startPos, nlPos - startPos));
+    startPos = nlPos + 1;
+  }
+  if (rawLines.empty()) return;
+
   float maxTextW = (float)winW * 0.90f - 48.0f;
-  float totalTextW = (float)s_osdMessage.length() * targetCharW;
-  if (totalTextW > maxTextW && s_osdMessage.length() > 0) {
-    targetCharW = maxTextW / (float)s_osdMessage.length();
+  int maxCharsPerLine = std::max(18, (int)(maxTextW / targetCharW));
+
+  std::vector<std::string> lines;
+  for (const auto& rline : rawLines) {
+    if ((int)rline.length() <= maxCharsPerLine) {
+      lines.push_back(rline);
+    } else {
+      // Quebra inteligente por palavras para manter a fonte sempre ampla e legível
+      size_t lineStart = 0;
+      while (lineStart < rline.length()) {
+        if (rline.length() - lineStart <= (size_t)maxCharsPerLine) {
+          lines.push_back(rline.substr(lineStart));
+          break;
+        }
+        size_t splitAt = lineStart + maxCharsPerLine;
+        size_t spacePos = rline.rfind(' ', splitAt);
+        if (spacePos != std::string::npos && spacePos > lineStart) {
+          lines.push_back(rline.substr(lineStart, spacePos - lineStart));
+          lineStart = spacePos + 1;
+        } else {
+          lines.push_back(rline.substr(lineStart, maxCharsPerLine));
+          lineStart += maxCharsPerLine;
+        }
+      }
+    }
+  }
+
+  // Verifica o comprimento máximo entre as linhas geradas
+  size_t maxLineLen = 0;
+  for (const auto& l : lines) {
+    if (l.length() > maxLineLen) maxLineLen = l.length();
+  }
+
+  float totalTextW = (float)maxLineLen * targetCharW;
+  if (totalTextW > maxTextW && maxLineLen > 0) {
+    targetCharW = maxTextW / (float)maxLineLen;
     targetCharH = targetCharW / cellAspect;
-    if (targetCharH < 22.0f) targetCharH = 22.0f;
-    if (targetCharW < 13.0f) targetCharW = 13.0f;
+    if (targetCharH < 26.0f) targetCharH = 26.0f;
+    if (targetCharW < 15.0f) targetCharW = 15.0f;
   }
 
   int charW = (int)targetCharW;
   int charH = (int)targetCharH;
-  int textW = (int)s_osdMessage.length() * charW;
+  int lineSpacing = (int)(6.0f * baseScale);
+  int textW = (int)maxLineLen * charW;
   int padX = (int)(22.0f * baseScale);
   int padY = (int)(12.0f * baseScale);
   int bannerW = textW + padX * 2;
-  int bannerH = charH + padY * 2;
+  int bannerH = (int)lines.size() * charH + (int)(lines.size() - 1) * lineSpacing + padY * 2;
   int bannerX = (winW - bannerW) / 2;
 
   // Posição vertical: em modo retrato, fica seguro abaixo da barra de status/notch (6.5% de winH)
@@ -761,20 +809,24 @@ static void drawOsd(int winW, int winH) {
     SDL_RenderDrawRect(s_renderer, &innerBorder);
   }
 
-  // Texto centralizado
+  // Texto centralizado por linha
   if (s_texFontOsd) {
     SDL_SetTextureAlphaMod(s_texFontOsd, alpha);
-    int startX = bannerX + padX;
-    int startY = bannerY + padY;
-    for (size_t i = 0; i < s_osdMessage.length(); i++) {
-      char c = s_osdMessage[i];
-      if (c < 32 || c > 126) c = ' ';
-      int idx = c - 32;
-      int col = idx % 16;
-      int row = idx / 16;
-      SDL_Rect src = { col * srcCellW, row * srcCellH, srcCellW, srcCellH };
-      SDL_Rect dst = { startX + (int)i * charW, startY, charW, charH };
-      SDL_RenderCopy(s_renderer, s_texFontOsd, &src, &dst);
+    for (size_t lineIdx = 0; lineIdx < lines.size(); lineIdx++) {
+      const std::string& line = lines[lineIdx];
+      int lineTextW = (int)line.length() * charW;
+      int lineStartX = bannerX + (bannerW - lineTextW) / 2;
+      int lineY = bannerY + padY + (int)lineIdx * (charH + lineSpacing);
+      for (size_t i = 0; i < line.length(); i++) {
+        char c = line[i];
+        if (c < 32 || c > 126) c = ' ';
+        int idx = c - 32;
+        int col = idx % 16;
+        int row = idx / 16;
+        SDL_Rect src = { col * srcCellW, row * srcCellH, srcCellW, srcCellH };
+        SDL_Rect dst = { lineStartX + (int)i * charW, lineY, charW, charH };
+        SDL_RenderCopy(s_renderer, s_texFontOsd, &src, &dst);
+      }
     }
   }
 }

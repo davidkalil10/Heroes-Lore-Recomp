@@ -136,6 +136,8 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
     - Configurado keystore dedicado permanente (`android/app/heroes_lore.keystore`) em `signingConfigs.release`, garantindo que todas as compilações (locais ou via GitHub Actions) usem sempre a mesma chave e permitam instalação direta como atualização sem necessidade de desinstalar o jogo.
   - [x] HUD On-Screen Display (OSD) Responsivo em Alta Resolucao:
     - Banner flutuante no topo da tela com visual moderno de vidro fosco, contorno cyan brilhante e fonte bitmap em alta fidelidade (`font_osd.rgba` 704x432 em celulas 44x72).
+    - Suporte a múltiplas linhas (`\n`) com quebra inteligente de palavras e centralização individual por linha, impedindo que mensagens longas sofram encolhimento de fonte.
+    - Mensagem de inicialização customizada por plataforma (Mobile Android, Switch e PC Desktop) em 2 linhas concisas, exibida sempre no tamanho máximo ampliado desde o primeiro instante de execução.
     - Escalonamento dinamico baseado na menor dimensao da tela (`minDim`), garantindo legibilidade perfeita e ampliada tanto em smartphones com telas de alta densidade (1080p/1440p) quanto no Nintendo Switch (720p).
     - Ajuste automatico de largura em telas estreitas (Modo Retrato) para evitar corte de texto pelas bordas, com margem vertical segura para notches e camera frontal.
     - Suporte a renderizacao no Nintendo Switch em modos rotacionados (TATE 90° e 270° Flip Grip) e confirmacao visual ao alternar orientacao.
