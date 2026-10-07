@@ -709,19 +709,29 @@ bool Updater::applyUpdate() {
   std::string tmpFile = storage + "/" + s_releaseInfo.assetName + ".download";
 
 #if defined(__SWITCH__)
-  std::string targetNro = "sdmc:/switch/heroes_lore/heroes_lore.nro";
+  std::string targetNro = "";
   std::string execPath = Platform::getExecutablePath();
   if (!execPath.empty() && (execPath.rfind(".nro") != std::string::npos || execPath.rfind(".NRO") != std::string::npos)) {
     targetNro = execPath;
+  } else {
+    // Se execPath não tiver a extensão .nro, verifica onde o arquivo já existe no SD
+    FILE* test1 = fopen("sdmc:/switch/heroes_lore.nro", "rb");
+    if (test1) {
+      fclose(test1);
+      targetNro = "sdmc:/switch/heroes_lore.nro";
+    } else {
+      FILE* test2 = fopen("sdmc:/switch/heroes_lore/heroes_lore.nro", "rb");
+      if (test2) {
+        fclose(test2);
+        targetNro = "sdmc:/switch/heroes_lore/heroes_lore.nro";
+      } else {
+        targetNro = "sdmc:/switch/heroes_lore.nro";
+      }
+    }
   }
 
+  // Copia APENAS para a pasta onde o NRO de fato reside
   bool ok = copyFile(tmpFile, targetNro);
-  if (targetNro != "sdmc:/switch/heroes_lore.nro") {
-    copyFile(tmpFile, "sdmc:/switch/heroes_lore.nro");
-  }
-  if (targetNro != "sdmc:/switch/heroes_lore/heroes_lore.nro") {
-    copyFile(tmpFile, "sdmc:/switch/heroes_lore/heroes_lore.nro");
-  }
   remove(tmpFile.c_str());
 
   if (ok) {
