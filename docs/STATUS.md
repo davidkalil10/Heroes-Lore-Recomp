@@ -142,6 +142,12 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
     - Ajuste automatico de largura em telas estreitas (Modo Retrato) para evitar corte de texto pelas bordas, com margem vertical segura para notches e camera frontal.
     - Suporte a renderizacao no Nintendo Switch em modos rotacionados (TATE 90° e 270° Flip Grip) e confirmacao visual ao alternar orientacao.
     - Exibe confirmacao visual por 2.5s com fade out suave ao alternar qualquer ajuste.
+  - [x] Recálculo Dinâmico de Culling de Cenário (`aj`) no Aspect Ratio (Fim dos Objetos Sumindo):
+    - Identificada e corrigida a causa raiz do desaparecimento de objetos decorativos (mesas, camas, plantas, estantes, baús) ao alternar para o modo True Widescreen 16:9. A classe `aj` salvava os limites de tela nos campos de instância `this.b` e `this.e` no momento do carregamento do mapa.
+    - Implementada a atualização dinâmica em lote de todas as instâncias de `aj` via `vm.allObjs` em `updateJavaViewportVariables()`, expandindo seus limites de visibilidade para os 568 pixels do modo widescreen e restaurando para os 240 pixels no modo 3:4.
+  - [x] Redesign Heráldico Completo do Painel Lateral da Moldura Soltia (Bezel):
+    - Reestruturação completa do painel direito da moldura temática de 1920x1080: eliminação do bloco condensado de textos e substituição por uma placa heráldica nobre entalhada em ardósia e ouro.
+    - Divisores dourados com losangos facetados, rebites de bronze nos cantos, tipografia com contraste hierárquico e alinhamento milimétrico simétrico com a coluna rúnica e medalhão do painel esquerdo.
   - [x] Persistência de Configurações:
     - Salva e restaura automaticamente as opções do usuário e o tamanho/posição da janela em `hl_settings.ini`.
 

@@ -256,24 +256,35 @@ def create_bezel_soltia(width=1920, height=1080):
     try:
         font_hl = ImageFont.truetype(FONT_TITLE, 34)
         font_wos = ImageFont.truetype(FONT_TITLE, 22)
-        font_tag = ImageFont.truetype(FONT_TITLE, 15)
-        font_credit = ImageFont.truetype(FONT_TITLE, 14)
+        font_tag = ImageFont.truetype(FONT_TITLE, 14)
+        font_box_title = ImageFont.truetype(FONT_TITLE, 13)
+        font_name_gold = ImageFont.truetype(FONT_TITLE, 19)
+        font_name_plat = ImageFont.truetype(FONT_TITLE, 18)
+        font_name_cyan = ImageFont.truetype(FONT_TITLE, 17)
+        font_sub = ImageFont.truetype(FONT_TITLE, 12)
+        font_stamp = ImageFont.truetype(FONT_TITLE, 14)
     except:
         font_hl = ImageFont.load_default()
         font_wos = font_hl
         font_tag = font_hl
-        font_credit = font_hl
+        font_box_title = font_hl
+        font_name_gold = font_hl
+        font_name_plat = font_hl
+        font_name_cyan = font_hl
+        font_sub = font_hl
+        font_stamp = font_hl
 
-    logo_y = cy_medallion - 40
-    # Placa entalhada para o título
-    plaque_w = 340
+    # 1. Placa Superior Nobre do Título (y = 230 até 390)
+    plaque_w = 380
     plaque_h = 160
+    logo_y = 230
+
     draw_beveled_rect(draw, [right_cx - plaque_w // 2, logo_y, right_cx + plaque_w // 2, logo_y + plaque_h],
                       fill=(18, 22, 32, 255),
                       light=(85, 105, 140, 240),
                       dark=(8, 10, 15, 255),
                       width=3)
-    # Filete dourado interno
+    # Filete dourado duplo interno
     draw.rectangle([right_cx - plaque_w // 2 + 6, logo_y + 6, right_cx + plaque_w // 2 - 6, logo_y + plaque_h - 6],
                    outline=(180, 140, 50, 200), width=2)
 
@@ -298,29 +309,115 @@ def create_bezel_soltia(width=1920, height=1080):
                  fill=(255, 215, 90, 255))
 
     # Sub-rótulo Recompilação Nativa
-    txt_sub = "RECOMPILACAO NATIVA C++17"
+    txt_sub = "EDICAO DEFINITIVA RECOMPILADA"
     bbox_sub = draw.textbbox((0, 0), txt_sub, font=font_tag)
     w_sub = bbox_sub[2] - bbox_sub[0]
     draw.text((right_cx - w_sub // 2, logo_y + 126), txt_sub, font=font_tag, fill=(140, 170, 210, 230))
 
-    # Detalhes informativos e créditos no painel direito
-    right_labels = [
-        "DAVID KALIL BRAGA (2026)",
-        "EA MOBILE / OPEN MIND TEAM",
-        "PROPORCAO: 3:4 ORIGINAL",
-        "AUDIO: GENERAL MIDI SF2",
-        "FIDELIDADE PIXEL-PERFECT"
-    ]
-    r_start_y = logo_y + plaque_h + 30
-    for idx, lbl in enumerate(right_labels):
-        bbox_l = draw.textbbox((0, 0), lbl, font=font_credit)
-        wl = bbox_l[2] - bbox_l[0]
-        if "DAVID" in lbl:
-            draw.text((right_cx - wl // 2, r_start_y + idx * 36), lbl, font=font_credit, fill=(245, 210, 110, 240))
-        elif "EA MOBILE" in lbl:
-            draw.text((right_cx - wl // 2, r_start_y + idx * 36), lbl, font=font_credit, fill=(160, 185, 215, 210))
-        else:
-            draw.text((right_cx - wl // 2, r_start_y + idx * 36), lbl, font=font_credit, fill=(0, 210, 255, 220))
+    # 2. Cartucho Heráldico Inferior (y = 430 até 870) — Amplo, harmonioso e simétrico
+    box_w = 390
+    box_h = 440
+    box_y = 430
+
+    draw_beveled_rect(draw, [right_cx - box_w // 2, box_y, right_cx + box_w // 2, box_y + box_h],
+                      fill=(15, 19, 27, 245),
+                      light=(70, 90, 120, 200),
+                      dark=(6, 8, 12, 255),
+                      width=2)
+    # Filete dourado interno refinado
+    draw.rectangle([right_cx - box_w // 2 + 5, box_y + 5, right_cx + box_w // 2 - 5, box_y + box_h - 5],
+                   outline=(150, 120, 45, 170), width=1)
+
+    # Rebites de bronze nos cantos
+    for cx_c, cy_c in [
+        (right_cx - box_w // 2 + 10, box_y + 10),
+        (right_cx + box_w // 2 - 10, box_y + 10),
+        (right_cx - box_w // 2 + 10, box_y + box_h - 10),
+        (right_cx + box_w // 2 - 10, box_y + box_h - 10)
+    ]:
+        draw.ellipse([cx_c - 3, cy_c - 3, cx_c + 3, cy_c + 3], fill=(190, 150, 60, 220), outline=(50, 40, 15, 255))
+
+    # Título do Cartucho
+    txt_hdr = "— ARQUIVO DE PRESERVACAO —"
+    bbox_hdr = draw.textbbox((0, 0), txt_hdr, font=font_box_title)
+    w_hdr = bbox_hdr[2] - bbox_hdr[0]
+    draw.text((right_cx - w_hdr // 2, box_y + 22), txt_hdr, font=font_box_title, fill=(215, 180, 85, 230))
+
+    # Divisor 1
+    d1_y = box_y + 56
+    draw.line([(right_cx - 120, d1_y), (right_cx + 120, d1_y)], fill=(130, 105, 45, 160), width=1)
+    draw.polygon([(right_cx, d1_y - 4), (right_cx + 4, d1_y), (right_cx, d1_y + 4), (right_cx - 4, d1_y)],
+                 fill=(220, 185, 80, 220))
+
+    # Bloco 1: David Kalil Braga
+    b1_y = box_y + 78
+    txt_dk = "DAVID KALIL BRAGA"
+    bbox_dk = draw.textbbox((0, 0), txt_dk, font=font_name_gold)
+    w_dk = bbox_dk[2] - bbox_dk[0]
+    draw.text((right_cx - w_dk // 2 + 1, b1_y + 1), txt_dk, font=font_name_gold, fill=(0, 0, 0, 240))
+    draw.text((right_cx - w_dk // 2, b1_y), txt_dk, font=font_name_gold, fill=(250, 215, 110, 255))
+
+    txt_dk_sub = "RECOMPILACAO C++17 • ENGENHARIA"
+    bbox_dk_sub = draw.textbbox((0, 0), txt_dk_sub, font=font_sub)
+    w_dk_sub = bbox_dk_sub[2] - bbox_dk_sub[0]
+    draw.text((right_cx - w_dk_sub // 2, b1_y + 26), txt_dk_sub, font=font_sub, fill=(160, 180, 205, 210))
+
+    # Divisor 2
+    d2_y = box_y + 150
+    draw.line([(right_cx - 120, d2_y), (right_cx + 120, d2_y)], fill=(130, 105, 45, 160), width=1)
+    draw.polygon([(right_cx, d2_y - 4), (right_cx + 4, d2_y), (right_cx, d2_y + 4), (right_cx - 4, d2_y)],
+                 fill=(220, 185, 80, 220))
+
+    # Bloco 2: EA Mobile / Open Mind Team
+    b2_y = box_y + 172
+    txt_ea = "EA MOBILE • OPEN MIND"
+    bbox_ea = draw.textbbox((0, 0), txt_ea, font=font_name_plat)
+    w_ea = bbox_ea[2] - bbox_ea[0]
+    draw.text((right_cx - w_ea // 2 + 1, b2_y + 1), txt_ea, font=font_name_plat, fill=(0, 0, 0, 240))
+    draw.text((right_cx - w_ea // 2, b2_y), txt_ea, font=font_name_plat, fill=(225, 240, 255, 255))
+
+    txt_ea_sub = "DESENVOLVEDORES ORIGINAIS (2006)"
+    bbox_ea_sub = draw.textbbox((0, 0), txt_ea_sub, font=font_sub)
+    w_ea_sub = bbox_ea_sub[2] - bbox_ea_sub[0]
+    draw.text((right_cx - w_ea_sub // 2, b2_y + 26), txt_ea_sub, font=font_sub, fill=(160, 180, 205, 210))
+
+    # Divisor 3
+    d3_y = box_y + 244
+    draw.line([(right_cx - 120, d3_y), (right_cx + 120, d3_y)], fill=(130, 105, 45, 160), width=1)
+    draw.polygon([(right_cx, d3_y - 4), (right_cx + 4, d3_y), (right_cx, d3_y + 4), (right_cx - 4, d3_y)],
+                 fill=(220, 185, 80, 220))
+
+    # Bloco 3: Fidelidade Técnica e Audiovisual
+    b3_y = box_y + 266
+    txt_fid = "PROPORCAO: 3:4 ORIGINAL"
+    bbox_fid = draw.textbbox((0, 0), txt_fid, font=font_name_cyan)
+    w_fid = bbox_fid[2] - bbox_fid[0]
+    draw.text((right_cx - w_fid // 2 + 1, b3_y + 1), txt_fid, font=font_name_cyan, fill=(0, 0, 0, 240))
+    draw.text((right_cx - w_fid // 2, b3_y), txt_fid, font=font_name_cyan, fill=(0, 225, 255, 245))
+
+    txt_fid_sub = "TAXA FIEL 15 FPS • SOM MIDI SF2"
+    bbox_fid_sub = draw.textbbox((0, 0), txt_fid_sub, font=font_sub)
+    w_fid_sub = bbox_fid_sub[2] - bbox_fid_sub[0]
+    draw.text((right_cx - w_fid_sub // 2, b3_y + 26), txt_fid_sub, font=font_sub, fill=(110, 205, 235, 220))
+
+    # Divisor 4
+    d4_y = box_y + 338
+    draw.line([(right_cx - 120, d4_y), (right_cx + 120, d4_y)], fill=(130, 105, 45, 160), width=1)
+    draw.polygon([(right_cx, d4_y - 4), (right_cx + 4, d4_y), (right_cx, d4_y + 4), (right_cx - 4, d4_y)],
+                 fill=(220, 185, 80, 220))
+
+    # Bloco 4: Carimbo de Fidelidade
+    b4_y = box_y + 368
+    txt_st = "• FIDELIDADE PIXEL-PERFECT •"
+    bbox_st = draw.textbbox((0, 0), txt_st, font=font_stamp)
+    w_st = bbox_st[2] - bbox_st[0]
+    draw.text((right_cx - w_st // 2, b4_y), txt_st, font=font_stamp, fill=(235, 195, 95, 230))
+
+    # 3. Selo Sagrado Inferior em y = 920 (Alinhado com • SOLTIA • do lado esquerdo)
+    txt_sfoot = "— SOLTIA REBORN 2026 —"
+    bbox_sf = draw.textbbox((0, 0), txt_sfoot, font=font_stamp)
+    w_sf = bbox_sf[2] - bbox_sf[0]
+    draw.text((right_cx - w_sf // 2, 922), txt_sfoot, font=font_stamp, fill=(200, 165, 75, 210))
 
     # 3. Chanfro de Profundidade e Sombra Suave na junção com o jogo (Inner Shadow)
     # Borda esquerda da tela do jogo (lado esquerdo)

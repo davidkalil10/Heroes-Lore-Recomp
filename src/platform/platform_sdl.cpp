@@ -239,6 +239,37 @@ static void setVmInstanceBool(Object* obj, const std::string& fieldName, bool va
   }
 }
 
+static void setVmInstanceShort(Object* obj, const std::string& fieldName, int16_t val) {
+  if (!obj || obj->kind != K_INST || !obj->cls) return;
+  Instance* inst = static_cast<Instance*>(obj);
+  ClassInfo* cls = obj->cls;
+  FieldInfo* targetField = nullptr;
+
+  std::vector<std::string> candidateNames = { fieldName };
+  if (fieldName.rfind("var_short_", 0) == 0) {
+    candidateNames.push_back(fieldName.substr(10));
+  } else if (fieldName.rfind("var_", 0) == 0) {
+    candidateNames.push_back(fieldName.substr(4));
+  }
+
+  for (ClassInfo* cur = cls; cur; cur = cur->super) {
+    for (const auto& name : candidateNames) {
+      for (auto& f : cur->fields) {
+        if (f.name == name && f.desc == "S" && !f.isStatic) {
+          targetField = &f;
+          break;
+        }
+      }
+      if (targetField) break;
+    }
+    if (targetField) break;
+  }
+
+  if (targetField && !targetField->isStatic && targetField->index >= 0 && targetField->index < (int)inst->f.size()) {
+    inst->f[targetField->index].i = val;
+  }
+}
+
 static Object* getVmStaticObjectByDesc(VM& vm, const std::string& className, const std::string& fieldName, const std::string& desc) {
   auto it = vm.classes.find(className);
   if (it == vm.classes.end()) return nullptr;
@@ -347,7 +378,37 @@ static void updateJavaViewportVariables(VM& vm) {
     }
   }
 
-  // 6. Redefine o clip do Graphics principal
+  // 6. Atualiza limites de culling dos objetos de cenário (classe aj) já carregados no mapa
+  // No bytecode original, o construtor de aj pré-calcula this.b = (short)(as.a + imgW/2) e this.e = (short)(as.b + imgH).
+  // Ao alternar para widescreen (ex: 240 -> 568), objetos que ficam além de 240px eram descartados pelo teste n4 > this.b.
+  for (Object* obj : vm.allObjs) {
+    if (!obj || obj->kind != K_INST || !obj->cls) continue;
+    if (obj->cls->name == "aj") {
+      Instance* inst = static_cast<Instance*>(obj);
+      int imgW = 32, imgH = 32;
+      for (ClassInfo* cur = inst->cls; cur; cur = cur->super) {
+        for (auto& f : cur->fields) {
+          if (!f.isStatic && f.isRef && f.desc == "Ljavax/microedition/lcdui/Image;") {
+            if (f.index >= 0 && f.index < (int)inst->f.size()) {
+              Object* imgO = inst->f[f.index].o;
+              if (imgO && imgO->kind == K_OBJECT) {
+                ImageObj* img = reinterpret_cast<ImageObj*>(imgO);
+                if (img->width > 0) imgW = img->width;
+                if (img->height > 0) imgH = img->height;
+              }
+            }
+            break;
+          }
+        }
+      }
+      int16_t newB = (int16_t)(g_screenWidth + (imgW >> 1));
+      int16_t newE = (int16_t)((g_screenHeight - 21) + imgH);
+      setVmInstanceShort(obj, "b", newB);
+      setVmInstanceShort(obj, "e", newE);
+    }
+  }
+
+  // 7. Redefine o clip do Graphics principal
   if (g_screenGraphics) {
     g_screenGraphics->resetClip();
   }
