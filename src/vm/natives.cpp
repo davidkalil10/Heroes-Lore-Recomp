@@ -989,6 +989,7 @@ static void PrintStream_println_str(VM&, Value* args, Value*) {
 }
 
 static void aj_draw_native(VM& vm, Value* args, Value*);
+static void bl_a_native(VM& vm, Value* args, Value* ret);
 
 // -------------------------------------------------------------
 // Registro de todos os métodos nativos
@@ -1159,6 +1160,9 @@ void VM::registerNatives() {
 
   // Otimização e correção de viewport widescreen para o motor de jogo
   reg("aj.a:(Ljavax/microedition/lcdui/Graphics;II)V", aj_draw_native);
+
+  // Menu 'Sobre' (Wind of Soltia) - hook para verificação de atualização OTA via tecla '5' / Action
+  reg("bl.a:(II)Z", bl_a_native);
 }
 
 // -------------------------------------------------------------
@@ -1218,6 +1222,85 @@ static void aj_draw_native(VM& vm, Value* args, Value*) {
   }
 
   g->drawImage(img, n4, n5, 33);
+}
+
+// -------------------------------------------------------------
+// bl: Tela 'Sobre' / Créditos (Wind of Soltia)
+// -------------------------------------------------------------
+static void bl_a_native(VM& vm, Value* args, Value* ret) {
+  Object* self = args[0].o;
+  int n2 = args[1].i; // GameAction
+  int n3 = args[2].i; // KeyCode
+
+  // Tecla '5' (53), Enter ou Fire (8 / -5) aciona checagem de atualizações OTA
+  if (n3 == 53 || n3 == -5 || n2 == 8) {
+    Platform::checkForUpdates();
+    ret[0].i = 1;
+    return;
+  }
+
+  // 1. Invoca this.b(n2, n3)
+  Value subArgs[2];
+  subArgs[0].i = n2;
+  subArgs[1].i = n3;
+  Value subRet[2];
+  vm.invokeVirtual(self, "b:(II)Z", subArgs, 2, subRet);
+  if (subRet[0].i != 0) {
+    ret[0].i = 1;
+    return;
+  }
+
+  // 2. Invoca this.c(n2, n3)
+  vm.invokeVirtual(self, "c:(II)Z", subArgs, 2, subRet);
+  if (subRet[0].i != 0) {
+    ret[0].i = 1;
+    return;
+  }
+
+  // 3. Se tecla RSK (bh.var_int_a), fecha a tela de Sobre
+  ClassInfo* bhClass = vm.findClass("bh");
+  int rskKey = -7;
+  if (bhClass) {
+    FieldInfo* fRsk = vm.findField(bhClass, "a:I");
+    if (fRsk && fRsk->isStatic && fRsk->index >= 0 && fRsk->index < (int)bhClass->statics.size()) {
+      rskKey = bhClass->statics[fRsk->index].i;
+    }
+  }
+
+  if (n3 == rskKey) {
+    ClassInfo* cbClass = vm.mustClass("cb");
+    FieldInfo* fCbA = vm.findField(cbClass, "a:Lcb;");
+    if (fCbA && !fCbA->isStatic && self && self->kind == K_INST) {
+      Instance* inst = static_cast<Instance*>(self);
+      if (fCbA->index >= 0 && fCbA->index < (int)inst->f.size()) {
+        Object* parentCb = inst->f[fCbA->index].o;
+        if (parentCb && parentCb->cls) {
+          Value pRet[2];
+          vm.invokeVirtual(parentCb, "a:()V", nullptr, 0, pRet);
+        }
+      }
+    }
+
+    if (bhClass) {
+      FieldInfo* fbA = vm.findField(bhClass, "a:Lb;");
+      FieldInfo* fbB = vm.findField(bhClass, "b:Lb;");
+      FieldInfo* fbC = vm.findField(bhClass, "c:Lb;");
+      auto setFlag = [&](FieldInfo* fi) {
+        if (fi && fi->isStatic && fi->index >= 0 && fi->index < (int)bhClass->statics.size()) {
+          Object* bObj = bhClass->statics[fi->index].o;
+          if (bObj && bObj->kind == K_INST && bObj->cls) {
+            FieldInfo* fBoolB = vm.findField(bObj->cls, "b:Z");
+            if (fBoolB && fBoolB->index >= 0 && fBoolB->index < (int)static_cast<Instance*>(bObj)->f.size()) {
+              static_cast<Instance*>(bObj)->f[fBoolB->index].i = 1;
+            }
+          }
+        }
+      };
+      setFlag(fbA); setFlag(fbB); setFlag(fbC);
+    }
+  }
+
+  ret[0].i = 1;
 }
 
 }  // namespace hl

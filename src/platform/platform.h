@@ -29,6 +29,10 @@ public:
   static void framePacerWait();
   static int getTargetFps();
 
+  // Recursos Passo 8: Detecção e Atualização OTA via GitHub Releases
+  static void checkForUpdates();
+  static void drawText(void* renderer, const std::string& text, int x, int y, int charW, int charH, uint8_t alpha = 255);
+
   // Sistema de Arquivos / Assets Portável (PC, Android APK, Switch RomFS)
   static std::vector<uint8_t> readAsset(const std::string& path);
   static std::string getStorageDir();

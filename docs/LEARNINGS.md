@@ -338,3 +338,27 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
        - **Cartucho Heráldico Inferior (y = 430 a 870):** Caixa ampla com rebites de bronze nos cantos, filete dourado fino e divisores rúnicos com losangos facetados entre cada bloco de informação.
     2. Os textos ganharam tipografia hierárquica diferenciada (ouro para nomes principais, platina para estúdios, ciano neon para especificações de tela e áudio, prata para subtítulos).
     3. Alinhamento vertical simétrico milimétrico com o painel esquerdo: o selo inferior `— SOLTIA REBORN 2026 —` repousa em `y = 922`, perfeitamente espelhado com o carimbo sagrado `• SOLTIA •` do lado esquerdo.
+
+## Sessão 9 (Passo 8 — Sistema de Detecção e Atualização Automática OTA via GitHub Releases)
+
+- **Viabilidade e Arquitetura Multiplataforma para Atualizações In-App:**
+  - *Windows:* Uso de `WinHTTP` (`winhttp.h` / `winhttp.lib`), dispensando qualquer DLL ou dependência externa de terceiros para conexões HTTPS com TLS moderno. O executável ativo (`heroes_lore.exe`) pode ser renomeado em execução para `.exe.old` e substituído pelo novo binário diretamente, reiniciando via `CreateProcessA`.
+  - *Nintendo Switch:* A devkitPro fornece `libcurl` e `mbedtls` nas portlibs (`-lcurl -lmbedtls -lmbedx509 -lmbedcrypto`). O sistema de arquivos FAT32 do cartão SD permite renomear e substituir o arquivo ativo `sdmc:/switch/heroes_lore/heroes_lore.nro` sem bloqueio de escrita. A reinicialização para o novo executável ocorre limpamente via `envSetNextLoad("sdmc:/switch/heroes_lore/heroes_lore.nro", "")`.
+  - *Linux (Steam Deck / Desktop):* Substituição in-place de executável / AppImage via `libcurl` com preservação de permissões (`chmod 0755`), reiniciando via `execv()`.
+  - *Android:* No Android moderno, o sistema operacional restringe a substituição direta de bibliotecas/APKs em execução sem o instalador do sistema (`PackageInstaller`). O `Updater` baixa o APK para a pasta de arquivos (`getStorageDir()`) e abre o diálogo nativo de atualização sem perder saves através de `ACTION_VIEW` com permissão `REQUEST_INSTALL_PACKAGES`.
+
+- **Experiência do Usuário (UX) e Proteção de Progresso (Save Game Safe):**
+  - O aplicativo **nunca** força downloads automáticos nem fecha o jogo de forma abrupta.
+  - Ao detectar uma nova versão (seja na inicialização em background ou via verificação manual no menu "Sobre" / tecla <kbd>F9</kbd>), o jogador é apresentado a uma caixa de diálogo nobre de Soltia (estilo ardósia com filetes dourados) que exibe claramente a versão atual e a nova versão disponível.
+  - O diálogo inclui um alerta em destaque com a mensagem:
+    `"ATENCAO: Salve seu progresso no jogo antes de atualizar, pois o jogo precisara reiniciar!"`
+  - O usuário possui duas opções explícitas:
+    - `[5 / A] Salvei e Quero Atualizar`: Inicia o download com barra gráfica percentual de progresso em tempo real e reinicializa/aplica.
+    - `[7 / B] Cancelar (Salvar Primeiro)`: Fecha o modal imediatamente e devolve o controle do jogo sem baixar nada, permitindo que ele salve seu progresso com tranquilidade no menu antes de prosseguir.
+  - Durante o tempo em que o modal de atualização está ativo, todos os eventos de controle são capturados com prioridade total pelo `Updater`, impedindo que o herói ou menus do jogo se movimentem por trás da janela de diálogo.
+
+- **Integração Orgânica ao Menu do Jogo J2ME (`bl.class` / "Sobre"):**
+  - A tela "Sobre" (`bl.class`) não possuía ação atribuída à tecla '5' (Ação/Ataque) no código original de 2008 (apenas a tecla RSK/'7' fechava a janela).
+  - Implementado o hook nativo `bl_a_native` registrado na VM para `bl.a:(II)Z` em `src/vm/natives.cpp`. Quando o jogador pressiona '5', Enter ou o botão <kbd>A</kbd> na tela "Sobre", o aplicativo dispara a checagem assíncrona de atualização OTA com feedback imediato via OSD e modal.
+  - Os créditos da tela "Sobre" foram atualizados via `tools/patch_credits.py` para exibir a dica visual intuitiva `[5 / A]: ATUALIZAR`, tornando o recurso um item oficial e visível de dentro da interface do próprio jogo.
+

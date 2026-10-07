@@ -151,15 +151,37 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
   - [x] Persistência de Configurações:
     - Salva e restaura automaticamente as opções do usuário e o tamanho/posição da janela em `hl_settings.ini`.
 
+- [x] Passo 8 — Sistema de Detecção e Atualização Automática OTA via GitHub Releases (In-App Updater):
+  - [x] Arquitetura de Rede Nativa e Segura por Plataforma:
+    - **Windows:** Utiliza a API de sistema `WinHTTP` (`winhttp.h` / `winhttp.lib`), suportando HTTPS/TLS moderno, redirecionamentos automáticos e headers de User-Agent sem demandar qualquer DLL externa.
+    - **Nintendo Switch & Linux:** Utiliza `libcurl` e `mbedtls` fornecidos pelas portlibs oficiais devkitPro e sistema, com callbacks de progresso em tempo real e verificação de integridade de buffers.
+    - **Android:** Download do APK atualizado diretamente no armazenamento interno com disparo de intenção de instalação (`ACTION_VIEW`) via `PackageInstaller` preservando saves e dados locais.
+  - [x] Comparação Semântica de Versões & Parser Leve de Releases:
+    - Algoritmo em C++ para parsing de JSON da GitHub API (`/repos/davidkalil10/Heroes-Lore-Recomp/releases/latest`) e comparação semântica (`v1.0.2` < `v1.0.3`) com suporte a tags alfanuméricas e sanitização de prefixos `v`.
+  - [x] Diálogo Modal Nobre e Segurança de Salvamento (Save Game Safe):
+    - Visual imersivo medieval de Soltia: moldura de pedra ardósia, filetes de ouro polido, rebites de bronze e tipografia legível via fonte bitmap OSD.
+    - **Aviso Obrigatório de Salvamento:** Exibe em destaque o alerta `"ATENCAO: Salve seu progresso no jogo antes de atualizar, pois o jogo precisara reiniciar!"` antes de qualquer download.
+    - Opção explícita de cancelamento `[7 / B] Cancelar (Salvar Primeiro)` para fechar o diálogo sem tocar em arquivos, permitindo que o jogador salve seu jogo antes de prosseguir.
+    - Opção `[5 / A] Salvei e Quero Atualizar` com barra gráfica de progresso em tempo real (0 a 100%).
+    - Bloqueio total de propagação de inputs para a VM enquanto o modal estiver ativo, garantindo foco exclusivo na interação do atualizador.
+  - [x] Integração Orgânica ao Menu do Jogo J2ME:
+    - Hook nativo `bl_a_native` registrado na VM para `bl.a:(II)Z` em `src/vm/natives.cpp`. Ao pressionar a tecla '5', Enter ou o botão <kbd>A</kbd> na tela "Sobre" (`bl.class`), a checagem OTA é disparada imediatamente.
+    - Texto da tela "Sobre" atualizado via `tools/patch_credits.py` para incluir a indicação visual oficial `[5 / A]: ATUALIZAR`.
+    - Atalho global no teclado via tecla <kbd>F9</kbd> e checagem assíncrona silenciosa em segundo plano durante a inicialização do jogo.
+
 ## Versões e Releases Oficiais
 - **v1.0.0:** Primeiro release oficial da recompilação nativa em C++17 (Passos 1 a 6 concluídos: áudio MIDI/SF2, salvamento RMS, typematic controls, gamepads, APK Android, Homebrew Nintendo Switch).
 - **v1.0.1:** Ajustes de empacotamento, documentação e distribuição multiplataforma.
 - **v1.0.2:** Passo 7 Finalizado com Sucesso — True Widescreen 16:9, bezels temáticos artísticos em alta definição, seletor de FPS (15/30), hook nativo de cenário `aj`, menus centralizados em tempo real, OSD responsivo para Mobile/Switch/PC, e controles ergonômicos touch & gamepad.
+- **v1.0.3 (Em preparação):** Passo 8 Finalizado com Sucesso — Sistema Completo de Atualização OTA In-App via GitHub Releases integrado ao menu "Sobre" do jogo, suporte multiplataforma (Windows, Switch, Android, Linux), aviso de segurança para salvar o jogo antes de reiniciar e barra de progresso visual.
 
 ## Próximos passos (Roadmap)
-- [ ] Passo 8: Cloud Save & Sincronização Cruzada (PC <-> Celular <-> Switch).
-- [ ] Passo 9: Seletor de Idiomas / Localização (PT-BR, EN, ES).
-- [ ] Passo 10: Port Imersivo VR / Realidade Mista para Meta Quest (OpenXR, Voxel/Diorama 3D Tabletop & Primeira Pessoa 360°). Detalhado em [`docs/VR_QUEST_CONCEPT.md`](VR_QUEST_CONCEPT.md).
+- [x] Passo 8: Possibilidade de detecção de update disponível no github releases para atualizar o app diretamente via rede (concluído para todas as plataformas)
+- [ ] Passo 9: Cloud Save & Sincronização Cruzada (PC/Linux <-> Celular <-> Switch).
+- [ ] Passo 10: Seletor de Idiomas / Localização (PT-BR, EN, ES).
+- [ ] Passo 11: Port Imersivo VR / Realidade Mista para Meta Quest (OpenXR, Voxel/Diorama 3D Tabletop & Primeira Pessoa 360°). Detalhado em [`docs/VR_QUEST_CONCEPT.md`](VR_QUEST_CONCEPT.md).
+
+
 
 
 

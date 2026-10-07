@@ -41,3 +41,5 @@ romfs/
 .vscode/
 *.user
 "dados de consulta/heroes_lore_modern"
+__pycache__/
+*.pyc

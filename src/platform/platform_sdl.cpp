@@ -1,5 +1,6 @@
 // platform_sdl.cpp — backend SDL2 com renderização 240x320 escalada, áudio SDL_mixer e mapeamento de teclado
 #include "platform.h"
+#include "updater.h"
 #include "midi_synth.h"
 #include "midp/midp.h"
 #include "vm/vm.h"
@@ -570,8 +571,12 @@ bool Platform::init(int scale) {
 #elif defined(__SWITCH__)
   Platform::showOsdMessage("Heroes Lore: Wind of Soltia\n[R3: FPS | Sel+Start: 16:9 | Sel+R3: Moldura]");
 #else
-  Platform::showOsdMessage("Heroes Lore: Wind of Soltia\n[F5: Moldura | F6: FPS | F7: 16:9 | F11: Tela Cheia]");
+  Platform::showOsdMessage("Heroes Lore: Wind of Soltia\n[F5: Moldura | F6: FPS | F7: 16:9 | F9: Atualizar | F11: Tela Cheia]");
 #endif
+
+  // Inicializa o subsistema de atualização OTA e dispara checagem em background
+  Updater::init();
+  Updater::checkAsync(false);
 
   return true;
 }
@@ -1270,6 +1275,33 @@ bool Platform::pollEvents(VM& vm) {
 #endif
   SDL_Event ev;
   while (SDL_PollEvent(&ev)) {
+    // Se o diálogo modal do Updater estiver ativo, direciona os eventos com prioridade total
+    if (Updater::isPromptActive()) {
+      int key = 0;
+      if (ev.type == SDL_KEYDOWN) {
+        if (ev.key.keysym.sym == SDLK_RETURN || ev.key.keysym.sym == SDLK_KP_ENTER ||
+            ev.key.keysym.sym == SDLK_SPACE || ev.key.keysym.sym == SDLK_5 || ev.key.keysym.sym == SDLK_KP_5) {
+          key = 53; // Confirmar
+        } else if (ev.key.keysym.sym == SDLK_ESCAPE || ev.key.keysym.sym == SDLK_BACKSPACE ||
+                   ev.key.keysym.sym == SDLK_7 || ev.key.keysym.sym == SDLK_KP_7) {
+          key = -7; // Cancelar
+        }
+      } else if (ev.type == SDL_CONTROLLERBUTTONDOWN) {
+        if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_A) {
+          key = 53; // Confirmar (A / 5)
+        } else if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_B) {
+          key = -7; // Cancelar (B / 7)
+        }
+      } else if (ev.type == SDL_FINGERDOWN || ev.type == SDL_MOUSEBUTTONDOWN) {
+        key = 53; // Toque na tela confirma/avança
+      }
+
+      if (key != 0) {
+        Updater::handleInput(key);
+      }
+      continue; // Bloqueia propagação para o motor de jogo enquanto o modal estiver aberto
+    }
+
     if (ev.type == SDL_QUIT) {
       s_quit = true;
       return false;
@@ -1470,7 +1502,7 @@ bool Platform::pollEvents(VM& vm) {
 
     // Teclado
     else if (ev.type == SDL_KEYDOWN) {
-      if (ev.key.keysym.sym == SDLK_F5 || ev.key.keysym.sym == SDLK_F9) {
+      if (ev.key.keysym.sym == SDLK_F5) {
         if (!ev.key.repeat) Platform::toggleBezel();
         continue;
       } else if (ev.key.keysym.sym == SDLK_F6 || ev.key.keysym.sym == SDLK_F8) {
@@ -1478,6 +1510,9 @@ bool Platform::pollEvents(VM& vm) {
         continue;
       } else if (ev.key.keysym.sym == SDLK_F7 || ev.key.keysym.sym == SDLK_F10) {
         if (!ev.key.repeat) Platform::toggleAspect(&vm);
+        continue;
+      } else if (ev.key.keysym.sym == SDLK_F9) {
+        if (!ev.key.repeat) Platform::checkForUpdates();
         continue;
       } else if (ev.key.keysym.sym == SDLK_F11 ||
                  (ev.key.keysym.sym == SDLK_RETURN && (ev.key.keysym.mod & KMOD_ALT))) {
@@ -1888,10 +1923,16 @@ void Platform::present() {
   // Desenha banner de notificação OSD
   drawOsd(winW, winH);
 
+  // Renderiza diálogo modal do atualizador OTA se estiver ativo
+  if (Updater::isPromptActive()) {
+    Updater::drawModal(s_renderer, winW, winH);
+  }
+
   SDL_RenderPresent(s_renderer);
 }
 
 void Platform::shutdown() {
+  Updater::shutdown();
   MidiSynth::shutdown();
   for (auto* pad : s_controllers) {
     if (pad) SDL_GameControllerClose(pad);
@@ -2149,6 +2190,37 @@ std::string Platform::getStorageDir() {
 #else
   return ".";
 #endif
+}
+
+void Platform::checkForUpdates() {
+  Updater::checkAsync(true);
+}
+
+void Platform::drawText(void* rendererPtr, const std::string& text, int x, int y, int charW, int charH, uint8_t alpha) {
+  SDL_Renderer* rend = (SDL_Renderer*)rendererPtr;
+  if (!rend) rend = s_renderer;
+  if (!rend) return;
+  if (!s_texFontOsd) {
+    s_texFontOsd = loadRgbaTexture("font_osd");
+  }
+  if (!s_texFontOsd) return;
+
+  int texW = 0, texH = 0;
+  SDL_QueryTexture(s_texFontOsd, nullptr, nullptr, &texW, &texH);
+  int srcCellW = (texW > 0) ? (texW / 16) : 22;
+  int srcCellH = (texH > 0) ? (texH / 6) : 36;
+
+  SDL_SetTextureAlphaMod(s_texFontOsd, alpha);
+  for (size_t i = 0; i < text.length(); i++) {
+    char c = text[i];
+    if (c < 32 || c > 126) c = ' ';
+    int idx = c - 32;
+    int col = idx % 16;
+    int row = idx / 16;
+    SDL_Rect src = { col * srcCellW, row * srcCellH, srcCellW, srcCellH };
+    SDL_Rect dst = { x + (int)i * charW, y, charW, charH };
+    SDL_RenderCopy(rend, s_texFontOsd, &src, &dst);
+  }
 }
 
 } // namespace hl

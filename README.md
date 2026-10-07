@@ -84,9 +84,10 @@ O mapeamento foi planejado com ergonomia moderna para controles USB/Bluetooth, t
 | **Próxima Poção (Direita)** | <kbd>]</kbd>, <kbd>.</kbd> ou <kbd>#</kbd> | <kbd>#</kbd> (Numpad) | `#` |
 | **Abrir/Fechar Minimapa** | <kbd>M</kbd>, <kbd>R</kbd>, <kbd>O</kbd> ou <kbd>0</kbd> | <kbd>Num 0</kbd> | `0` |
 | **Atalhos Rápidos** | <kbd>*</kbd> | <kbd>*</kbd> (Numpad) | `*` |
-| 🖼️ **Alternar Moldura (Bezel)** | <kbd>F5</kbd> ou <kbd>F9</kbd> | — | — |
+| 🖼️ **Alternar Moldura (Bezel)** | <kbd>F5</kbd> | — | — |
 | ⚡ **Alternar FPS (15 <-> 30 Turbo)** | <kbd>F6</kbd> ou <kbd>F8</kbd> | — | — |
 | 🖥️ **Alternar Widescreen (3:4 <-> 16:9)** | <kbd>F7</kbd> ou <kbd>F10</kbd> | — | — |
+| 🔄 **Checar Atualização (OTA In-App)** | <kbd>F9</kbd> ou Menu Sobre (<kbd>5</kbd> / <kbd>A</kbd>) | — | — |
 | 📺 **Tela Cheia (Fullscreen)** | <kbd>F11</kbd> ou <kbd>Alt + Enter</kbd> | — | — |
 
 ---

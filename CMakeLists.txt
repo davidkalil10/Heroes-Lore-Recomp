@@ -19,6 +19,7 @@ set(SOURCES
     src/midp/midp.cpp
     src/platform/platform_sdl.cpp
     src/platform/midi_synth.cpp
+    src/platform/updater.cpp
 )
 
 add_executable(heroes_lore ${SOURCES})
@@ -46,6 +47,10 @@ elseif (TARGET PkgConfig::SDL2_MIXER)
     target_link_libraries(heroes_lore PRIVATE PkgConfig::SDL2_MIXER)
 else()
     target_link_libraries(heroes_lore PRIVATE ${SDL2_MIXER_LIBRARIES})
+endif()
+
+if (WIN32)
+    target_link_libraries(heroes_lore PRIVATE winhttp)
 endif()
 
 if (WIN32)
