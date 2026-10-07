@@ -49,6 +49,11 @@ static SDL_Window* s_window = nullptr;
 static SDL_Renderer* s_renderer = nullptr;
 static SDL_Texture* s_screenTexture = nullptr;
 static bool s_quit = false;
+static std::string s_executablePath = "";
+
+void Platform::setExecutablePath(const std::string& path) { s_executablePath = path; }
+std::string Platform::getExecutablePath() { return s_executablePath; }
+void Platform::requestQuit() { s_quit = true; }
 
 static std::vector<SDL_GameController*> s_controllers;
 static bool s_ltHeld = false;
@@ -1269,6 +1274,7 @@ static void getTouchCoords(const SDL_TouchFingerEvent& tf, int winW, int winH, f
 }
 
 bool Platform::pollEvents(VM& vm) {
+  if (s_quit) return false;
 #ifdef __SWITCH__
   if (!appletMainLoop()) {
     s_quit = true;
@@ -1294,8 +1300,17 @@ bool Platform::pollEvents(VM& vm) {
         } else if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_B) {
           key = -7; // Cancelar (B / 7)
         }
-      } else if (ev.type == SDL_FINGERDOWN || ev.type == SDL_MOUSEBUTTONDOWN) {
-        key = 53; // Toque na tela confirma/avança
+      } else if (ev.type == SDL_FINGERDOWN) {
+        int winW = 0, winH = 0;
+        SDL_GetWindowSize(s_window, &winW, &winH);
+        float tx = 0, ty = 0;
+        int tw = 0, th = 0;
+        getTouchCoords(ev.tfinger, winW, winH, tx, ty, tw, th);
+        Updater::handleClick((int)tx, (int)ty);
+        continue;
+      } else if (ev.type == SDL_MOUSEBUTTONDOWN) {
+        Updater::handleClick(ev.button.x, ev.button.y);
+        continue;
       }
 
       if (key != 0) {
@@ -2213,6 +2228,21 @@ std::string Platform::getStorageDir() {
   const char* path = SDL_AndroidGetInternalStoragePath();
   if (path && path[0] != '\0') return std::string(path);
   return ".";
+#elif defined(__linux__)
+  const char* xdg = getenv("XDG_DATA_HOME");
+  std::string dir;
+  if (xdg && xdg[0] != '\0') {
+    dir = std::string(xdg) + "/heroes_lore";
+  } else {
+    const char* home = getenv("HOME");
+    if (home && home[0] != '\0') {
+      dir = std::string(home) + "/.local/share/heroes_lore";
+    } else {
+      dir = "/tmp/heroes_lore";
+    }
+  }
+  mkdir(dir.c_str(), 0777);
+  return dir;
 #else
   return ".";
 #endif
@@ -2222,7 +2252,7 @@ void Platform::checkForUpdates() {
   Updater::checkAsync(true);
 }
 
-void Platform::drawText(void* rendererPtr, const std::string& text, int x, int y, int charW, int charH, uint8_t alpha) {
+void Platform::drawText(void* rendererPtr, const std::string& text, int x, int y, int charW, int charH, uint8_t alpha, int stepX) {
   SDL_Renderer* rend = (SDL_Renderer*)rendererPtr;
   if (!rend) rend = s_renderer;
   if (!rend) return;
@@ -2236,6 +2266,10 @@ void Platform::drawText(void* rendererPtr, const std::string& text, int x, int y
   int srcCellW = (texW > 0) ? (texW / 16) : 22;
   int srcCellH = (texH > 0) ? (texH / 6) : 36;
 
+  if (stepX <= 0) {
+    stepX = charW;
+  }
+
   SDL_SetTextureAlphaMod(s_texFontOsd, alpha);
   for (size_t i = 0; i < text.length(); i++) {
     char c = text[i];
@@ -2244,9 +2278,15 @@ void Platform::drawText(void* rendererPtr, const std::string& text, int x, int y
     int col = idx % 16;
     int row = idx / 16;
     SDL_Rect src = { col * srcCellW, row * srcCellH, srcCellW, srcCellH };
-    SDL_Rect dst = { x + (int)i * charW, y, charW, charH };
+    SDL_Rect dst = { x + (int)i * stepX, y, charW, charH };
     SDL_RenderCopy(rend, s_texFontOsd, &src, &dst);
   }
+}
+
+int Platform::getTextWidth(const std::string& text, int charW, int stepX) {
+  if (text.empty()) return 0;
+  if (stepX <= 0) stepX = charW;
+  return (int)(text.length() - 1) * stepX + charW;
 }
 
 } // namespace hl

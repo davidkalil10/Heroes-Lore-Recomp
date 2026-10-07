@@ -43,6 +43,9 @@ int main(int argc, char** argv) {
   setvbuf(stdout, nullptr, _IONBF, 0);
   setvbuf(stderr, nullptr, _IONBF, 0);
   using namespace hl;
+  if (argc > 0 && argv && argv[0]) {
+    Platform::setExecutablePath(argv[0]);
+  }
 
 #ifdef __SWITCH__
   s_bootLog = fopen("sdmc:/heroes_lore_boot.log", "a");

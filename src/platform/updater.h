@@ -71,8 +71,9 @@ public:
   static void dismissPrompt();
   static void confirmUpdate();
 
-  // Manipulação de entrada no diálogo (teclas 5/Enter/A e 7/ESC/B)
+  // Manipulação de entrada no diálogo (teclas 5/Enter/A e 7/ESC/B e cliques/toque)
   static bool handleInput(int key);
+  static void handleClick(int x, int y);
 
   // Renderização da interface modal e barra de progresso sobre o renderer SDL
   static void drawModal(SDL_Renderer* renderer, int winW, int winH);

@@ -427,3 +427,33 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
     2. A inicialização de sockets da libnx (`socketInitializeDefault()`) foi protegida para verificar o retorno de sucesso (`R_SUCCEEDED(rc)`), evitando falhas caso o console esteja offline ou em modo avião.
     3. Removido o cabeçalho `<thread>` de `updater.cpp`.
 
+## Sessão 13 (Aperfeiçoamento do Auto-Updater OTA Multiplataforma e Nova Identidade Visual)
+
+- **Correção de Cancelamento e Hit-Testing nos Botões do Modal:**
+  - *Diagnóstico:* Clicar em "Cancelar / Salvar Primeiro" era ignorado e disparava o download forçado em todas as plataformas.
+  - *Causa Raiz:*
+    1. No `pollEvents`, qualquer evento de toque (`SDL_FINGERDOWN`) ou clique de mouse estava forçando `key = 53` (Ação/Confirmar), sem verificar as coordenadas do clique.
+    2. O botão B do gamepad gerava `key = -7`, mas `Updater::handleInput` checava apenas `key == 7`, ignorando o sinal negativo do MIDP RSK.
+  - *Correção:* Implementado `Updater::handleClick(int x, int y)` com hit-testing exato nos retângulos `s_btnConfirmRect` e `s_btnCancelRect`, além de fechar o aviso caso o usuário toque fora da janela modal. Adicionado suporte total a `-7`, `7`, `ESC`, `Backspace` e `55` para cancelamento.
+
+- **Design Visual Nobre da Janela Modal (Soltia Heritage):**
+  - *Ajuste de Proporção:* Limitada a largura máxima a 450px para evitar distorção horizontal em formato letterbox no modo 16:9 widescreen.
+  - *Espaçamento Natural de Caracteres:* Implementado o parâmetro `stepX` em `Platform::drawText` e `Platform::getTextWidth`, reduzindo o avanço horizontal entre glifos para sobrepor a margem transparente da fonte OSD. O texto agora é exibido como palavras contínuas e elegantes, sem letras excessivamente espaçadas.
+  - *Botões Gráficos Reais:* Substituídas as linhas de texto bruto por botões retangulares chanfrados iluminados (Ciano/Ouro para Atualizar e Ardósia Carmesim para Cancelar).
+
+- **Reinício Limpo e Encadeamento no Nintendo Switch (Eliminação do Erro de Fechamento):**
+  - *Diagnóstico:* O Switch baixava a atualização, mas exibia erro da Atmosphere ao tentar reiniciar e não aplicava o arquivo.
+  - *Causa Raiz:* Chamar `exit(0)` encerrava o processo abruptamente sem desinicializar os serviços da libnx, RomFS e SDL2. Além disso, o caminho de destino estava fixo em `/switch/heroes_lore/heroes_lore.nro`, enquanto muitos usuários executam diretamente de `/switch/heroes_lore.nro`.
+  - *Correção:*
+    1. O caminho do NRO executado é detectado dinamicamente via `argv[0]`.
+    2. O novo NRO é gravado no caminho ativo e duplicado tanto em `sdmc:/switch/heroes_lore.nro` quanto em `sdmc:/switch/heroes_lore/heroes_lore.nro`.
+    3. Em vez de `exit(0)`, chama-se `Platform::requestQuit()`. O loop principal de `main()` encerra normalmente, executa `Platform::shutdown()` com `romfsExit()` e retorna 0. O hbmenu então executa `envSetNextLoad` sem qualquer erro do sistema.
+
+- **Resolução do Executável do Windows ("Incompatível com o PC"):**
+  - *Causa Raiz:* O atualizador baixava o asset `heroes_lore_windows_x64.zip` e o renomeava diretamente para `heroes_lore.exe`.
+  - *Correção:* Atualizado o GitHub Actions (`build.yml`) para publicar tanto o ZIP quanto o executável nativo `heroes_lore.exe` na Release. O atualizador no Windows agora baixa diretamente o binário `heroes_lore.exe` e o substitui atomicamente.
+
+- **Resolução de Falha no Download do Linux (AppImage):**
+  - *Causa Raiz:* No AppImage, o diretório de execução atual (`"."`) é uma montagem somente-leitura em squashfs, causando falha de permissão no `fopen`.
+  - *Correção:* `Platform::getStorageDir()` agora utiliza o diretório de dados gravável do usuário (`~/.local/share/heroes_lore`). Ao aplicar a atualização, o caminho real do arquivo executado é lido via `getenv("APPIMAGE")`.
+

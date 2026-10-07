@@ -122,7 +122,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: heroes_lore_windows_zip
-          path: heroes_lore_windows_x64.zip
+          path: |
+            heroes_lore_windows_x64.zip
+            dist_windows/heroes_lore.exe
 
   # ==============================================================================
   # 3. Linux x86_64 (AppImage Portátil / Steam Deck)
@@ -285,6 +287,7 @@ jobs:
           generate_release_notes: true
           files: |
             heroes_lore.nro
+            heroes_lore.exe
             heroes_lore_windows_x64.zip
             heroes_lore_linux_x86_64.AppImage
             heroes_lore_android_universal.apk
