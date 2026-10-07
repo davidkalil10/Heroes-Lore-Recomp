@@ -411,4 +411,12 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - Criado o `ApkFileProvider` derivado de `ContentProvider` nativo, dispensando dependências externas do AndroidX.
   - Ao concluir o download de `heroes_lore_android_universal.apk`, o arquivo é renomeado para a extensão `.apk` e aberto via `content://org.libsdl.app.provider/...` com a flag `FLAG_GRANT_READ_URI_PERMISSION`.
   - O PackageInstaller do Android abre a tela oficial de atualização do sistema para que o jogador instale a nova versão mantendo os dados e saves intactos.
+- **Resolução de Crash Instantâneo no Boot (FindClass em Native Threads do Android):**
+  - *Diagnóstico:* Ao iniciar o jogo no celular, a aplicação fechava subitamente no primeiro segundo ("ameaçava abrir e fechava").
+  - *Causa Raiz:* No boot, `Platform::init` disparava `Updater::checkAsync(false)` em uma `std::thread` C++. Em threads nativas anexadas via `AttachCurrentThread`, a função `env->FindClass("org/libsdl/app/SDLActivity")` falha com `ClassNotFoundException` porque threads nativas utilizam o ClassLoader do sistema, que não enxerga as classes da aplicação. Sem o tratamento de `ExceptionClear()`, o runtime ART do Android abortava o processo imediatamente.
+  - *Correção Definitiva:*
+    1. A inicialização de JNI (`androidInitJni()`) foi transferida para `Updater::init()`, executando na thread principal do SDL onde o ClassLoader da aplicação está ativo.
+    2. A referência da classe `SDLActivity` é resolvida via `SDL_AndroidGetActivity()` + `GetObjectClass` (ou `FindClass` na thread principal) e salva como `NewGlobalRef` (`s_activityClass`), permitindo seu uso seguro e instantâneo em qualquer thread de background sem novas buscas.
+    3. Todas as chamadas JNI foram blindadas com `env->ExceptionCheck() / ExceptionClear()`, evitando que exceções não tratadas causem abort no ART.
+    4. O `ApkFileProvider` no `AndroidManifest.xml` foi corrigido para `android:exported="false"`, atendendo às restrições estritas de segurança do Android 12+.
 

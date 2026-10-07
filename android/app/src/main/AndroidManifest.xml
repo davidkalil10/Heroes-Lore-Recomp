@@ -104,7 +104,7 @@
         <provider
             android:name="org.libsdl.app.ApkFileProvider"
             android:authorities="org.libsdl.app.provider"
-            android:exported="true"
+            android:exported="false"
             android:grantUriPermissions="true" />
     </application>
 

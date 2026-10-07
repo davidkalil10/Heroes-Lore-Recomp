@@ -350,24 +350,65 @@ static bool curlDownloadFile(const std::string& url, const std::string& outPath)
 #endif
 
 #if defined(__ANDROID__)
+static jclass s_activityClass = nullptr;
+static jmethodID s_midHttpGet = nullptr;
+static jmethodID s_midDownloadFile = nullptr;
+static jmethodID s_midInstallApk = nullptr;
+
+static void androidInitJni() {
+  if (s_activityClass) return;
+  JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+  if (!env) return;
+
+  // Tenta obter a instância viva do SDLActivity
+  jobject activityObj = (jobject)SDL_AndroidGetActivity();
+  if (activityObj) {
+    jclass localClass = env->GetObjectClass(activityObj);
+    if (localClass) {
+      s_activityClass = (jclass)env->NewGlobalRef(localClass);
+      env->DeleteLocalRef(localClass);
+    }
+  }
+
+  // Fallback para FindClass se GetActivity ainda não estiver pronto
+  if (!s_activityClass) {
+    jclass localClass = env->FindClass("org/libsdl/app/SDLActivity");
+    if (localClass) {
+      s_activityClass = (jclass)env->NewGlobalRef(localClass);
+      env->DeleteLocalRef(localClass);
+    }
+  }
+
+  if (s_activityClass) {
+    s_midHttpGet = env->GetStaticMethodID(s_activityClass, "httpGet", "(Ljava/lang/String;)Ljava/lang/String;");
+    s_midDownloadFile = env->GetStaticMethodID(s_activityClass, "downloadFile", "(Ljava/lang/String;Ljava/lang/String;)Z");
+    s_midInstallApk = env->GetStaticMethodID(s_activityClass, "installApk", "(Ljava/lang/String;)V");
+  }
+
+  if (env->ExceptionCheck()) {
+    env->ExceptionClear();
+  }
+}
+
 static std::string androidHttpGet(const std::string& url) {
   JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
   if (!env) return "";
 
-  jclass activityClass = env->FindClass("org/libsdl/app/SDLActivity");
-  if (!activityClass) return "";
-
-  jmethodID mid = env->GetStaticMethodID(activityClass, "httpGet", "(Ljava/lang/String;)Ljava/lang/String;");
-  if (!mid) {
-    env->DeleteLocalRef(activityClass);
-    return "";
+  if (!s_activityClass || !s_midHttpGet) {
+    androidInitJni();
   }
+  if (!s_activityClass || !s_midHttpGet) return "";
 
   jstring jUrl = env->NewStringUTF(url.c_str());
-  jstring jRes = (jstring)env->CallStaticObjectMethod(activityClass, mid, jUrl);
-  env->DeleteLocalRef(jUrl);
-  env->DeleteLocalRef(activityClass);
+  if (!jUrl) return "";
 
+  jstring jRes = (jstring)env->CallStaticObjectMethod(s_activityClass, s_midHttpGet, jUrl);
+  env->DeleteLocalRef(jUrl);
+
+  if (env->ExceptionCheck()) {
+    env->ExceptionClear();
+    return "";
+  }
   if (!jRes) return "";
 
   const char* utf = env->GetStringUTFChars(jRes, nullptr);
@@ -382,21 +423,27 @@ static bool androidDownloadFile(const std::string& url, const std::string& outPa
   JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
   if (!env) return false;
 
-  jclass activityClass = env->FindClass("org/libsdl/app/SDLActivity");
-  if (!activityClass) return false;
-
-  jmethodID mid = env->GetStaticMethodID(activityClass, "downloadFile", "(Ljava/lang/String;Ljava/lang/String;)Z");
-  if (!mid) {
-    env->DeleteLocalRef(activityClass);
-    return false;
+  if (!s_activityClass || !s_midDownloadFile) {
+    androidInitJni();
   }
+  if (!s_activityClass || !s_midDownloadFile) return false;
 
   jstring jUrl = env->NewStringUTF(url.c_str());
   jstring jPath = env->NewStringUTF(outPath.c_str());
-  jboolean res = env->CallStaticBooleanMethod(activityClass, mid, jUrl, jPath);
+  if (!jUrl || !jPath) {
+    if (jUrl) env->DeleteLocalRef(jUrl);
+    if (jPath) env->DeleteLocalRef(jPath);
+    return false;
+  }
+
+  jboolean res = env->CallStaticBooleanMethod(s_activityClass, s_midDownloadFile, jUrl, jPath);
   env->DeleteLocalRef(jUrl);
   env->DeleteLocalRef(jPath);
-  env->DeleteLocalRef(activityClass);
+
+  if (env->ExceptionCheck()) {
+    env->ExceptionClear();
+    return false;
+  }
 
   return res == JNI_TRUE;
 }
@@ -405,16 +452,20 @@ static void androidInstallApk(const std::string& apkPath) {
   JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
   if (!env) return;
 
-  jclass activityClass = env->FindClass("org/libsdl/app/SDLActivity");
-  if (!activityClass) return;
+  if (!s_activityClass || !s_midInstallApk) {
+    androidInitJni();
+  }
+  if (!s_activityClass || !s_midInstallApk) return;
 
-  jmethodID mid = env->GetStaticMethodID(activityClass, "installApk", "(Ljava/lang/String;)V");
-  if (mid) {
-    jstring jPath = env->NewStringUTF(apkPath.c_str());
-    env->CallStaticVoidMethod(activityClass, mid, jPath);
+  jstring jPath = env->NewStringUTF(apkPath.c_str());
+  if (jPath) {
+    env->CallStaticVoidMethod(s_activityClass, s_midInstallApk, jPath);
     env->DeleteLocalRef(jPath);
   }
-  env->DeleteLocalRef(activityClass);
+
+  if (env->ExceptionCheck()) {
+    env->ExceptionClear();
+  }
 }
 #endif
 
@@ -424,6 +475,8 @@ void Updater::init() {
   curl_global_init(CURL_GLOBAL_ALL);
 #elif defined(__linux__) && !defined(__ANDROID__)
   curl_global_init(CURL_GLOBAL_ALL);
+#elif defined(__ANDROID__)
+  androidInitJni();
 #endif
   s_state = UpdateState::IDLE;
   s_promptActive = false;
@@ -435,6 +488,17 @@ void Updater::shutdown() {
   socketExit();
 #elif defined(__linux__) && !defined(__ANDROID__)
   curl_global_cleanup();
+#elif defined(__ANDROID__)
+  if (s_activityClass) {
+    JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+    if (env) {
+      env->DeleteGlobalRef(s_activityClass);
+    }
+    s_activityClass = nullptr;
+    s_midHttpGet = nullptr;
+    s_midDownloadFile = nullptr;
+    s_midInstallApk = nullptr;
+  }
 #endif
 }
 
