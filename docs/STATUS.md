@@ -175,7 +175,7 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
 - **v1.0.0:** Primeiro release oficial da recompilação nativa em C++17 (Passos 1 a 6 concluídos: áudio MIDI/SF2, salvamento RMS, typematic controls, gamepads, APK Android, Homebrew Nintendo Switch).
 - **v1.0.1:** Ajustes de empacotamento, documentação e distribuição multiplataforma.
 - **v1.0.2:** Passo 7 Finalizado com Sucesso — True Widescreen 16:9, bezels temáticos artísticos em alta definição, seletor de FPS (15/30), hook nativo de cenário `aj`, menus centralizados em tempo real, OSD responsivo para Mobile/Switch/PC, e controles ergonômicos touch & gamepad.
-- **v1.0.3 (Em preparação):** Passo 8 Finalizado com Sucesso — Sistema Completo de Atualização OTA In-App via GitHub Releases integrado ao menu "Sobre" do jogo, suporte multiplataforma (Windows, Switch, Android, Linux), aviso de segurança para salvar o jogo antes de reiniciar e barra de progresso visual.
+- **v1.0.3 (Em preparação):** Passo 8 Finalizado com Sucesso — Sistema Completo de Atualização OTA In-App via GitHub Releases integrado ao menu "Sobre" do jogo, suporte multiplataforma (Windows, Switch, Android, Linux), aviso de segurança para salvar o jogo antes de reiniciar, alinhamento pixel-perfect da faixa de seleção do menu principal (`bf`), do menu Sobre (`bl`) e dos submenus de Informações (`bx`) em True Widescreen 16:9.
 
 ## Próximos passos (Roadmap)
 - [x] Passo 8: Possibilidade de detecção de update disponível no github releases para atualizar o app diretamente via rede (concluído para todas as plataformas)

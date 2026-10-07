@@ -362,3 +362,25 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - Implementado o hook nativo `bl_a_native` registrado na VM para `bl.a:(II)Z` em `src/vm/natives.cpp`. Quando o jogador pressiona '5', Enter ou o botão <kbd>A</kbd> na tela "Sobre", o aplicativo dispara a checagem assíncrona de atualização OTA com feedback imediato via OSD e modal.
   - Os créditos da tela "Sobre" foram atualizados via `tools/patch_credits.py` para exibir a dica visual intuitiva `[5 / A]: ATUALIZAR`, tornando o recurso um item oficial e visível de dentro da interface do próprio jogo.
 
+## Sessão 10 (Correções Visuais de Widescreen 16:9 — Precedência Aritmética J2ME em `bf` e `bx`)
+
+- **Armadilha de Precedência de Operadores em Java de 2007 (`+` vs `>>`):**
+  - No código descompilado e no bytecode original de `bf.java` (Menu Principal) e `bx.java` (Submenus de INFO):
+    - `bf.java`: `int n5 = n2 + (201 - k[n4].getWidth()) >> 1;`
+    - `bx.java`: `bh.void_a(graphics, n2 + 201 >> 1, n3 + 9, this.b, 1);`
+  - Em Java (e C/C++), o operador de adição `+` tem precedência aritmética maior que o operador de deslocamento de bits `>>`.
+  - O compilador javac gerou bytecode avaliando como:
+    - `(n2 + (201 - width)) >> 1`
+    - `(n2 + 201) >> 1`
+  - Em telas 240x320 (`n2 = 19`), a discrepância era de apenas ~10 pixels e passava despercebida nos celulares com telas minúsculas da época.
+  - Em True Widescreen 16:9 (`g_screenWidth = 569`, `n2 = 184`):
+    - `(184 + 201) >> 1 = 192` (em vez de `184 + 100 = 284`).
+    - Como resultado, tanto a faixa/cometa vermelho de seleção do menu principal quanto o título do submenu de informações ficavam **quase 100 pixels deslocados para a esquerda**, vazando para fora do pergaminho!
+- **Solução Nativa Pixel-Perfect via Hooks (`bf_draw_native` e `bx_draw_native`):**
+  - Implementados os hooks nativos C++ `bf_draw_native` e `bx_draw_native` em `src/vm/natives.cpp`.
+  - Calculam o centro e o deslocamento com a aritmética correta:
+    - `cometX = n2 + ((scrollW - cometW) / 2) + 15`
+    - `titleX = n2 + (scrollW / 2)` (ou `g_screenWidth / 2`)
+  - A faixa vermelha e os títulos ficam perfeitamente centralizados e alinhados em qualquer proporção de tela (3:4 clássico, 16:9 Widescreen, 16:10, 21:9 Ultrawide).
+
+

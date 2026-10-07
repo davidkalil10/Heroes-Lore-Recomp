@@ -991,6 +991,8 @@ static void PrintStream_println_str(VM&, Value* args, Value*) {
 static void aj_draw_native(VM& vm, Value* args, Value*);
 static void bl_a_native(VM& vm, Value* args, Value* ret);
 static void bl_draw_native(VM& vm, Value* args, Value*);
+static void bf_draw_native(VM& vm, Value* args, Value*);
+static void bx_draw_native(VM& vm, Value* args, Value*);
 
 // -------------------------------------------------------------
 // Registro de todos os métodos nativos
@@ -1167,6 +1169,12 @@ void VM::registerNatives() {
 
   // Menu 'Sobre' (Wind of Soltia) - renderização centrada em True Widescreen 16:9 sem cortes
   reg("bl.a:(Ljavax/microedition/lcdui/Graphics;II)V", bl_draw_native);
+
+  // Menu Principal (Wind of Soltia) - renderização da faixa de seleção e itens centrados em True Widescreen
+  reg("bf.a:(Ljavax/microedition/lcdui/Graphics;II)V", bf_draw_native);
+
+  // Submenus de INFO (Wind of Soltia) - renderização com título perfeitamente centrado em True Widescreen
+  reg("bx.a:(Ljavax/microedition/lcdui/Graphics;II)V", bx_draw_native);
 }
 
 // -------------------------------------------------------------
@@ -1430,6 +1438,305 @@ static void bl_draw_native(VM& vm, Value* args, Value*) {
     Object* eObj = (fCharArrE && fCharArrE->isStatic && fCharArrE->index >= 0 && fCharArrE->index < (int)bhClass->statics.size()) ? bhClass->statics[fCharArrE->index].o : nullptr;
     Value sArgs[3]; sArgs[0].o = gObj; sArgs[1].o = nullptr; sArgs[2].o = eObj; Value sRet[2];
     vm.invoke(mBhSoftkey, sArgs, sRet);
+  }
+}
+
+// -------------------------------------------------------------
+// bf: Renderização do Menu Principal (Wind of Soltia)
+// Corrige o cálculo da posição X do cometa de seleção (faixa vermelha)
+// que em Java 2007 sofria com erro de precedência de operadores (+ antes de >>)
+// e os textos das opções em True Widescreen 16:9
+// -------------------------------------------------------------
+static void bf_draw_native(VM& vm, Value* args, Value*) {
+  Object* selfObj = args[0].o;
+  if (!selfObj || selfObj->kind != K_INST) return;
+  Instance* inst = static_cast<Instance*>(selfObj);
+
+  Object* gObj = args[1].o;
+  if (!gObj || gObj->kind != K_GRAPHICS) return;
+  GraphicsObj* g = static_cast<GraphicsObj*>(gObj);
+
+  int n2 = args[2].i;
+  int n3 = args[3].i;
+
+  // 1. Fundo roxo medieval de Soltia preenchendo a tela inteira (0x3F1F3F)
+  g->setColor(0x3F1F3F);
+  g->fillRect(0, 0, g_screenWidth, g_screenHeight);
+
+  // 2. Pergaminho principal (bf.b com 4 blocos verticais)
+  n3 += 13;
+  ClassInfo* bfClass = vm.findClass("bf");
+  Method* mBfB = bfClass ? vm.findMethod(bfClass, "b:(Ljavax/microedition/lcdui/Graphics;III)V") : nullptr;
+  if (mBfB) {
+    Value bArgs[4];
+    bArgs[0].o = gObj;
+    bArgs[1].i = n2;
+    bArgs[2].i = n3 - 12;
+    bArgs[3].i = 4;
+    Value bRet[2];
+    vm.invoke(mBfB, bArgs, bRet);
+  }
+
+  n3 += 35;
+  if (g_screenHeight <= 160) {
+    n3 -= 10;
+  }
+
+  // 3. Lê o estado da animação da faixa vermelha (campo private byte c de bf)
+  FieldInfo* fByteC = vm.findField(inst->cls, "c:B");
+  int animStep = (fByteC && fByteC->index >= 0 && fByteC->index < (int)inst->f.size()) ? inst->f[fByteC->index].i : 2;
+
+  int cometIndex = 18;
+  if (animStep == 0) {
+    cometIndex = 14;
+  } else if (animStep == 1) {
+    cometIndex = 16;
+  }
+
+  // 4. Obtém a imagem do cometa vermelho de ce.k[cometIndex]
+  ClassInfo* ceClass = vm.findClass("ce");
+  ImageObj* cometImg = nullptr;
+  if (ceClass) {
+    FieldInfo* fImgK = vm.findField(ceClass, "k:[Ljavax/microedition/lcdui/Image;");
+    if (fImgK && fImgK->isStatic && fImgK->index >= 0 && fImgK->index < (int)ceClass->statics.size()) {
+      Array* arrK = static_cast<Array*>(ceClass->statics[fImgK->index].o);
+      if (arrK && cometIndex >= 0 && cometIndex < arrK->len) {
+        cometImg = static_cast<ImageObj*>(arrK->as<Object*>()[cometIndex]);
+      }
+    }
+  }
+
+  // Lê a opção selecionada atual (campo public byte b de cb)
+  FieldInfo* fByteB = vm.findField(inst->cls, "b:B");
+  int selectedOption = (fByteB && fByteB->index >= 0 && fByteB->index < (int)inst->f.size()) ? inst->f[fByteB->index].i : 0;
+
+  // Desenha o cometa de seleção perfeitamente centralizado no pergaminho
+  const int scrollW = 201;
+  if (cometImg) {
+    int cometW = cometImg->width > 0 ? cometImg->width : 134;
+    // Posição com parênteses corretos: n2 + ((scrollW - cometW) / 2) + 15
+    int cometX = n2 + ((scrollW - cometW) / 2) + 15;
+    int cometY = n3 + 12 + selectedOption * 16;
+    g->drawImage(cometImg, cometX, cometY, 20);
+  }
+
+  // 5. Desenha o texto de cada opção do menu (INICIAR, CARREGAR, OPCOES, INFO, SOBRE, SAIR)
+  FieldInfo* fByteA = vm.findField(inst->cls, "a:B");
+  int optionCount = (fByteA && fByteA->index >= 0 && fByteA->index < (int)inst->f.size()) ? inst->f[fByteA->index].i : 6;
+
+  ClassInfo* bhClass = vm.findClass("bh");
+  Method* mBhA = bhClass ? vm.findMethod(bhClass, "a:(Ljavax/microedition/lcdui/Graphics;III)V") : nullptr;
+
+  int centerX = n2 + (scrollW / 2);
+  for (int i = 0; i < optionCount; ++i) {
+    int lineY = n3 + 14 + i * 16;
+    int textId = i * 2;
+    if (selectedOption != i || animStep < 2) {
+      textId += 1;
+    }
+    if (mBhA) {
+      Value tArgs[4];
+      tArgs[0].o = gObj;
+      tArgs[1].i = textId;
+      tArgs[2].i = centerX;
+      tArgs[3].i = lineY;
+      Value tRet[2];
+      vm.invoke(mBhA, tArgs, tRet);
+    }
+  }
+
+  // 6. Desenha as softkeys no rodapé (bh.a(Graphics, char[], char[]))
+  Method* mBhSoftkey = bhClass ? vm.findMethod(bhClass, "a:(Ljavax/microedition/lcdui/Graphics;[C[C)V") : nullptr;
+  if (mBhSoftkey) {
+    FieldInfo* fCharArrD = vm.findField(bhClass, "d:[C");
+    FieldInfo* fCharArrC = vm.findField(bhClass, "c:[C");
+    Object* dObj = (fCharArrD && fCharArrD->isStatic && fCharArrD->index >= 0 && fCharArrD->index < (int)bhClass->statics.size()) ? bhClass->statics[fCharArrD->index].o : nullptr;
+    Object* cObj = (fCharArrC && fCharArrC->isStatic && fCharArrC->index >= 0 && fCharArrC->index < (int)bhClass->statics.size()) ? bhClass->statics[fCharArrC->index].o : nullptr;
+    Value sArgs[3];
+    sArgs[0].o = gObj;
+    sArgs[1].o = dObj;
+    sArgs[2].o = cObj;
+    Value sRet[2];
+    vm.invoke(mBhSoftkey, sArgs, sRet);
+  }
+}
+
+// -------------------------------------------------------------
+// bx: Renderização de Submenu do Menu INFO (Wind of Soltia)
+// Corrige o alinhamento do título ("NOCOES BASICAS", etc.) na placa superior
+// que sofria com precedência de operadores (+ antes de >>) em Widescreen
+// -------------------------------------------------------------
+static void bx_draw_native(VM& vm, Value* args, Value*) {
+  Object* selfObj = args[0].o;
+  if (!selfObj || selfObj->kind != K_INST) return;
+  Instance* inst = static_cast<Instance*>(selfObj);
+
+  Object* gObj = args[1].o;
+  if (!gObj || gObj->kind != K_GRAPHICS) return;
+  GraphicsObj* g = static_cast<GraphicsObj*>(gObj);
+
+  int n2 = args[2].i;
+  int n3 = args[3].i;
+
+  const int scrollW = 201;
+  int origN2 = n2;
+  int origN3 = n3;
+  int centerX = origN2 + (scrollW / 2);
+
+  // Lê campos da instância de bx
+  FieldInfo* fBoolC = vm.findField(inst->cls, "c:Z");
+  bool isModal = (fBoolC && fBoolC->index >= 0 && fBoolC->index < (int)inst->f.size()) ? (inst->f[fBoolC->index].i != 0) : false;
+
+  FieldInfo* fCharArrB = vm.findField(inst->cls, "b:[C");
+  Array* titleArr = (fCharArrB && fCharArrB->index >= 0 && fCharArrB->index < (int)inst->f.size()) ? static_cast<Array*>(inst->f[fCharArrB->index].o) : nullptr;
+
+  ClassInfo* bfClass = vm.findClass("bf");
+  ClassInfo* bhClass = vm.findClass("bh");
+  ClassInfo* ceClass = vm.findClass("ce");
+
+  if (isModal) {
+    ClassInfo* cbClass = vm.findClass("cb");
+    Method* mCbB = cbClass ? vm.findMethod(cbClass, "b:(Ljavax/microedition/lcdui/Graphics;IIII)V") : nullptr;
+    if (mCbB) {
+      Value cbArgs[5];
+      cbArgs[0].o = gObj;
+      cbArgs[1].i = n2 + 6;
+      cbArgs[2].i = n3 + 25;
+      cbArgs[3].i = 189;
+      cbArgs[4].i = 213;
+      Value cbRet[2];
+      vm.invoke(mCbB, cbArgs, cbRet);
+    }
+    n2 += 8;
+    n3 += 25;
+    g->setColor(0xFFFFFF);
+    Method* mBhSoftkey = bhClass ? vm.findMethod(bhClass, "a:(Ljavax/microedition/lcdui/Graphics;[C[C)V") : nullptr;
+    if (mBhSoftkey) {
+      FieldInfo* fM = vm.findField(bhClass, "m:[C");
+      FieldInfo* fE = vm.findField(bhClass, "e:[C");
+      Object* mObj = (fM && fM->isStatic && fM->index >= 0 && fM->index < (int)bhClass->statics.size()) ? bhClass->statics[fM->index].o : nullptr;
+      Object* eObj = (fE && fE->isStatic && fE->index >= 0 && fE->index < (int)bhClass->statics.size()) ? bhClass->statics[fE->index].o : nullptr;
+      Value sArgs[3]; sArgs[0].o = gObj; sArgs[1].o = mObj; sArgs[2].o = eObj; Value sRet[2];
+      vm.invoke(mBhSoftkey, sArgs, sRet);
+    }
+  } else {
+    // Fundo tela cheia
+    g->setColor(0x3F1F3F);
+    g->fillRect(0, 0, g_screenWidth, g_screenHeight);
+
+    // Aba superior de cabeçalho (bf.c)
+    Method* mBfC = bfClass ? vm.findMethod(bfClass, "c:(Ljavax/microedition/lcdui/Graphics;II)V") : nullptr;
+    if (mBfC) {
+      Value cArgs[3]; cArgs[0].o = gObj; cArgs[1].i = origN2; cArgs[2].i = origN3; Value cRet[2];
+      vm.invoke(mBfC, cArgs, cRet);
+    }
+
+    // Título do submenu ("NOCOES BASICAS") perfeitamente centralizado em centerX!
+    Method* mBhA_bold = bhClass ? vm.findMethod(bhClass, "a:(Z)V") : nullptr;
+    if (mBhA_bold) {
+      Value bArgs[1]; bArgs[0].i = 1; Value bRet[2];
+      vm.invoke(mBhA_bold, bArgs, bRet);
+    }
+    g->setColor(0);
+    Method* mBhVoidA = bhClass ? vm.findMethod(bhClass, "a:(Ljavax/microedition/lcdui/Graphics;II[CI)V") : nullptr;
+    if (mBhVoidA && titleArr) {
+      Value vArgs[5];
+      vArgs[0].o = gObj;
+      vArgs[1].i = centerX;  // Correção do deslocamento: centerX em vez de origN2 + 201 >> 1!
+      vArgs[2].i = origN3 + 5 + 4;
+      vArgs[3].o = titleArr;
+      vArgs[4].i = 1;        // Graphics.HCENTER
+      Value vRet[2];
+      vm.invoke(mBhVoidA, vArgs, vRet);
+    }
+    if (mBhA_bold) {
+      Value bArgs[1]; bArgs[0].i = 0; Value bRet[2];
+      vm.invoke(mBhA_bold, bArgs, bRet);
+    }
+
+    // Pergaminho principal (3 blocos)
+    Method* mBfB = bfClass ? vm.findMethod(bfClass, "b:(Ljavax/microedition/lcdui/Graphics;III)V") : nullptr;
+    if (mBfB) {
+      Value bArgs[4]; bArgs[0].o = gObj; bArgs[1].i = origN2; bArgs[2].i = origN3 + 24; bArgs[3].i = 3; Value bRet[2];
+      vm.invoke(mBfB, bArgs, bRet);
+    }
+
+    n2 += 10;
+    n3 += 43;
+    g->setColor(0x5F3F3F);
+    Method* mBhSoftkey = bhClass ? vm.findMethod(bhClass, "a:(Ljavax/microedition/lcdui/Graphics;[C[C)V") : nullptr;
+    if (mBhSoftkey) {
+      FieldInfo* fE = vm.findField(bhClass, "e:[C");
+      Object* eObj = (fE && fE->isStatic && fE->index >= 0 && fE->index < (int)bhClass->statics.size()) ? bhClass->statics[fE->index].o : nullptr;
+      Value sArgs[3]; sArgs[0].o = gObj; sArgs[1].o = nullptr; sArgs[2].o = eObj; Value sRet[2];
+      vm.invoke(mBhSoftkey, sArgs, sRet);
+    }
+  }
+
+  // Indicador de página [1/3] no canto superior direito do pergaminho (r.d)
+  FieldInfo* fByteA = vm.findField(inst->cls, "a:B");
+  FieldInfo* fByteB = vm.findField(inst->cls, "b:B");
+  int pageCount = (fByteA && fByteA->index >= 0 && fByteA->index < (int)inst->f.size()) ? inst->f[fByteA->index].i : 1;
+  int curPage   = (fByteB && fByteB->index >= 0 && fByteB->index < (int)inst->f.size()) ? inst->f[fByteB->index].i : 0;
+
+  ClassInfo* rClass = vm.findClass("r");
+  Method* mRD = rClass ? vm.findMethod(rClass, "d:(Ljavax/microedition/lcdui/Graphics;IIII)V") : nullptr;
+  if (mRD) {
+    Value dArgs[5];
+    dArgs[0].o = gObj;
+    dArgs[1].i = n2 + 201 - 25;
+    dArgs[2].i = n3 - 8;
+    dArgs[3].i = curPage + 1;
+    dArgs[4].i = pageCount;
+    Value dRet[2];
+    vm.invoke(mRD, dArgs, dRet);
+  }
+
+  // Setas de navegação de página
+  if (pageCount > 1 && ceClass) {
+    if (curPage > 0) {
+      FieldInfo* fImgL = vm.findField(ceClass, "l:Ljavax/microedition/lcdui/Image;");
+      if (fImgL && fImgL->isStatic && fImgL->index >= 0 && fImgL->index < (int)ceClass->statics.size()) {
+        ImageObj* imgL = static_cast<ImageObj*>(ceClass->statics[fImgL->index].o);
+        if (imgL) g->drawImage(imgL, n2 + 62 + 13, n3 - 6, 20);
+      }
+    }
+    if (curPage < pageCount - 1) {
+      FieldInfo* fImgO = vm.findField(ceClass, "o:Ljavax/microedition/lcdui/Image;");
+      if (fImgO && fImgO->isStatic && fImgO->index >= 0 && fImgO->index < (int)ceClass->statics.size()) {
+        ImageObj* imgO = static_cast<ImageObj*>(ceClass->statics[fImgO->index].o);
+        if (imgO) g->drawImage(imgO, n2 + 62 + 13, n3 + 114 + 26 + 40, 20);
+      }
+    }
+  }
+
+  // Conteúdo do texto do parágrafo
+  FieldInfo* fCharArrA = vm.findField(inst->cls, "a:[C");
+  FieldInfo* fShortArrA = vm.findField(inst->cls, "a:[S");
+  Array* charArr = (fCharArrA && fCharArrA->index >= 0 && fCharArrA->index < (int)inst->f.size()) ? static_cast<Array*>(inst->f[fCharArrA->index].o) : nullptr;
+  Array* shortArr = (fShortArrA && fShortArrA->index >= 0 && fShortArrA->index < (int)inst->f.size()) ? static_cast<Array*>(inst->f[fShortArrA->index].o) : nullptr;
+
+  if (charArr && shortArr && curPage >= 0 && curPage < shortArr->len) {
+    int s3 = shortArr->as<int16_t>()[curPage];
+    int s2 = (curPage == pageCount - 1) ? charArr->len : shortArr->as<int16_t>()[curPage + 1];
+    if (charArr->len > 0 && charArr->as<uint16_t>()[0] == '!' && s3 == 0) s3 = 1;
+
+    g->setColor(isModal ? 0xFFFFFF : 0);
+    Method* mBhTextA = bhClass ? vm.findMethod(bhClass, "a:(Ljavax/microedition/lcdui/Graphics;IIII[CIII)V") : nullptr;
+    if (mBhTextA) {
+      Value aTextArgs[9];
+      aTextArgs[0].o = gObj;
+      aTextArgs[1].i = n2;
+      aTextArgs[2].i = n3;
+      aTextArgs[3].i = 176;
+      aTextArgs[4].i = 1;
+      aTextArgs[5].o = charArr;
+      aTextArgs[6].i = s3;
+      aTextArgs[7].i = 0;
+      aTextArgs[8].i = s2 - s3;
+      Value aTextRet[2];
+      vm.invoke(mBhTextA, aTextArgs, aTextRet);
+    }
   }
 }
 
