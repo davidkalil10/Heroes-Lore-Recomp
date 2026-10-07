@@ -522,5 +522,8 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
     1. O console estava rodando a build antiga (v1.0.6) que nunca havia conseguido substituir o NRO antes.
     2. Identificado também que `romfsInit()` em `platform_sdl.cpp` mantém o descritor do NRO aberto para ler assets da partição embutida. Em `applyUpdate()`, adicionada a chamada preventiva `romfsExit()` para liberar imediatamente qualquer lock de arquivo no SD antes da cópia ou rotação atômica.
 
+- **Ciclo de Validação v1.1.1:**
+  - Publicação da release v1.1.1 para validação de auto-atualização OTA fim a fim em clientes v1.1.0 no Windows e Switch.
+
 
 
