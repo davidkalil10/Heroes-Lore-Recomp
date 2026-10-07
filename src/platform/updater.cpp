@@ -275,7 +275,7 @@ static bool winHttpDownloadFile(const std::string& url, const std::string& outPa
 }
 #endif
 
-#if defined(__SWITCH__) || defined(__linux__)
+#if defined(__SWITCH__) || (defined(__linux__) && !defined(__ANDROID__))
 // Callback de escrita de dados com libcurl
 static size_t curlWriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
   size_t total = size * nmemb;
