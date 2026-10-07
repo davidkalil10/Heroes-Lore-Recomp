@@ -117,6 +117,8 @@ jobs:
             cp -r reference/extracted dist_windows/assets
           fi
           cd dist_windows && zip -r ../heroes_lore_windows_x64.zip .
+          cd ..
+          cp build/heroes_lore.exe ./heroes_lore.exe
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
@@ -124,7 +126,7 @@ jobs:
           name: heroes_lore_windows_zip
           path: |
             heroes_lore_windows_x64.zip
-            dist_windows/heroes_lore.exe
+            heroes_lore.exe
 
   # ==============================================================================
   # 3. Linux x86_64 (AppImage Portátil / Steam Deck)

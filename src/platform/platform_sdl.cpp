@@ -1299,10 +1299,11 @@ bool Platform::pollEvents(VM& vm) {
           key = -7; // Cancelar
         }
       } else if (ev.type == SDL_CONTROLLERBUTTONDOWN) {
-        if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_A) {
-          key = 53; // Confirmar (A / 5)
-        } else if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_B) {
-          key = -7; // Cancelar (B / 7)
+        int mkey = mapControllerButton(ev.cbutton.button);
+        if (mkey == 53) {
+          key = 53; // Confirmar (A no Switch, A no Xbox/PC)
+        } else if (mkey == -7 || mkey == -8) {
+          key = -7; // Cancelar (B no Switch, B no Xbox/PC)
         }
       } else if (ev.type == SDL_FINGERDOWN) {
         int winW = 0, winH = 0;

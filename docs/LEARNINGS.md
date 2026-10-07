@@ -457,3 +457,44 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - *Causa Raiz:* No AppImage, o diretório de execução atual (`"."`) é uma montagem somente-leitura em squashfs, causando falha de permissão no `fopen`.
   - *Correção:* `Platform::getStorageDir()` agora utiliza o diretório de dados gravável do usuário (`~/.local/share/heroes_lore`). Ao aplicar a atualização, o caminho real do arquivo executado é lido via `getenv("APPIMAGE")`.
 
+## Sessão 14 (Refinamento do OTA Multiplataforma: Layout Responsivo, Switch A/B e Auto-Update PC/Console)
+
+- **Diagnóstico da Não Detecção da Versão Nova no PC (Windows):**
+  - *Causa Raiz:* Na release v1.0.5 do GitHub, apenas o asset `heroes_lore_windows_x64.zip` havia sido publicado (porque o upload do artefato no CI colocava o executável sob a subpasta `dist_windows/heroes_lore.exe`, sendo ignorado pelo publicador do release na raiz). No código C++, o atualizador procurava estritamente por `"heroes_lore.exe"`. Como não encontrava um asset exato com esse nome, o parser retornava falso e informava que nenhuma versão nova estava disponível.
+  - *Solução Definitiva:*
+    1. **Parser Flexível com Lista de Candidatos por Prioridade:** `getCandidateAssetNames()` foi introduzido. No Windows, ele testa `heroes_lore.exe`, `heroes_lore_windows_x64.zip` e `heroes_lore.zip`. O primeiro que existir no release é selecionado.
+    2. **Suporte Nativo a Atualização por ZIP no Windows:** Se o asset baixado for um `.zip`, `applyUpdate()` extrai o conteúdo no diretório da aplicação via `tar.exe` nativo do Windows 10/11 (ou PowerShell `Expand-Archive`). Se for `.exe`, realiza a substituição in-place com renomeação para `.old`.
+    3. **Upload Direto no GitHub Actions:** O workflow `.github/workflows/build.yml` foi corrigido para copiar `build/heroes_lore.exe` para a raiz do artefato, garantindo que as próximas releases publiquem simultaneamente o executável solto de ~4MB e o ZIP portátil completo.
+
+- **Resolução do Modal Microscópico em Telas de Alta Resolução / Celular em Modo Retrato:**
+  - *Causa Raiz:* As dimensões do modal estavam travadas em `modalW = std::min(450, ...)` e tamanho de caractere fixo em `18px`. Em telas modernas de smartphones (1080x2400 ou 1440p em modo vertical/retrato), uma caixa de 450px representava uma fração diminuta da tela, tornando as letras ilegíveis.
+  - *Solução Arquitetural Responsiva:*
+    1. **Detecção de Orientação e Densidade:** Distinção automática entre Retrato (`winH > winW`) e Paisagem (`winW >= winH`).
+    2. **Modo Retrato (Smartphones):** O modal agora ocupa **92% da largura da tela** (`modalW = std::clamp((int)(winW * 0.92f), 280, 1100)`) com altura proporcional (`modalH = (int)(modalW * 0.92f)`).
+    3. **Modo Paisagem (Nintendo Switch 720p, Steam Deck, PC):** A janela modal foi expandida para **65% da tela** (`modalW = ~800px`, `modalH = ~520px` no Switch em vez de 450x270px), ocupando o centro da tela de forma imponente e confortável.
+    4. **Tipografia Dinâmica Escalável:** A fonte OSD agora escala dinamicamente com a altura da janela (`charH = std::clamp((int)(modalH * 0.052f), 16, 32)`). No celular, isso eleva os glifos para 32px; no Switch, para 26px; e no PC, para 28px.
+    5. **Botões Touch com Ampla Área de Clique:** No celular, os botões virtuais agora atingem mais de 70px de altura e 400px de largura, proporcionando toque ergonômico imediato sem esforço.
+
+- **Inversão dos Botões A e B no Nintendo Switch (Layout Físico Nintendo):**
+  - *Diagnóstico:* Na janela de atualização, ao apertar o botão A físico da Nintendo (direita) a tela fechava (cancelava); ao apertar o botão B físico (baixo) o jogo tentava atualizar.
+  - *Causa Raiz:* No loop de eventos do SDL2 para o modal, o código checava diretamente `ev.cbutton.button == SDL_CONTROLLER_BUTTON_A` (que no padrão Xbox corresponde ao botão inferior = B físico da Nintendo) e `SDL_CONTROLLER_BUTTON_B` (que corresponde ao botão direito = A físico da Nintendo).
+  - *Solução:* O loop de eventos do modal agora utiliza a função `mapControllerButton(ev.cbutton.button)`. No Switch (`#ifdef __SWITCH__`), o botão físico A (direita) gera o código `53` (Confirmar/Atualizar), e o botão físico B (baixo) gera `-7` (Cancelar/Fechar).
+  - Além disso, os textos de atalhos exibidos nos botões agora mostram claramente:
+    - No Switch: `[ BOTAO A ]` para atualizar, `[ BOTAO B ]` para cancelar.
+    - No Celular: `[ TOQUE ]` para atualizar e fechar.
+    - No PC/Linux: `[ A / ENTER ]` para atualizar, `[ B / ESC ]` para cancelar.
+
+- **Substituição Definitiva do NRO no Cartão SD do Nintendo Switch:**
+  - *Diagnóstico:* O Switch baixava o arquivo NRO (77.9 MB), exibia "Reinicie para continuar", mas ao fechar e reabrir o jogo continuava na versão anterior.
+  - *Causa Raiz:*
+    1. `Platform::getExecutablePath()` recebia `argv[0]` relativo (ex: `"heroes_lore.nro"`), sem o prefixo de montagem do cartão SD (`sdmc:/`).
+    2. Como o processo em execução não possuía o caminho canônico, a cópia para `"heroes_lore.nro"` falhava silenciosamente ou era gravada fora do diretório do Homebrew Menu.
+    3. `runDownloadThread` não checava o retorno booleano de `applyUpdate()`. Mesmo se a substituição falhasse, o estado era marcado como `DOWNLOAD_COMPLETE` e exibia falsamente "Arquivo instalado com sucesso!".
+  - *Solução Robusta:*
+    1. **Resolução Canônica de Caminho (`resolveSwitchNroPath`):** O caminho real é validado sequencialmente contra o `execPath` com prefixo `sdmc:/`, os diretórios padrão do console (`sdmc:/switch/heroes_lore/heroes_lore.nro`, `sdmc:/switch/heroes_lore.nro`) e normalizado.
+    2. **Validação de Tamanho do Download:** O arquivo `.download` é verificado antes da substituição para garantir que tem tamanho íntegro de NRO (> 1 MB).
+    3. **Substituição Atômica com Backup:** O NRO existente é temporariamente renomeado para `.old`. O novo arquivo é copiado via stream binário em blocos de 64KB. Em caso de falha, o backup `.old` é restaurado automaticamente.
+    4. **Logs Detalhados:** Toda a operação é registrada com `boot_log` em `sdmc:/heroes_lore_boot.log`.
+    5. **Transição Estrita de Estado:** A interface só avança para `RESTART_READY` se `applyUpdate()` retornar verdadeiro com 100% dos bytes validados e `envSetNextLoad` configurado.
+
+

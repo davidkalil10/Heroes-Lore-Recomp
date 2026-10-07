@@ -51,6 +51,8 @@
 
 namespace hl {
 
+void boot_log(const char* fmt, ...);
+
 static UpdateState s_state = UpdateState::IDLE;
 static UpdateReleaseInfo s_releaseInfo;
 static std::atomic<float> s_downloadProgress{0.0f};
@@ -90,18 +92,18 @@ static std::string extractJsonString(const std::string& json, const std::string&
   return json.substr(q1 + 1, q2 - q1 - 1);
 }
 
-// Retorna o nome de arquivo esperado no release do GitHub para a plataforma atual
-static std::string getExpectedAssetName() {
+// Retorna lista de nomes de arquivos candidatos no release do GitHub para a plataforma atual (por ordem de prioridade)
+static std::vector<std::string> getCandidateAssetNames() {
 #if defined(__SWITCH__)
-  return "heroes_lore.nro";
+  return { "heroes_lore.nro" };
 #elif defined(__ANDROID__)
-  return "heroes_lore_android_universal.apk";
+  return { "heroes_lore_android_universal.apk", "heroes_lore_android_arm64.apk" };
 #elif defined(_WIN32)
-  return "heroes_lore.exe";
+  return { "heroes_lore.exe", "heroes_lore_windows_x64.zip", "heroes_lore.zip" };
 #elif defined(__linux__)
-  return "heroes_lore_linux_x86_64.AppImage";
+  return { "heroes_lore_linux_x86_64.AppImage" };
 #else
-  return "heroes_lore";
+  return { "heroes_lore" };
 #endif
 }
 
@@ -112,9 +114,16 @@ static bool parseReleaseJson(const std::string& json, UpdateReleaseInfo& out) {
   out.releaseNotes = extractJsonString(json, "body");
   if (out.tagName.empty()) return false;
 
-  std::string targetAsset = getExpectedAssetName();
+  std::vector<std::string> candidates = getCandidateAssetNames();
 
-  // Varre a lista de assets procurando o correspondente
+  struct FoundAsset {
+    std::string name;
+    std::string url;
+    size_t size = 0;
+  };
+  std::vector<FoundAsset> foundAssets;
+
+  // Varre todos os assets disponíveis no JSON do release
   size_t pos = 0;
   while ((pos = json.find("\"name\"", pos)) != std::string::npos) {
     size_t colon = json.find(':', pos);
@@ -125,32 +134,48 @@ static bool parseReleaseJson(const std::string& json, UpdateReleaseInfo& out) {
     if (q2 == std::string::npos) break;
 
     std::string aname = json.substr(q1 + 1, q2 - q1 - 1);
-    if (aname == targetAsset || aname.find(targetAsset) != std::string::npos) {
-      out.assetName = aname;
-      // Procura URL de download no mesmo bloco
-      size_t urlKey = json.find("\"browser_download_url\"", q2);
-      if (urlKey != std::string::npos) {
-        size_t uColon = json.find(':', urlKey);
-        size_t uQ1 = json.find('"', uColon);
-        size_t uQ2 = json.find('"', uQ1 + 1);
-        if (uQ1 != std::string::npos && uQ2 != std::string::npos) {
-          out.assetUrl = json.substr(uQ1 + 1, uQ2 - uQ1 - 1);
-        }
+    std::string aurl = "";
+    size_t asize = 0;
+
+    // Procura URL de download no mesmo bloco do asset
+    size_t urlKey = json.find("\"browser_download_url\"", q2);
+    if (urlKey != std::string::npos) {
+      size_t uColon = json.find(':', urlKey);
+      size_t uQ1 = json.find('"', uColon);
+      size_t uQ2 = json.find('"', uQ1 + 1);
+      if (uQ1 != std::string::npos && uQ2 != std::string::npos) {
+        aurl = json.substr(uQ1 + 1, uQ2 - uQ1 - 1);
       }
-      // Procura tamanho do asset
-      size_t sizeKey = json.find("\"size\"", q2);
-      if (sizeKey != std::string::npos && sizeKey < urlKey) {
-        size_t sColon = json.find(':', sizeKey);
-        if (sColon != std::string::npos) {
-          out.assetSize = std::strtoul(json.c_str() + sColon + 1, nullptr, 10);
-        }
+    }
+
+    // Procura tamanho do asset
+    size_t sizeKey = json.find("\"size\"", q2);
+    if (sizeKey != std::string::npos && (urlKey == std::string::npos || sizeKey < urlKey)) {
+      size_t sColon = json.find(':', sizeKey);
+      if (sColon != std::string::npos) {
+        asize = std::strtoul(json.c_str() + sColon + 1, nullptr, 10);
       }
-      break;
+    }
+
+    if (!aname.empty() && !aurl.empty()) {
+      foundAssets.push_back({ aname, aurl, asize });
     }
     pos = q2 + 1;
   }
 
-  return !out.assetUrl.empty();
+  // Seleciona o melhor asset baseado na lista de prioridades de candidatos
+  for (const auto& cand : candidates) {
+    for (const auto& fa : foundAssets) {
+      if (fa.name == cand || fa.name.find(cand) != std::string::npos) {
+        out.assetName = fa.name;
+        out.assetUrl = fa.url;
+        out.assetSize = fa.size;
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 #if defined(_WIN32)
@@ -645,10 +670,17 @@ static int runDownloadThread(void* data) {
 
   std::lock_guard<std::mutex> lock(s_updaterMutex);
   if (ok) {
-    s_state = UpdateState::DOWNLOAD_COMPLETE;
     s_downloadProgress = 1.0f;
     s_statusMessage = "Download concluido! Aplicando...";
-    Updater::applyUpdate();
+    bool applied = Updater::applyUpdate();
+    if (applied) {
+      s_state = UpdateState::RESTART_READY;
+      s_statusMessage = "Atualizacao concluida! Reinicie o aplicativo.";
+    } else {
+      s_state = UpdateState::DOWNLOAD_FAILED;
+      s_statusMessage = "Falha ao gravar arquivo de atualizacao.";
+      Platform::showOsdMessage("Falha ao gravar atualizacao.");
+    }
   } else {
     s_state = UpdateState::DOWNLOAD_FAILED;
     s_statusMessage = "Falha no download da atualizacao.";
@@ -704,59 +736,147 @@ static SDL_Rect s_modalRect = { 0, 0, 0, 0 };
 static SDL_Rect s_btnConfirmRect = { 0, 0, 0, 0 };
 static SDL_Rect s_btnCancelRect = { 0, 0, 0, 0 };
 
+#if defined(__SWITCH__)
+static std::string resolveSwitchNroPath() {
+  std::string execPath = Platform::getExecutablePath();
+  boot_log("[Updater-Switch] execPath: '%s'\n", execPath.c_str());
+
+  // 1. Testa execPath diretamente
+  if (!execPath.empty()) {
+    FILE* fp = fopen(execPath.c_str(), "rb");
+    if (fp) {
+      fclose(fp);
+      boot_log("[Updater-Switch] Encontrado em execPath: %s\n", execPath.c_str());
+      return execPath;
+    }
+    // Se não tinha sdmc:/, prefixa
+    if (execPath.rfind("sdmc:/", 0) != 0) {
+      std::string candidate = (execPath[0] == '/') ? ("sdmc:" + execPath) : ("sdmc:/" + execPath);
+      fp = fopen(candidate.c_str(), "rb");
+      if (fp) {
+        fclose(fp);
+        boot_log("[Updater-Switch] Encontrado com sdmc: prefixado: %s\n", candidate.c_str());
+        return candidate;
+      }
+      std::string candidateInSwitch = "sdmc:/switch/" + execPath;
+      fp = fopen(candidateInSwitch.c_str(), "rb");
+      if (fp) {
+        fclose(fp);
+        boot_log("[Updater-Switch] Encontrado em sdmc:/switch/: %s\n", candidateInSwitch.c_str());
+        return candidateInSwitch;
+      }
+    }
+  }
+
+  // 2. Procura nos caminhos padrão conhecidos
+  const char* knownPaths[] = {
+    "sdmc:/switch/heroes_lore/heroes_lore.nro",
+    "sdmc:/switch/heroes_lore.nro",
+    "sdmc:/switch/HeroesLore.nro",
+    "sdmc:/heroes_lore.nro"
+  };
+  for (const char* kp : knownPaths) {
+    FILE* fp = fopen(kp, "rb");
+    if (fp) {
+      fclose(fp);
+      boot_log("[Updater-Switch] Encontrado em caminho padrao: %s\n", kp);
+      return kp;
+    }
+  }
+
+  // 3. Fallback
+  if (!execPath.empty() && (execPath.find(".nro") != std::string::npos || execPath.find(".NRO") != std::string::npos)) {
+    if (execPath.rfind("sdmc:/", 0) == 0) return execPath;
+    if (execPath[0] == '/') return "sdmc:" + execPath;
+    return "sdmc:/switch/" + execPath;
+  }
+  return "sdmc:/switch/heroes_lore.nro";
+}
+#endif
+
 bool Updater::applyUpdate() {
   std::string storage = Platform::getStorageDir();
   std::string tmpFile = storage + "/" + s_releaseInfo.assetName + ".download";
 
 #if defined(__SWITCH__)
-  std::string targetNro = "";
-  std::string execPath = Platform::getExecutablePath();
-  if (!execPath.empty() && (execPath.rfind(".nro") != std::string::npos || execPath.rfind(".NRO") != std::string::npos)) {
-    targetNro = execPath;
-  } else {
-    // Se execPath não tiver a extensão .nro, verifica onde o arquivo já existe no SD
-    FILE* test1 = fopen("sdmc:/switch/heroes_lore.nro", "rb");
-    if (test1) {
-      fclose(test1);
-      targetNro = "sdmc:/switch/heroes_lore.nro";
-    } else {
-      FILE* test2 = fopen("sdmc:/switch/heroes_lore/heroes_lore.nro", "rb");
-      if (test2) {
-        fclose(test2);
-        targetNro = "sdmc:/switch/heroes_lore/heroes_lore.nro";
-      } else {
-        targetNro = "sdmc:/switch/heroes_lore.nro";
-      }
-    }
+  std::string targetNro = resolveSwitchNroPath();
+  boot_log("[Updater-Switch] Substituindo NRO alvo: %s\n", targetNro.c_str());
+
+  FILE* chk = fopen(tmpFile.c_str(), "rb");
+  if (!chk) {
+    boot_log("[Updater-Switch] ERRO: arquivo temporario %s nao abre!\n", tmpFile.c_str());
+    return false;
+  }
+  fseek(chk, 0, SEEK_END);
+  long tmpSize = ftell(chk);
+  fclose(chk);
+  boot_log("[Updater-Switch] Tamanho do NRO baixado: %ld bytes\n", tmpSize);
+  if (tmpSize <= 1024 * 1024) {
+    boot_log("[Updater-Switch] ERRO: NRO baixado muito pequeno (%ld bytes)\n", tmpSize);
+    remove(tmpFile.c_str());
+    return false;
   }
 
-  // Copia APENAS para a pasta onde o NRO de fato reside
+  std::string oldNro = targetNro + ".old";
+  remove(oldNro.c_str());
+  rename(targetNro.c_str(), oldNro.c_str());
+
   bool ok = copyFile(tmpFile, targetNro);
+  boot_log("[Updater-Switch] copyFile -> %s: %s (errno=%d: %s)\n",
+           targetNro.c_str(), ok ? "SUCESSO" : "FALHA", errno, strerror(errno));
+
+  if (!ok) {
+    rename(oldNro.c_str(), targetNro.c_str());
+    remove(tmpFile.c_str());
+    return false;
+  }
+
+  remove(oldNro.c_str());
   remove(tmpFile.c_str());
 
-  if (ok) {
-    s_state = UpdateState::RESTART_READY;
-    s_statusMessage = "Atualizacao concluida! Reiniciando...";
-    envSetNextLoad(targetNro.c_str(), targetNro.c_str());
-    Platform::showOsdMessage("Atualizacao concluida! Reinicie o aplicativo.");
-    return true;
-  }
+  envSetNextLoad(targetNro.c_str(), targetNro.c_str());
+  Platform::showOsdMessage("Atualizacao concluida! Reinicie o aplicativo.");
+  return true;
+
 #elif defined(_WIN32)
+  bool isZip = (s_releaseInfo.assetName.rfind(".zip") != std::string::npos ||
+                s_releaseInfo.assetName.rfind(".ZIP") != std::string::npos);
   std::string targetExe = "heroes_lore.exe";
   std::string execPath = Platform::getExecutablePath();
   if (!execPath.empty() && (execPath.rfind(".exe") != std::string::npos || execPath.rfind(".EXE") != std::string::npos)) {
     targetExe = execPath;
   }
-  std::string oldExe = targetExe + ".old";
-  remove(oldExe.c_str());
-  MoveFileA(targetExe.c_str(), oldExe.c_str());
-  if (MoveFileA(tmpFile.c_str(), targetExe.c_str()) || copyFile(tmpFile, targetExe)) {
+
+  if (isZip) {
+    std::string appDir = ".";
+    size_t lastSlash = targetExe.find_last_of("\\/");
+    if (lastSlash != std::string::npos) {
+      appDir = targetExe.substr(0, lastSlash);
+    }
+    std::string cmd = "tar.exe -xf \"" + tmpFile + "\" -C \"" + appDir + "\"";
+    int res = system(cmd.c_str());
+    if (res != 0) {
+      cmd = "powershell -Command \"Expand-Archive -Force -Path '" + tmpFile + "' -DestinationPath '" + appDir + "'\"";
+      res = system(cmd.c_str());
+    }
     remove(tmpFile.c_str());
-    s_state = UpdateState::RESTART_READY;
-    s_statusMessage = "Atualizacao concluida! Reinicie o jogo.";
-    Platform::showOsdMessage("Atualizacao concluida! Reinicie o jogo.");
-    return true;
+    if (res == 0) {
+      Platform::showOsdMessage("Atualizacao concluida! Reinicie o jogo.");
+      return true;
+    }
+    return false;
+  } else {
+    std::string oldExe = targetExe + ".old";
+    remove(oldExe.c_str());
+    MoveFileA(targetExe.c_str(), oldExe.c_str());
+    if (MoveFileA(tmpFile.c_str(), targetExe.c_str()) || copyFile(tmpFile, targetExe)) {
+      remove(tmpFile.c_str());
+      Platform::showOsdMessage("Atualizacao concluida! Reinicie o jogo.");
+      return true;
+    }
+    return false;
   }
+
 #elif defined(__linux__) && !defined(__ANDROID__)
   chmod(tmpFile.c_str(), 0755);
   std::string targetAppImage = "heroes_lore.AppImage";
@@ -773,21 +893,20 @@ bool Updater::applyUpdate() {
   if (rename(tmpFile.c_str(), targetAppImage.c_str()) == 0 || copyFile(tmpFile, targetAppImage)) {
     remove(tmpFile.c_str());
     chmod(targetAppImage.c_str(), 0755);
-    s_state = UpdateState::RESTART_READY;
-    s_statusMessage = "Atualizacao concluida! Reiniciando...";
     Platform::showOsdMessage("Atualizado! Reinicie o aplicativo.");
     return true;
   }
+  return false;
+
 #elif defined(__ANDROID__)
   std::string targetApk = storage + "/" + s_releaseInfo.assetName;
   remove(targetApk.c_str());
   rename(tmpFile.c_str(), targetApk.c_str());
   androidInstallApk(targetApk);
-  s_state = UpdateState::RESTART_READY;
-  s_statusMessage = "Instalando atualizacao...";
   Platform::showOsdMessage("Instalador aberto! Conclua a atualizacao.");
   return true;
 #endif
+
   return false;
 }
 
@@ -876,19 +995,33 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
 
   // 1. Escurecimento translúcido do fundo (Backdrop)
   SDL_Rect fullScreen = { 0, 0, winW, winH };
-  SDL_SetRenderDrawColor(renderer, 0, 0, 0, 210);
+  SDL_SetRenderDrawColor(renderer, 0, 0, 0, 215);
   SDL_RenderFillRect(renderer, &fullScreen);
 
-  // 2. Caixa Modal Proporcional (não estica no widescreen)
-  int modalW = std::min(winW - 24, std::max(310, std::min(450, (int)(winH * 0.95f))));
-  int modalH = std::min(winH - 24, std::max(270, (int)(modalW * 0.70f)));
+  // 2. Caixa Modal Proporcional e Responsiva por Resolução / Orientação
+  bool isPortrait = (winH > winW);
+  int modalW = 0;
+  int modalH = 0;
+
+  if (isPortrait) {
+    // Modo Retrato (Celular em pé): ocupa ~92% da largura da tela com boa altura
+    modalW = std::clamp((int)(winW * 0.92f), 280, 1100);
+    modalH = std::clamp((int)(modalW * 0.92f), 320, (int)(winH * 0.70f));
+  } else {
+    // Modo Paisagem (Nintendo Switch 720p, PC, Steam Deck):
+    // Switch (1280x720): modalW = ~800px, modalH = ~520px
+    modalW = std::clamp((int)(winW * 0.65f), 380, 960);
+    modalH = std::clamp((int)(winH * 0.76f), 300, 680);
+  }
+
   int modalX = (winW - modalW) / 2;
   int modalY = (winH - modalH) / 2;
   s_modalRect = { modalX, modalY, modalW, modalH };
 
   // Sombra suave da caixa
-  SDL_Rect shadow = { modalX + 6, modalY + 6, modalW, modalH };
-  SDL_SetRenderDrawColor(renderer, 0, 0, 0, 160);
+  int shadowOff = std::clamp(modalH / 50, 4, 10);
+  SDL_Rect shadow = { modalX + shadowOff, modalY + shadowOff, modalW, modalH };
+  SDL_SetRenderDrawColor(renderer, 0, 0, 0, 170);
   SDL_RenderFillRect(renderer, &shadow);
 
   // Fundo ardósia nobre de Soltia
@@ -901,43 +1034,64 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   SDL_RenderDrawRect(renderer, &box);
 
   // Filete interno em ouro nobre
-  SDL_Rect goldBorder = { modalX + 4, modalY + 4, modalW - 8, modalH - 8 };
+  int borderPad = std::clamp(modalH / 90, 4, 8);
+  SDL_Rect goldBorder = { modalX + borderPad, modalY + borderPad, modalW - borderPad * 2, modalH - borderPad * 2 };
   SDL_SetRenderDrawColor(renderer, 195, 155, 60, 255);
   SDL_RenderDrawRect(renderer, &goldBorder);
 
   // Rebites de bronze nos 4 cantos
+  int rivetSize = std::clamp(modalH / 80, 4, 8);
+  int rivetOffset = borderPad + 3;
   SDL_SetRenderDrawColor(renderer, 225, 185, 80, 255);
-  SDL_Rect r1 = { modalX + 7, modalY + 7, 4, 4 };
-  SDL_Rect r2 = { modalX + modalW - 11, modalY + 7, 4, 4 };
-  SDL_Rect r3 = { modalX + 7, modalY + modalH - 11, 4, 4 };
-  SDL_Rect r4 = { modalX + modalW - 11, modalY + modalH - 11, 4, 4 };
+  SDL_Rect r1 = { modalX + rivetOffset, modalY + rivetOffset, rivetSize, rivetSize };
+  SDL_Rect r2 = { modalX + modalW - rivetOffset - rivetSize, modalY + rivetOffset, rivetSize, rivetSize };
+  SDL_Rect r3 = { modalX + rivetOffset, modalY + modalH - rivetOffset - rivetSize, rivetSize, rivetSize };
+  SDL_Rect r4 = { modalX + modalW - rivetOffset - rivetSize, modalY + modalH - rivetOffset - rivetSize, rivetSize, rivetSize };
   SDL_RenderFillRect(renderer, &r1);
   SDL_RenderFillRect(renderer, &r2);
   SDL_RenderFillRect(renderer, &r3);
   SDL_RenderFillRect(renderer, &r4);
 
-  // Faixa de cabeçalho
-  SDL_Rect headerBox = { modalX + 6, modalY + 6, modalW - 12, 32 };
+  // Faixa de cabeçalho proporcional
+  int headerH = std::clamp((int)(modalH * 0.12f), 34, 60);
+  SDL_Rect headerBox = { modalX + borderPad + 2, modalY + borderPad + 2, modalW - (borderPad + 2) * 2, headerH };
   SDL_SetRenderDrawColor(renderer, 22, 28, 40, 255);
   SDL_RenderFillRect(renderer, &headerBox);
   SDL_SetRenderDrawColor(renderer, 195, 155, 60, 200);
-  SDL_RenderDrawLine(renderer, modalX + 6, modalY + 38, modalX + modalW - 6, modalY + 38);
+  SDL_RenderDrawLine(renderer, headerBox.x, headerBox.y + headerH, headerBox.x + headerBox.w, headerBox.y + headerH);
 
-  int charH = 18;
-  int charW = 12;
-  int stepX = 8; // Espaçamento proporcional natural entre caracteres
+  // Escala tipográfica dinâmica harmoniosa
+  int charH = std::clamp((int)(modalH * 0.052f), 16, 32);
+  int charW = (int)(charH * 0.65f);
+  int stepX = (int)(charW * 0.68f);
+
+  int smallCharH = std::max(14, (int)(charH * 0.82f));
+  int smallCharW = (int)(smallCharH * 0.65f);
+  int smallStepX = (int)(smallCharW * 0.68f);
+
+  // Legendas de atalhos por plataforma
+#if defined(__SWITCH__)
+  std::string scConfirm = "[ BOTAO A ]";
+  std::string scCancel  = "[ BOTAO B ]";
+#elif defined(__ANDROID__)
+  std::string scConfirm = "[ TOQUE ]";
+  std::string scCancel  = "[ TOQUE ]";
+#else
+  std::string scConfirm = "[ A / ENTER ]";
+  std::string scCancel  = "[ B / ESC ]";
+#endif
 
   if (s_state == UpdateState::UPDATE_AVAILABLE || s_state == UpdateState::CONFIRM_PROMPT) {
     // Título do Cabeçalho
     std::string title = "ATUALIZACAO DISPONIVEL";
     int tw = Platform::getTextWidth(title, charW, stepX);
-    Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + 13, charW, charH, 255, stepX);
+    Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + (headerH - charH) / 2 + borderPad, charW, charH, 255, stepX);
 
     // Faixa/Badge de Versão (Estilo Pill)
-    int badgeW = std::min(modalW - 40, 230);
-    int badgeH = 24;
+    int badgeW = std::clamp((int)(modalW * 0.68f), 220, 480);
+    int badgeH = std::clamp((int)(modalH * 0.085f), 26, 44);
     int badgeX = modalX + (modalW - badgeW) / 2;
-    int badgeY = modalY + 48;
+    int badgeY = modalY + headerH + std::clamp((int)(modalH * 0.04f), 10, 22);
     SDL_Rect verBox = { badgeX, badgeY, badgeW, badgeH };
     SDL_SetRenderDrawColor(renderer, 18, 28, 42, 255);
     SDL_RenderFillRect(renderer, &verBox);
@@ -946,13 +1100,14 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
 
     std::string vLine = std::string(HL_VERSION_TAG) + " -> " + s_releaseInfo.tagName;
     int vw = Platform::getTextWidth(vLine, charW, stepX);
-    Platform::drawText(renderer, vLine, badgeX + (badgeW - vw) / 2, badgeY + 3, charW, charH, 255, stepX);
+    Platform::drawText(renderer, vLine, badgeX + (badgeW - vw) / 2, badgeY + (badgeH - charH) / 2, charW, charH, 255, stepX);
 
     // Caixa de Alerta Âmbar de Salvamento
-    int noteX = modalX + 16;
-    int noteY = modalY + 80;
-    int noteW = modalW - 32;
-    int noteH = 68;
+    int noteMargin = (int)(modalW * 0.05f);
+    int noteW = modalW - noteMargin * 2;
+    int noteH = std::max(75, (int)(modalH * 0.28f));
+    int noteX = modalX + noteMargin;
+    int noteY = badgeY + badgeH + std::clamp((int)(modalH * 0.04f), 10, 22);
     SDL_Rect noteBox = { noteX, noteY, noteW, noteH };
     SDL_SetRenderDrawColor(renderer, 28, 22, 12, 235);
     SDL_RenderFillRect(renderer, &noteBox);
@@ -962,16 +1117,19 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     std::string a1 = "AVISO IMPORTANTE:";
     std::string a2 = "Salve o jogo antes de prosseguir.";
     std::string a3 = "O aplicativo sera reiniciado.";
-    Platform::drawText(renderer, a1, noteX + (noteW - Platform::getTextWidth(a1, charW, stepX)) / 2, noteY + 7, charW, charH, 255, stepX);
-    Platform::drawText(renderer, a2, noteX + (noteW - Platform::getTextWidth(a2, charW, stepX)) / 2, noteY + 27, charW, charH, 240, stepX);
-    Platform::drawText(renderer, a3, noteX + (noteW - Platform::getTextWidth(a3, charW, stepX)) / 2, noteY + 46, charW, charH, 240, stepX);
+    int lineSpacing = std::clamp((int)(noteH * 0.28f), charH + 4, charH + 18);
+    int lineStartY = noteY + (noteH - (lineSpacing * 2 + charH)) / 2;
+
+    Platform::drawText(renderer, a1, noteX + (noteW - Platform::getTextWidth(a1, charW, stepX)) / 2, lineStartY, charW, charH, 255, stepX);
+    Platform::drawText(renderer, a2, noteX + (noteW - Platform::getTextWidth(a2, charW, stepX)) / 2, lineStartY + lineSpacing, charW, charH, 240, stepX);
+    Platform::drawText(renderer, a3, noteX + (noteW - Platform::getTextWidth(a3, charW, stepX)) / 2, lineStartY + lineSpacing * 2, charW, charH, 240, stepX);
 
     // Botões Interativos (Lado a Lado)
-    int btnMargin = 16;
-    int btnGap = 12;
+    int btnMargin = (int)(modalW * 0.05f);
+    int btnGap = (int)(modalW * 0.04f);
+    int btnH = std::clamp((int)(modalH * 0.16f), 46, 78);
     int btnW = (modalW - (btnMargin * 2) - btnGap) / 2;
-    int btnH = 42;
-    int btnY = modalY + modalH - btnH - 16;
+    int btnY = modalY + modalH - btnH - std::clamp((int)(modalH * 0.05f), 14, 28);
 
     s_btnConfirmRect = { modalX + btnMargin, btnY, btnW, btnH };
     s_btnCancelRect = { modalX + btnMargin + btnW + btnGap, btnY, btnW, btnH };
@@ -986,9 +1144,8 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderDrawRect(renderer, &cBorder);
 
     std::string bt1 = "ATUALIZAR";
-    std::string sc1 = "[ A / 5 ]";
-    Platform::drawText(renderer, bt1, s_btnConfirmRect.x + (btnW - Platform::getTextWidth(bt1, charW, stepX)) / 2, btnY + 4, charW, charH, 255, stepX);
-    Platform::drawText(renderer, sc1, s_btnConfirmRect.x + (btnW - Platform::getTextWidth(sc1, charW, stepX)) / 2, btnY + 22, charW, charH, 200, stepX);
+    Platform::drawText(renderer, bt1, s_btnConfirmRect.x + (btnW - Platform::getTextWidth(bt1, charW, stepX)) / 2, btnY + (btnH / 2) - charH + 1, charW, charH, 255, stepX);
+    Platform::drawText(renderer, scConfirm, s_btnConfirmRect.x + (btnW - Platform::getTextWidth(scConfirm, smallCharW, smallStepX)) / 2, btnY + (btnH / 2) + 3, smallCharW, smallCharH, 210, smallStepX);
 
     // 2. Botão Cancelar (Ardósia Carmesim)
     SDL_SetRenderDrawColor(renderer, 48, 20, 26, 255);
@@ -1000,24 +1157,24 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderDrawRect(renderer, &rBorder);
 
     std::string bt2 = "CANCELAR";
-    std::string sc2 = "[ B / 7 ]";
-    Platform::drawText(renderer, bt2, s_btnCancelRect.x + (btnW - Platform::getTextWidth(bt2, charW, stepX)) / 2, btnY + 4, charW, charH, 255, stepX);
-    Platform::drawText(renderer, sc2, s_btnCancelRect.x + (btnW - Platform::getTextWidth(sc2, charW, stepX)) / 2, btnY + 22, charW, charH, 200, stepX);
+    Platform::drawText(renderer, bt2, s_btnCancelRect.x + (btnW - Platform::getTextWidth(bt2, charW, stepX)) / 2, btnY + (btnH / 2) - charH + 1, charW, charH, 255, stepX);
+    Platform::drawText(renderer, scCancel, s_btnCancelRect.x + (btnW - Platform::getTextWidth(scCancel, smallCharW, smallStepX)) / 2, btnY + (btnH / 2) + 3, smallCharW, smallCharH, 210, smallStepX);
 
   } else if (s_state == UpdateState::DOWNLOADING) {
     std::string title = "BAIXANDO ATUALIZACAO";
     int tw = Platform::getTextWidth(title, charW, stepX);
-    Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + 13, charW, charH, 255, stepX);
+    Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + (headerH - charH) / 2 + borderPad, charW, charH, 255, stepX);
 
     std::string fLine = s_releaseInfo.assetName;
     int fw = Platform::getTextWidth(fLine, charW, stepX);
-    Platform::drawText(renderer, fLine, modalX + (modalW - fw) / 2, modalY + 54, charW, charH, 240, stepX);
+    int fLineY = modalY + headerH + std::clamp((int)(modalH * 0.08f), 16, 36);
+    Platform::drawText(renderer, fLine, modalX + (modalW - fw) / 2, fLineY, charW, charH, 240, stepX);
 
     // Barra de progresso gráfica
-    int barW = modalW - 48;
-    int barH = 20;
-    int barX = modalX + 24;
-    int barY = modalY + 88;
+    int barW = modalW - (int)(modalW * 0.12f);
+    int barH = std::clamp((int)(modalH * 0.075f), 22, 38);
+    int barX = modalX + (modalW - barW) / 2;
+    int barY = fLineY + charH + std::clamp((int)(modalH * 0.06f), 14, 28);
 
     SDL_Rect barBg = { barX, barY, barW, barH };
     SDL_SetRenderDrawColor(renderer, 10, 14, 20, 255);
@@ -1039,11 +1196,12 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     snprintf(pBuf, sizeof(pBuf), "%.1f MB / %.1f MB (%d%%)", mbDown, mbTotal, (int)(prog * 100.0f));
     std::string pStr = pBuf;
     int pw = Platform::getTextWidth(pStr, charW, stepX);
-    Platform::drawText(renderer, pStr, modalX + (modalW - pw) / 2, barY + barH + 12, charW, charH, 255, stepX);
+    int pStrY = barY + barH + std::clamp((int)(modalH * 0.05f), 12, 24);
+    Platform::drawText(renderer, pStr, modalX + (modalW - pw) / 2, pStrY, charW, charH, 255, stepX);
 
     std::string wLine = "Aguarde... Nao feche o jogo.";
-    int ww = Platform::getTextWidth(wLine, charW, stepX);
-    Platform::drawText(renderer, wLine, modalX + (modalW - ww) / 2, modalY + modalH - 32, charW, charH, 200, stepX);
+    int ww = Platform::getTextWidth(wLine, smallCharW, smallStepX);
+    Platform::drawText(renderer, wLine, modalX + (modalW - ww) / 2, modalY + modalH - std::clamp((int)(modalH * 0.12f), 32, 54), smallCharW, smallCharH, 200, smallStepX);
 
     s_btnConfirmRect = { 0, 0, 0, 0 };
     s_btnCancelRect = { 0, 0, 0, 0 };
@@ -1051,21 +1209,23 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   } else if (s_state == UpdateState::RESTART_READY || s_state == UpdateState::DOWNLOAD_COMPLETE) {
     std::string title = "ATUALIZACAO CONCLUIDA";
     int tw = Platform::getTextWidth(title, charW, stepX);
-    Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + 13, charW, charH, 255, stepX);
+    Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + (headerH - charH) / 2 + borderPad, charW, charH, 255, stepX);
 
     std::string s1 = "Arquivo instalado com sucesso!";
     int sw1 = Platform::getTextWidth(s1, charW, stepX);
-    Platform::drawText(renderer, s1, modalX + (modalW - sw1) / 2, modalY + 68, charW, charH, 255, stepX);
+    int s1Y = modalY + headerH + std::clamp((int)(modalH * 0.14f), 24, 52);
+    Platform::drawText(renderer, s1, modalX + (modalW - sw1) / 2, s1Y, charW, charH, 255, stepX);
 
     std::string s2 = "Reinicie para aplicar a nova versao.";
     int sw2 = Platform::getTextWidth(s2, charW, stepX);
-    Platform::drawText(renderer, s2, modalX + (modalW - sw2) / 2, modalY + 92, charW, charH, 220, stepX);
+    int s2Y = s1Y + charH + std::clamp((int)(modalH * 0.05f), 12, 22);
+    Platform::drawText(renderer, s2, modalX + (modalW - sw2) / 2, s2Y, charW, charH, 220, stepX);
 
     // Botão de Reinício (Verde Esmeralda)
-    int btnW = std::min(modalW - 48, 220);
-    int btnH = 42;
+    int btnW = std::clamp((int)(modalW * 0.58f), 180, 360);
+    int btnH = std::clamp((int)(modalH * 0.16f), 46, 78);
     int btnX = modalX + (modalW - btnW) / 2;
-    int btnY = modalY + modalH - btnH - 18;
+    int btnY = modalY + modalH - btnH - std::clamp((int)(modalH * 0.07f), 16, 32);
     s_btnConfirmRect = { btnX, btnY, btnW, btnH };
     s_btnCancelRect = { 0, 0, 0, 0 };
 
@@ -1075,23 +1235,23 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderDrawRect(renderer, &s_btnConfirmRect);
 
     std::string rText = "REINICIAR";
-    std::string rSub = "[ A / 5 ]";
-    Platform::drawText(renderer, rText, btnX + (btnW - Platform::getTextWidth(rText, charW, stepX)) / 2, btnY + 4, charW, charH, 255, stepX);
-    Platform::drawText(renderer, rSub, btnX + (btnW - Platform::getTextWidth(rSub, charW, stepX)) / 2, btnY + 22, charW, charH, 200, stepX);
+    Platform::drawText(renderer, rText, btnX + (btnW - Platform::getTextWidth(rText, charW, stepX)) / 2, btnY + (btnH / 2) - charH + 1, charW, charH, 255, stepX);
+    Platform::drawText(renderer, scConfirm, btnX + (btnW - Platform::getTextWidth(scConfirm, smallCharW, smallStepX)) / 2, btnY + (btnH / 2) + 3, smallCharW, smallCharH, 210, smallStepX);
 
   } else if (s_state == UpdateState::CHECK_FAILED || s_state == UpdateState::DOWNLOAD_FAILED) {
     std::string title = "AVISO DE ATUALIZACAO";
     int tw = Platform::getTextWidth(title, charW, stepX);
-    Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + 13, charW, charH, 255, stepX);
+    Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + (headerH - charH) / 2 + borderPad, charW, charH, 255, stepX);
 
     std::string s1 = s_statusMessage.empty() ? "Nao foi possivel concluir a atualizacao." : s_statusMessage;
     int sw1 = Platform::getTextWidth(s1, charW, stepX);
-    Platform::drawText(renderer, s1, modalX + (modalW - sw1) / 2, modalY + 75, charW, charH, 255, stepX);
+    int s1Y = modalY + headerH + std::clamp((int)(modalH * 0.16f), 26, 60);
+    Platform::drawText(renderer, s1, modalX + (modalW - sw1) / 2, s1Y, charW, charH, 255, stepX);
 
-    int btnW = 160;
-    int btnH = 40;
+    int btnW = std::clamp((int)(modalW * 0.45f), 160, 280);
+    int btnH = std::clamp((int)(modalH * 0.15f), 42, 68);
     int btnX = modalX + (modalW - btnW) / 2;
-    int btnY = modalY + modalH - btnH - 18;
+    int btnY = modalY + modalH - btnH - std::clamp((int)(modalH * 0.07f), 16, 32);
     s_btnCancelRect = { btnX, btnY, btnW, btnH };
     s_btnConfirmRect = { 0, 0, 0, 0 };
 
@@ -1100,8 +1260,9 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_SetRenderDrawColor(renderer, 175, 65, 75, 255);
     SDL_RenderDrawRect(renderer, &s_btnCancelRect);
 
-    std::string cText = "FECHAR [ B / 7 ]";
-    Platform::drawText(renderer, cText, btnX + (btnW - Platform::getTextWidth(cText, charW, stepX)) / 2, btnY + 11, charW, charH, 255, stepX);
+    std::string cText = "FECHAR";
+    Platform::drawText(renderer, cText, btnX + (btnW - Platform::getTextWidth(cText, charW, stepX)) / 2, btnY + (btnH / 2) - charH + 1, charW, charH, 255, stepX);
+    Platform::drawText(renderer, scCancel, btnX + (btnW - Platform::getTextWidth(scCancel, smallCharW, smallStepX)) / 2, btnY + (btnH / 2) + 3, smallCharW, smallCharH, 210, smallStepX);
   }
 }
 
