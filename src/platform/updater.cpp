@@ -99,7 +99,7 @@ static std::vector<std::string> getCandidateAssetNames() {
 #elif defined(__ANDROID__)
   return { "heroes_lore_android_universal.apk", "heroes_lore_android_arm64.apk" };
 #elif defined(_WIN32)
-  return { "heroes_lore.exe", "heroes_lore_windows_x64.zip", "heroes_lore.zip" };
+  return { "heroes_lore_windows_x64.zip", "heroes_lore.zip", "heroes_lore.exe" };
 #elif defined(__linux__)
   return { "heroes_lore_linux_x86_64.AppImage" };
 #else
@@ -739,58 +739,42 @@ static SDL_Rect s_btnCancelRect = { 0, 0, 0, 0 };
 #if defined(__SWITCH__)
 static std::string resolveSwitchNroPath() {
   std::string execPath = Platform::getExecutablePath();
-  boot_log("[Updater-Switch] execPath: '%s'\n", execPath.c_str());
+  boot_log("[Updater-Switch] execPath bruto: '%s'\n", execPath.c_str());
 
-  // 1. Testa execPath diretamente
+  // Lista de candidatos com garantia absoluta do prefixo sdmc:/
+  std::vector<std::string> candidates;
+
   if (!execPath.empty()) {
-    FILE* fp = fopen(execPath.c_str(), "rb");
-    if (fp) {
-      fclose(fp);
-      boot_log("[Updater-Switch] Encontrado em execPath: %s\n", execPath.c_str());
-      return execPath;
-    }
-    // Se não tinha sdmc:/, prefixa
-    if (execPath.rfind("sdmc:/", 0) != 0) {
-      std::string candidate = (execPath[0] == '/') ? ("sdmc:" + execPath) : ("sdmc:/" + execPath);
-      fp = fopen(candidate.c_str(), "rb");
-      if (fp) {
-        fclose(fp);
-        boot_log("[Updater-Switch] Encontrado com sdmc: prefixado: %s\n", candidate.c_str());
-        return candidate;
-      }
-      std::string candidateInSwitch = "sdmc:/switch/" + execPath;
-      fp = fopen(candidateInSwitch.c_str(), "rb");
-      if (fp) {
-        fclose(fp);
-        boot_log("[Updater-Switch] Encontrado em sdmc:/switch/: %s\n", candidateInSwitch.c_str());
-        return candidateInSwitch;
+    std::string norm = execPath;
+    if (norm.rfind("sdmc:/", 0) == 0) {
+      candidates.push_back(norm);
+    } else {
+      if (norm[0] == '/') {
+        candidates.push_back("sdmc:" + norm);
+      } else {
+        candidates.push_back("sdmc:/switch/" + norm);
+        candidates.push_back("sdmc:/switch/heroes_lore/" + norm);
+        candidates.push_back("sdmc:/" + norm);
       }
     }
   }
 
-  // 2. Procura nos caminhos padrão conhecidos
-  const char* knownPaths[] = {
-    "sdmc:/switch/heroes_lore/heroes_lore.nro",
-    "sdmc:/switch/heroes_lore.nro",
-    "sdmc:/switch/HeroesLore.nro",
-    "sdmc:/heroes_lore.nro"
-  };
-  for (const char* kp : knownPaths) {
-    FILE* fp = fopen(kp, "rb");
+  candidates.push_back("sdmc:/switch/heroes_lore/heroes_lore.nro");
+  candidates.push_back("sdmc:/switch/heroes_lore.nro");
+  candidates.push_back("sdmc:/switch/HeroesLore.nro");
+  candidates.push_back("sdmc:/heroes_lore.nro");
+
+  for (const auto& path : candidates) {
+    FILE* fp = fopen(path.c_str(), "rb");
     if (fp) {
       fclose(fp);
-      boot_log("[Updater-Switch] Encontrado em caminho padrao: %s\n", kp);
-      return kp;
+      boot_log("[Updater-Switch] NRO confirmado em: %s\n", path.c_str());
+      return path;
     }
   }
 
-  // 3. Fallback
-  if (!execPath.empty() && (execPath.find(".nro") != std::string::npos || execPath.find(".NRO") != std::string::npos)) {
-    if (execPath.rfind("sdmc:/", 0) == 0) return execPath;
-    if (execPath[0] == '/') return "sdmc:" + execPath;
-    return "sdmc:/switch/" + execPath;
-  }
-  return "sdmc:/switch/heroes_lore.nro";
+  boot_log("[Updater-Switch] Fallback para sdmc:/switch/heroes_lore/heroes_lore.nro\n");
+  return "sdmc:/switch/heroes_lore/heroes_lore.nro";
 }
 #endif
 
@@ -800,7 +784,7 @@ bool Updater::applyUpdate() {
 
 #if defined(__SWITCH__)
   std::string targetNro = resolveSwitchNroPath();
-  boot_log("[Updater-Switch] Substituindo NRO alvo: %s\n", targetNro.c_str());
+  boot_log("[Updater-Switch] Substituindo NRO alvo: %s (a partir de %s)\n", targetNro.c_str(), tmpFile.c_str());
 
   FILE* chk = fopen(tmpFile.c_str(), "rb");
   if (!chk) {
@@ -817,26 +801,45 @@ bool Updater::applyUpdate() {
     return false;
   }
 
-  std::string oldNro = targetNro + ".old";
-  remove(oldNro.c_str());
-  rename(targetNro.c_str(), oldNro.c_str());
-
+  // 1. Tenta copia direta primeiro
   bool ok = copyFile(tmpFile, targetNro);
-  boot_log("[Updater-Switch] copyFile -> %s: %s (errno=%d: %s)\n",
+  boot_log("[Updater-Switch] copyFile direto para %s: %s (errno=%d: %s)\n",
            targetNro.c_str(), ok ? "SUCESSO" : "FALHA", errno, strerror(errno));
 
+  // 2. Se copyFile direto falhou, tenta rotacionar com .old
   if (!ok) {
-    rename(oldNro.c_str(), targetNro.c_str());
+    std::string oldNro = targetNro + ".old";
+    remove(oldNro.c_str());
+    if (rename(targetNro.c_str(), oldNro.c_str()) == 0) {
+      if (rename(tmpFile.c_str(), targetNro.c_str()) == 0) {
+        ok = true;
+        remove(oldNro.c_str());
+        boot_log("[Updater-Switch] rename atomico tmpFile -> targetNro SUCESSO!\n");
+      } else {
+        ok = copyFile(tmpFile, targetNro);
+        if (ok) {
+          remove(oldNro.c_str());
+          remove(tmpFile.c_str());
+          boot_log("[Updater-Switch] copyFile pos-rename SUCESSO!\n");
+        } else {
+          rename(oldNro.c_str(), targetNro.c_str());
+          boot_log("[Updater-Switch] Falhou gravar novo NRO, backup .old restaurado.\n");
+        }
+      }
+    } else {
+      boot_log("[Updater-Switch] rename de %s para %s falhou (errno=%d: %s)\n",
+               targetNro.c_str(), oldNro.c_str(), errno, strerror(errno));
+    }
+  } else {
     remove(tmpFile.c_str());
-    return false;
   }
 
-  remove(oldNro.c_str());
-  remove(tmpFile.c_str());
-
-  envSetNextLoad(targetNro.c_str(), targetNro.c_str());
-  Platform::showOsdMessage("Atualizacao concluida! Reinicie o aplicativo.");
-  return true;
+  if (ok) {
+    envSetNextLoad(targetNro.c_str(), targetNro.c_str());
+    Platform::showOsdMessage("Atualizacao concluida! Reinicie o aplicativo.");
+    return true;
+  }
+  return false;
 
 #elif defined(_WIN32)
   bool isZip = (s_releaseInfo.assetName.rfind(".zip") != std::string::npos ||
@@ -853,6 +856,13 @@ bool Updater::applyUpdate() {
     if (lastSlash != std::string::npos) {
       appDir = targetExe.substr(0, lastSlash);
     }
+
+    // Renomeia o executavel ativo para .old ANTES de descompactar,
+    // liberando heroes_lore.exe para extracao sem erro de sharing violation
+    std::string oldExe = targetExe + ".old";
+    remove(oldExe.c_str());
+    MoveFileA(targetExe.c_str(), oldExe.c_str());
+
     std::string cmd = "tar.exe -xf \"" + tmpFile + "\" -C \"" + appDir + "\"";
     int res = system(cmd.c_str());
     if (res != 0) {
@@ -863,8 +873,10 @@ bool Updater::applyUpdate() {
     if (res == 0) {
       Platform::showOsdMessage("Atualizacao concluida! Reinicie o jogo.");
       return true;
+    } else {
+      MoveFileA(oldExe.c_str(), targetExe.c_str());
+      return false;
     }
-    return false;
   } else {
     std::string oldExe = targetExe + ".old";
     remove(oldExe.c_str());

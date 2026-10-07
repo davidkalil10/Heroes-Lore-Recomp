@@ -495,6 +495,19 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
     2. **Validação de Tamanho do Download:** O arquivo `.download` é verificado antes da substituição para garantir que tem tamanho íntegro de NRO (> 1 MB).
     3. **Substituição Atômica com Backup:** O NRO existente é temporariamente renomeado para `.old`. O novo arquivo é copiado via stream binário em blocos de 64KB. Em caso de falha, o backup `.old` é restaurado automaticamente.
     4. **Logs Detalhados:** Toda a operação é registrada com `boot_log` em `sdmc:/heroes_lore_boot.log`.
-    5. **Transição Estrita de Estado:** A interface só avança para `RESTART_READY` se `applyUpdate()` retornar verdadeiro com 100% dos bytes validados e `envSetNextLoad` configurado.
+## Sessão 15 (Atualização Integral de Assets no Windows e Blindagem do SDMC no Switch)
+
+- **Atualização da Pasta `assets/` no Windows via Pacote ZIP Completo:**
+  - *Diagnóstico:* Ao atualizar no PC, o jogo reiniciava informando no banner superior que estava na nova versão (`v1.0.7`), mas o pergaminho "Sobre" continuava exibindo a versão anterior (`v1.0.6`).
+  - *Causa Raiz:* O texto da tela "Sobre" é carregado do bytecode em `assets/bl.class`. O atualizador havia baixado apenas o binário `heroes_lore.exe`, deixando a pasta `assets/` intocada com os dados antigos.
+  - *Solução:*
+    1. A lista de prioridade `getCandidateAssetNames()` no Windows passou a priorizar `heroes_lore_windows_x64.zip` em primeiro lugar.
+    2. Antes de descompactar o ZIP, `applyUpdate()` renomeia o executável ativo `heroes_lore.exe` para `.old`, contornando a restrição de compartilhamento do Windows (`ERROR_SHARING_VIOLATION`) e permitindo que o `tar.exe` / `Expand-Archive` extraia o novo executável, DLLs e toda a árvore de `assets/` sem bloqueio.
+
+- **Blindagem do Caminho Canônico `sdmc:/` e Gravação no Switch:**
+  - *Diagnóstico:* Ao concluir o download de ~81MB no Switch, o modal exibia "Falha ao gravar arquivo de atualizacao".
+  - *Causa Raiz:* `resolveSwitchNroPath()` validava `fopen(execPath, "rb")` e, caso o arquivo abrisse via diretório de trabalho relativo (ex: `"heroes_lore.nro"`), retornava o nome puro sem o prefixo `sdmc:/`. No Switch, o runtime C não possui permissão de gravação em caminhos relativos sem devoptab explícito, falhando no `fopen(..., "wb")`.
+  - *Solução:* Todos os caminhos candidatos em `resolveSwitchNroPath()` agora iniciam obrigatoriamente com `sdmc:/`. A gravação tenta a cópia direta e, caso falhe por lock de arquivo, utiliza rotação atômica via `.old` e `rename` com rollback de segurança.
+
 
 
