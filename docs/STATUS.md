@@ -164,10 +164,12 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
     - Opção explícita de cancelamento `[7 / B] Cancelar (Salvar Primeiro)` para fechar o diálogo sem tocar em arquivos, permitindo que o jogador salve seu jogo antes de prosseguir.
     - Opção `[5 / A] Salvei e Quero Atualizar` com barra gráfica de progresso em tempo real (0 a 100%).
     - Bloqueio total de propagação de inputs para a VM enquanto o modal estiver ativo, garantindo foco exclusivo na interação do atualizador.
-  - [x] Integração Orgânica ao Menu do Jogo J2ME:
-    - Hook nativo `bl_a_native` registrado na VM para `bl.a:(II)Z` em `src/vm/natives.cpp`. Ao pressionar a tecla '5', Enter ou o botão <kbd>A</kbd> na tela "Sobre" (`bl.class`), a checagem OTA é disparada imediatamente.
+  - [x] Integração Orgânica ao Menu do Jogo J2ME & Alinhamento Widescreen:
+    - **Hook Nativo de Renderização (`bl_draw_native`):** Corrigido o bug histórico do bytecode J2ME original (`n2 + 201 >> 1`) que deslocava todo o texto dos créditos em quase 100 pixels para a esquerda em Widescreen. O pergaminho agora é renderizado centralizado na tela ativa (240x320 ou 568x320), conectando a aba superior de forma contínua sem faixas roxas dividindo, e com altura ampliada (repetição 4) acomodando confortavelmente todas as 10 linhas de texto.
+    - **Hook Nativo de Entrada (`bl_a_native`):** Suporte robusto a todas as variantes da tecla '5' (53), Enter (13), Fire (8 / -5) e clique de mouse disparando a checagem com feedback OSD imediato ("Verificando atualizacoes no GitHub...").
+    - **Tratamento de Feedback Resiliente:** Exibe retorno claro ao usuário via banner OSD em todas as situações (versão já atualizada, repositório privado / 404, sem conexão à internet ou nova versão disponível com diálogo modal).
     - Texto da tela "Sobre" atualizado via `tools/patch_credits.py` para incluir a indicação visual oficial `[5 / A]: ATUALIZAR`.
-    - Atalho global no teclado via tecla <kbd>F9</kbd> e checagem assíncrona silenciosa em segundo plano durante a inicialização do jogo.
+    - Atalho global no teclado via tecla <kbd>F9</kbd> e suporte a clique do mouse na tela.
 
 ## Versões e Releases Oficiais
 - **v1.0.0:** Primeiro release oficial da recompilação nativa em C++17 (Passos 1 a 6 concluídos: áudio MIDI/SF2, salvamento RMS, typematic controls, gamepads, APK Android, Homebrew Nintendo Switch).
