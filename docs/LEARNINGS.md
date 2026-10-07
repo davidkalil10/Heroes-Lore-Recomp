@@ -397,7 +397,18 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   2. Isolamento condicional por plataforma do tratador de mouse:
      Envolvido por `#if !defined(__ANDROID__) && !defined(__SWITCH__)`, garantindo que binários mobile e de console sequer compilem o código de mouse.
   3. Verificação de ID de dispositivo:
-     `if (ev.button.which != SDL_TOUCH_MOUSEID)`, blindando o desktop PC contra qualquer toque sintetizado.
+     `if (ev.button.which != SDL_TOUCH_MOUSEID)`, blindando o desktop PC contra qualquer toque sintetizado.## Sessão 12 (Pilha HTTP Nativa Android via JNI e Instalação OTA com ApkFileProvider)
 
-
+- **Causa do "Atualização: Sem Conexão com a Internet" no Android:**
+  - Na compilação inicial de teste do CI, as rotinas de rede no Android haviam sido temporariamente isoladas para destravar a compilação cruzada do NDK, resultando em resposta HTTP vazia (`""`).
+  - Como a resposta da API do GitHub retornava vazia, o sistema ativava o mecanismo de proteção com o aviso OSD de "Sem conexão com a internet".
+- **Implementação da Pilha de Rede Java Nativa via JNI (`SDLActivity.java`):**
+  - Em vez de compilar e linkar a biblioteca `libcurl` com OpenSSL no NDK (o que aumentaria o APK e exigiria gerenciamento de certificados CA raiz desatualizados em dispositivos antigos), implementamos chamadas JNI diretas (`androidHttpGet` e `androidDownloadFile`) mapeadas para métodos estáticos em `org.libsdl.app.SDLActivity`.
+  - As chamadas utilizam `java.net.HttpURLConnection`, que emprega a pilha de certificados TLS nativa do sistema operacional Android.
+  - **Tratamento de Redirecionamentos 302 do GitHub:** Os downloads de assets no GitHub Releases redirecionam (HTTP 302 Found) para os servidores S3 da Amazon (`objects.githubusercontent.com`). O método Java implementa um loop seguro de até 5 saltos seguindo o cabeçalho `Location`.
+- **Instalação Segura de APK no Android 7.0+ (Nougat ao Android 15) com `ApkFileProvider`:**
+  - Desde o Android 7.0+, o sistema operacional bloqueia o compartilhamento direto de URIs `file://` com o PackageInstaller via `FileUriExposedException`.
+  - Criado o `ApkFileProvider` derivado de `ContentProvider` nativo, dispensando dependências externas do AndroidX.
+  - Ao concluir o download de `heroes_lore_android_universal.apk`, o arquivo é renomeado para a extensão `.apk` e aberto via `content://org.libsdl.app.provider/...` com a flag `FLAG_GRANT_READ_URI_PERMISSION`.
+  - O PackageInstaller do Android abre a tela oficial de atualização do sistema para que o jogador instale a nova versão mantendo os dados e saves intactos.
 

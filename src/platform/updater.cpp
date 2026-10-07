@@ -25,6 +25,15 @@
 #elif defined(__ANDROID__)
   #include <jni.h>
   #include <unistd.h>
+  #if defined(__has_include)
+    #if __has_include(<SDL2/SDL_system.h>)
+      #include <SDL2/SDL_system.h>
+    #else
+      #include <SDL_system.h>
+    #endif
+  #else
+    #include <SDL_system.h>
+  #endif
 #elif defined(__linux__)
   #include <curl/curl.h>
   #include <unistd.h>
@@ -340,6 +349,75 @@ static bool curlDownloadFile(const std::string& url, const std::string& outPath)
 }
 #endif
 
+#if defined(__ANDROID__)
+static std::string androidHttpGet(const std::string& url) {
+  JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+  if (!env) return "";
+
+  jclass activityClass = env->FindClass("org/libsdl/app/SDLActivity");
+  if (!activityClass) return "";
+
+  jmethodID mid = env->GetStaticMethodID(activityClass, "httpGet", "(Ljava/lang/String;)Ljava/lang/String;");
+  if (!mid) {
+    env->DeleteLocalRef(activityClass);
+    return "";
+  }
+
+  jstring jUrl = env->NewStringUTF(url.c_str());
+  jstring jRes = (jstring)env->CallStaticObjectMethod(activityClass, mid, jUrl);
+  env->DeleteLocalRef(jUrl);
+  env->DeleteLocalRef(activityClass);
+
+  if (!jRes) return "";
+
+  const char* utf = env->GetStringUTFChars(jRes, nullptr);
+  std::string result = utf ? utf : "";
+  if (utf) env->ReleaseStringUTFChars(jRes, utf);
+  env->DeleteLocalRef(jRes);
+
+  return result;
+}
+
+static bool androidDownloadFile(const std::string& url, const std::string& outPath) {
+  JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+  if (!env) return false;
+
+  jclass activityClass = env->FindClass("org/libsdl/app/SDLActivity");
+  if (!activityClass) return false;
+
+  jmethodID mid = env->GetStaticMethodID(activityClass, "downloadFile", "(Ljava/lang/String;Ljava/lang/String;)Z");
+  if (!mid) {
+    env->DeleteLocalRef(activityClass);
+    return false;
+  }
+
+  jstring jUrl = env->NewStringUTF(url.c_str());
+  jstring jPath = env->NewStringUTF(outPath.c_str());
+  jboolean res = env->CallStaticBooleanMethod(activityClass, mid, jUrl, jPath);
+  env->DeleteLocalRef(jUrl);
+  env->DeleteLocalRef(jPath);
+  env->DeleteLocalRef(activityClass);
+
+  return res == JNI_TRUE;
+}
+
+static void androidInstallApk(const std::string& apkPath) {
+  JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+  if (!env) return;
+
+  jclass activityClass = env->FindClass("org/libsdl/app/SDLActivity");
+  if (!activityClass) return;
+
+  jmethodID mid = env->GetStaticMethodID(activityClass, "installApk", "(Ljava/lang/String;)V");
+  if (mid) {
+    jstring jPath = env->NewStringUTF(apkPath.c_str());
+    env->CallStaticVoidMethod(activityClass, mid, jPath);
+    env->DeleteLocalRef(jPath);
+  }
+  env->DeleteLocalRef(activityClass);
+}
+#endif
+
 void Updater::init() {
 #if defined(__SWITCH__)
   socketInitializeDefault();
@@ -384,7 +462,7 @@ void Updater::checkAsync(bool notifyIfNoUpdate) {
 #elif defined(__SWITCH__) || (defined(__linux__) && !defined(__ANDROID__))
     json = curlHttpGet("https://api.github.com/repos/davidkalil10/Heroes-Lore-Recomp/releases/latest");
 #elif defined(__ANDROID__)
-    // No Android, a chamada JNI pode ser feita ou fallback silencioso
+    json = androidHttpGet("https://api.github.com/repos/davidkalil10/Heroes-Lore-Recomp/releases/latest");
 #endif
 
     std::lock_guard<std::mutex> lock(s_updaterMutex);
@@ -450,6 +528,8 @@ void Updater::startDownload() {
     ok = winHttpDownloadFile(downloadUrl, destPath);
 #elif defined(__SWITCH__) || (defined(__linux__) && !defined(__ANDROID__))
     ok = curlDownloadFile(downloadUrl, destPath);
+#elif defined(__ANDROID__)
+    ok = androidDownloadFile(downloadUrl, destPath);
 #endif
 
     std::lock_guard<std::mutex> lock(s_updaterMutex);
@@ -501,6 +581,15 @@ bool Updater::applyUpdate() {
     Platform::showOsdMessage("Atualizado! Reinicie o aplicativo.");
     return true;
   }
+#elif defined(__ANDROID__)
+  std::string targetApk = storage + "/" + s_releaseInfo.assetName;
+  remove(targetApk.c_str());
+  rename(tmpFile.c_str(), targetApk.c_str());
+  androidInstallApk(targetApk);
+  s_state = UpdateState::RESTART_READY;
+  s_statusMessage = "Instalando atualizacao...";
+  Platform::showOsdMessage("Instalador aberto! Conclua a atualizacao.");
+  return true;
 #endif
   return false;
 }

@@ -1860,6 +1860,135 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         }
         return 0;
     }
+
+    public static String httpGet(String urlStr) {
+        try {
+            String currentUrl = urlStr;
+            int redirects = 0;
+            while (redirects < 5) {
+                java.net.URL url = new java.net.URL(currentUrl);
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setRequestProperty("User-Agent", "Heroes-Lore-Updater/1.0");
+                conn.setRequestProperty("Accept", "application/vnd.github.v3+json");
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(10000);
+                conn.setInstanceFollowRedirects(true);
+                int code = conn.getResponseCode();
+                if (code == java.net.HttpURLConnection.HTTP_MOVED_TEMP ||
+                    code == java.net.HttpURLConnection.HTTP_MOVED_PERM ||
+                    code == java.net.HttpURLConnection.HTTP_SEE_OTHER ||
+                    code == 307 || code == 308) {
+                    String loc = conn.getHeaderField("Location");
+                    if (loc != null && !loc.isEmpty()) {
+                        currentUrl = loc;
+                        redirects++;
+                        conn.disconnect();
+                        continue;
+                    }
+                }
+                if (code >= 200 && code < 400) {
+                    java.io.InputStream in = conn.getInputStream();
+                    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                    byte[] buf = new byte[4096];
+                    int n;
+                    while ((n = in.read(buf)) != -1) {
+                        out.write(buf, 0, n);
+                    }
+                    in.close();
+                    conn.disconnect();
+                    return out.toString("UTF-8");
+                } else if (code == 404) {
+                    conn.disconnect();
+                    return "{\"status\":\"404\",\"message\":\"Not Found\"}";
+                }
+                conn.disconnect();
+                break;
+            }
+        } catch (Exception e) {
+            Log.e("SDL", "httpGet error: " + e.getMessage());
+        }
+        return "";
+    }
+
+    public static boolean downloadFile(String urlStr, String destPath) {
+        try {
+            String currentUrl = urlStr;
+            int redirects = 0;
+            while (redirects < 5) {
+                java.net.URL url = new java.net.URL(currentUrl);
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setRequestProperty("User-Agent", "Heroes-Lore-Updater/1.0");
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(30000);
+                conn.setInstanceFollowRedirects(true);
+                int code = conn.getResponseCode();
+                if (code == java.net.HttpURLConnection.HTTP_MOVED_TEMP ||
+                    code == java.net.HttpURLConnection.HTTP_MOVED_PERM ||
+                    code == java.net.HttpURLConnection.HTTP_SEE_OTHER ||
+                    code == 307 || code == 308) {
+                    String loc = conn.getHeaderField("Location");
+                    if (loc != null && !loc.isEmpty()) {
+                        currentUrl = loc;
+                        redirects++;
+                        conn.disconnect();
+                        continue;
+                    }
+                }
+                if (code >= 200 && code < 400) {
+                    java.io.File destFile = new java.io.File(destPath);
+                    java.io.File parent = destFile.getParentFile();
+                    if (parent != null && !parent.exists()) {
+                        parent.mkdirs();
+                    }
+                    java.io.InputStream in = conn.getInputStream();
+                    java.io.FileOutputStream out = new java.io.FileOutputStream(destFile);
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = in.read(buf)) != -1) {
+                        out.write(buf, 0, n);
+                    }
+                    out.flush();
+                    out.close();
+                    in.close();
+                    conn.disconnect();
+                    return true;
+                }
+                conn.disconnect();
+                break;
+            }
+        } catch (Exception e) {
+            Log.e("SDL", "downloadFile error: " + e.getMessage());
+        }
+        return false;
+    }
+
+    public static void installApk(String apkPath) {
+        try {
+            if (mSingleton == null) return;
+            java.io.File file = new java.io.File(apkPath);
+            if (!file.exists()) {
+                Log.e("SDL", "installApk file not found: " + apkPath);
+                return;
+            }
+
+            file.setReadable(true, false);
+
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                Uri contentUri = Uri.parse("content://org.libsdl.app.provider" + file.getAbsolutePath());
+                intent.setDataAndType(contentUri, "application/vnd.android.package-archive");
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } else {
+                intent.setDataAndType(Uri.fromFile(file), "application/vnd.android.package-archive");
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            mSingleton.startActivity(intent);
+        } catch (Exception e) {
+            Log.e("SDL", "installApk error: " + e.getMessage());
+        }
+    }
 }
 
 /**
