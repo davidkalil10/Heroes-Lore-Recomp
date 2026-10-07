@@ -437,13 +437,19 @@ static uint32_t s_osdExpireTime = 0;
 
 static void loadSettings();
 
+#ifdef __SWITCH__
+static bool s_romfsInitialized = false;
+#endif
+
 bool Platform::init(int scale) {
 #ifdef __SWITCH__
   Result rc = romfsInit();
   if (R_FAILED(rc)) {
     fprintf(stderr, "[RomFS] Falha ao inicializar romfsInit: 0x%x\n", rc);
+    s_romfsInitialized = false;
   } else {
     printf("[RomFS] RomFS inicializado com sucesso!\n");
+    s_romfsInitialized = true;
   }
 #endif
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS | SDL_INIT_GAMECONTROLLER) < 0) {
@@ -2012,8 +2018,15 @@ void Platform::shutdown() {
   if (s_window) { SDL_DestroyWindow(s_window); s_window = nullptr; }
   Mix_CloseAudio();
   SDL_Quit();
+  Platform::cleanupRomfs();
+}
+
+void Platform::cleanupRomfs() {
 #ifdef __SWITCH__
-  romfsExit();
+  if (s_romfsInitialized) {
+    romfsExit();
+    s_romfsInitialized = false;
+  }
 #endif
 }
 

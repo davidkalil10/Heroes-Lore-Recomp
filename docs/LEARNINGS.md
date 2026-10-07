@@ -522,8 +522,11 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
     1. O console estava rodando a build antiga (v1.0.6) que nunca havia conseguido substituir o NRO antes.
     2. Identificado também que `romfsInit()` em `platform_sdl.cpp` mantém o descritor do NRO aberto para ler assets da partição embutida. Em `applyUpdate()`, adicionada a chamada preventiva `romfsExit()` para liberar imediatamente qualquer lock de arquivo no SD antes da cópia ou rotação atômica.
 
-- **Ciclo de Validação v1.1.1:**
-  - Publicação da release v1.1.1 para validação de auto-atualização OTA fim a fim em clientes v1.1.0 no Windows e Switch.
+- **Ciclo de Validação v1.1.1 e Homologação Oficial do Passo 8:**
+  - *Resultado Confirmado pelo Usuário:* Auto-atualização concluiu com sucesso no PC Desktop e no Nintendo Switch! Ao reabrir, ambas as plataformas iniciaram atualizadas na nova versão.
+  - *Diagnóstico do "Apito de Erro" no Switch ao Confirmar o Reinício:*
+    - *Causa:* Em `applyUpdate()`, chamávamos `romfsExit()` para liberar o NRO no SD. Quando o jogador confirmava o diálogo, `Platform::cleanup()` chamava `romfsExit()` uma segunda vez. Na `libnx`, a desinicialização dupla do RomFS causa erro de asserção interna do sistema operacional na saída do aplicativo (gerando o apito de erro do console, apesar de a substituição já ter sido concluída com 100% de integridade).
+    - *Solução Definitiva:* Implementado `Platform::cleanupRomfs()` idempotente com flag de estado `s_romfsInitialized`. O fechamento é invocado com segurança em `applyUpdate()` e a chamada no `cleanup()` normal é neutralizada sem disparar nenhum erro de sistema.
 
 
 

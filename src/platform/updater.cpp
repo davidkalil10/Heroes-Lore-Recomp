@@ -783,8 +783,8 @@ bool Updater::applyUpdate() {
   std::string tmpFile = storage + "/" + s_releaseInfo.assetName + ".download";
 
 #if defined(__SWITCH__)
-  // Libera qualquer descritor mantido aberto pela libnx no NRO para permitir gravação/substituição
-  romfsExit();
+  // Libera qualquer descritor mantido aberto pela libnx no NRO para permitir gravação/substituição de forma segura
+  Platform::cleanupRomfs();
 
   std::string targetNro = resolveSwitchNroPath();
   boot_log("[Updater-Switch] Substituindo NRO alvo: %s (a partir de %s)\n", targetNro.c_str(), tmpFile.c_str());
