@@ -617,19 +617,52 @@ static HttpResponse curlHttpRequest(const std::string& method, const std::string
 
 #elif defined(__ANDROID__)
 
+static jclass s_cloudActivityClass = nullptr;
+static jmethodID s_midHttpExecute = nullptr;
+
+static void androidCloudInitJni() {
+  if (s_cloudActivityClass && s_midHttpExecute) return;
+  JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+  if (!env) return;
+
+  jobject activityObj = (jobject)SDL_AndroidGetActivity();
+  if (activityObj && !s_cloudActivityClass) {
+    jclass localClass = env->GetObjectClass(activityObj);
+    if (localClass) {
+      s_cloudActivityClass = (jclass)env->NewGlobalRef(localClass);
+      env->DeleteLocalRef(localClass);
+    }
+  }
+
+  if (!s_cloudActivityClass) {
+    jclass localClass = env->FindClass("org/libsdl/app/SDLActivity");
+    if (localClass) {
+      s_cloudActivityClass = (jclass)env->NewGlobalRef(localClass);
+      env->DeleteLocalRef(localClass);
+    }
+  }
+
+  if (s_cloudActivityClass && !s_midHttpExecute) {
+    s_midHttpExecute = env->GetStaticMethodID(s_cloudActivityClass, "httpExecute",
+                                             "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+  }
+
+  if (env->ExceptionCheck()) {
+    env->ExceptionClear();
+  }
+}
+
 static HttpResponse androidHttpRequest(const std::string& method, const std::string& url,
                                       const std::vector<std::string>& headers, const std::string& bodyData) {
   HttpResponse resp;
   JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
   if (!env) return resp;
 
-  jclass activityClass = env->FindClass("org/libsdl/app/SDLActivity");
-  if (!activityClass) return resp;
-
-  jmethodID mid = env->GetStaticMethodID(activityClass, "httpExecute",
-                                        "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
-  if (!mid) {
-    env->DeleteLocalRef(activityClass);
+  if (!s_cloudActivityClass || !s_midHttpExecute) {
+    androidCloudInitJni();
+  }
+  if (!s_cloudActivityClass || !s_midHttpExecute) {
+    if (env->ExceptionCheck()) env->ExceptionClear();
     return resp;
   }
 
@@ -643,13 +676,26 @@ static HttpResponse androidHttpRequest(const std::string& method, const std::str
   jstring jHeaders = env->NewStringUTF(headersConcat.c_str());
   jstring jBody = env->NewStringUTF(bodyData.c_str());
 
-  jstring jResult = (jstring)env->CallStaticObjectMethod(activityClass, mid, jUrl, jMethod, jHeaders, jBody);
+  if (!jUrl || !jMethod || !jHeaders || !jBody) {
+    if (jUrl) env->DeleteLocalRef(jUrl);
+    if (jMethod) env->DeleteLocalRef(jMethod);
+    if (jHeaders) env->DeleteLocalRef(jHeaders);
+    if (jBody) env->DeleteLocalRef(jBody);
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    return resp;
+  }
+
+  jstring jResult = (jstring)env->CallStaticObjectMethod(s_cloudActivityClass, s_midHttpExecute, jUrl, jMethod, jHeaders, jBody);
 
   env->DeleteLocalRef(jUrl);
   env->DeleteLocalRef(jMethod);
   env->DeleteLocalRef(jHeaders);
   env->DeleteLocalRef(jBody);
-  env->DeleteLocalRef(activityClass);
+
+  if (env->ExceptionCheck()) {
+    env->ExceptionClear();
+    return resp;
+  }
 
   if (jResult) {
     const char* utf = env->GetStringUTFChars(jResult, nullptr);
@@ -748,27 +794,27 @@ static bool ensureValidAccessToken() {
 // -----------------------------------------------------------------------------
 // Resumo dos Saves Locais e Conversão de Datas (Ronin, Reah, Aramor)
 // -----------------------------------------------------------------------------
+static inline time_t portableTimegm(int year, int mon, int day, int hour, int min, int sec) {
+  static const int daysBeforeMonth[12] = {
+    0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334
+  };
+  int y = year - (mon <= 2 ? 1 : 0);
+  int leaps = (y / 4) - (y / 100) + (y / 400) - (1970 / 4 - 1970 / 100 + 1970 / 400);
+  int days = (year - 1970) * 365 + leaps + daysBeforeMonth[mon - 1] + (day - 1);
+  if (mon > 2 && ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0))) {
+    days += 1;
+  }
+  return (time_t)days * 86400 + (time_t)hour * 3600 + (time_t)min * 60 + (time_t)sec;
+}
+
 static std::string formatUtcIsoToLocalDate(const std::string& iso) {
   if (iso.size() < 16) return iso;
   int y = 0, m = 0, d = 0, hr = 0, mn = 0, sec = 0;
   if (std::sscanf(iso.c_str(), "%d-%d-%dT%d:%d:%d", &y, &m, &d, &hr, &mn, &sec) >= 5) {
-    std::tm tmUtc = {};
-    tmUtc.tm_year = y - 1900;
-    tmUtc.tm_mon = m - 1;
-    tmUtc.tm_mday = d;
-    tmUtc.tm_hour = hr;
-    tmUtc.tm_min = mn;
-    tmUtc.tm_sec = sec;
-    tmUtc.tm_isdst = -1;
-
-#if defined(_WIN32)
-    time_t t = _mkgmtime(&tmUtc);
-#else
-    time_t t = timegm(&tmUtc);
-#endif
-    if (t != (time_t)-1) {
+    time_t utcTime = portableTimegm(y, m, d, hr, mn, sec);
+    if (utcTime > 0) {
       char buf[32];
-      std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", std::localtime(&t));
+      std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", std::localtime(&utcTime));
       return std::string(buf);
     }
   }
@@ -892,16 +938,41 @@ static std::string getPlatformName() {
 }
 
 // -----------------------------------------------------------------------------
+// Despachador de Threads em Segundo Plano Seguro para SDL2/Android JNI
+// -----------------------------------------------------------------------------
+template<typename F>
+static void runAsync(F&& f) {
+  auto* fnPtr = new std::decay_t<F>(std::forward<F>(f));
+  SDL_Thread* th = SDL_CreateThread([](void* data) -> int {
+    auto* fn = static_cast<std::decay_t<F>*>(data);
+    (*fn)();
+    delete fn;
+    return 0;
+  }, "HL_CloudThread", fnPtr);
+  if (th) {
+    SDL_DetachThread(th);
+  } else {
+    std::thread([fnPtr]() {
+      (*fnPtr)();
+      delete fnPtr;
+    }).detach();
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Inicialização e Shutdown
 // -----------------------------------------------------------------------------
 void CloudSave::init() {
+#if defined(__ANDROID__)
+  androidCloudInitJni();
+#endif
   loadTokensFromFile();
   if (!s_refreshToken.empty()) {
     s_state = CloudSaveState::LOGGED_IN;
     // Em thread separada, checa se há backup recente no drive
-    std::thread([]() {
+    runAsync([]() {
       queryCloudBackupAsync();
-    }).detach();
+    });
   } else {
     s_state = CloudSaveState::NOT_LOGGED_IN;
   }
@@ -971,6 +1042,9 @@ bool CloudSave::isModalActive() {
 }
 
 void CloudSave::openModal(VM* vm) {
+#if defined(__ANDROID__)
+  androidCloudInitJni();
+#endif
   if (vm) s_activeVm = vm;
   s_modalActive = true;
   s_statusMessage.clear();
@@ -1003,7 +1077,7 @@ void CloudSave::startLogin() {
   s_state = CloudSaveState::REQUESTING_CODE;
   s_statusMessage = "Solicitando codigo de acesso ao Google...";
 
-  std::thread([]() {
+  runAsync([]() {
     std::string url = "https://oauth2.googleapis.com/device/code";
     std::vector<std::string> headers = {
       "Content-Type: application/x-www-form-urlencoded"
@@ -1095,7 +1169,7 @@ void CloudSave::startLogin() {
     std::lock_guard<std::mutex> lock(s_cloudMutex);
     s_state = CloudSaveState::NOT_LOGGED_IN;
     s_loginActive = false;
-  }).detach();
+  });
 }
 
 void CloudSave::cancelLogin() {
@@ -1122,7 +1196,7 @@ void CloudSave::logout() {
 void CloudSave::queryCloudBackupAsync() {
   if (!isLoggedIn()) return;
 
-  std::thread([]() {
+  runAsync([]() {
     if (!ensureValidAccessToken()) return;
 
     // Busca arquivo heroes_lore_save.json
@@ -1151,7 +1225,7 @@ void CloudSave::queryCloudBackupAsync() {
         s_cloudBackup.fileId = "";
       }
     }
-  }).detach();
+  });
 }
 
 // -----------------------------------------------------------------------------
@@ -1162,7 +1236,7 @@ void CloudSave::uploadBackupAsync() {
   s_state = CloudSaveState::UPLOADING;
   s_statusMessage = "Empacotando e enviando saves para o Google Drive...";
 
-  std::thread([]() {
+  runAsync([]() {
     if (!ensureValidAccessToken()) {
       std::lock_guard<std::mutex> lock(s_cloudMutex);
       s_state = CloudSaveState::ERROR_NOTIFICATION;
@@ -1272,7 +1346,7 @@ void CloudSave::uploadBackupAsync() {
       s_statusMessage = "Falha ao enviar backup (" + std::to_string(resp.statusCode) + ")";
       Platform::showOsdMessage(tr(CloudStr::OSD_UPLOAD_ERROR));
     }
-  }).detach();
+  });
 }
 
 // -----------------------------------------------------------------------------
@@ -1295,7 +1369,7 @@ void CloudSave::confirmRestore(VM* vm) {
   s_state = CloudSaveState::DOWNLOADING;
   s_statusMessage = "Baixando save da nuvem e restaurando arquivos...";
 
-  std::thread([vm]() {
+  runAsync([vm]() {
     if (!ensureValidAccessToken()) {
       std::lock_guard<std::mutex> lock(s_cloudMutex);
       s_state = CloudSaveState::ERROR_NOTIFICATION;
@@ -1358,7 +1432,7 @@ void CloudSave::confirmRestore(VM* vm) {
       s_statusMessage.clear();
     }
     Platform::showOsdMessage(tr(CloudStr::OSD_DOWNLOAD_SUCCESS));
-  }).detach();
+  });
 }
 
 // -----------------------------------------------------------------------------
@@ -1461,12 +1535,17 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   SDL_SetRenderDrawColor(renderer, 0, 0, 0, 220);
   SDL_RenderFillRect(renderer, &fullScreen);
 
-  // 2. Caixa Modal Proporcional
+  // 2. Caixa Modal Proporcional e Responsiva
   bool isPortrait = (winH > winW);
+
+  // Escala responsiva universal para Switch (720p), PC (1080p) e Mobile (1080p/1440p)
+  float baseDim = isPortrait ? (float)winW : (float)winH;
+  float uiScale = std::clamp(baseDim / 480.0f, 1.0f, 2.5f);
+
   int modalW = isPortrait ? std::clamp((int)(winW * 0.94f), 280, 1100)
-                          : std::clamp((int)(winW * 0.70f), 380, 960);
-  int modalH = isPortrait ? std::clamp((int)(modalW * 0.95f), 340, (int)(winH * 0.85f))
-                          : std::clamp((int)(winH * 0.80f), 320, 680);
+                          : std::clamp((int)(winW * 0.68f), 420, 960);
+  int modalH = isPortrait ? std::clamp((int)(winH * 0.64f), 420, 1600)
+                          : std::clamp((int)(winH * 0.82f), 320, 700);
 
   int modalX = (winW - modalW) / 2;
   int modalY = (winH - modalH) / 2;
@@ -1502,31 +1581,31 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   SDL_RenderFillRect(renderer, &r3);
   SDL_RenderFillRect(renderer, &r4);
 
+  // Tipografia e Botões Proporcionais à Densidade da Tela
+  int charH = std::clamp((int)(20.0f * uiScale), 16, 42);
+  int charW = (int)(charH * 0.64f);
+  int stepX = (int)(charW * 0.68f);
+
+  int smallH = std::clamp((int)(15.0f * uiScale), 13, 32);
+  int smallW = (int)(smallH * 0.64f);
+  int smallStep = (int)(smallW * 0.68f);
+
+  int headerH = std::clamp((int)(46.0f * uiScale), 38, 90);
+  int btnH    = std::clamp((int)(46.0f * uiScale), 36, 92);
+  int btnMargin = std::clamp((int)(12.0f * uiScale), 10, 24);
+
   // Cabeçalho
-  int headerH = std::clamp((int)(modalH * 0.11f), 32, 54);
   SDL_Rect headerBox = { modalX + 8, modalY + 8, modalW - 16, headerH };
   SDL_SetRenderDrawColor(renderer, 22, 28, 40, 255);
   SDL_RenderFillRect(renderer, &headerBox);
   SDL_SetRenderDrawColor(renderer, 195, 155, 60, 200);
   SDL_RenderDrawLine(renderer, headerBox.x, headerBox.y + headerH, headerBox.x + headerBox.w, headerBox.y + headerH);
 
-  int charH = std::clamp((int)(modalH * 0.050f), 15, 28);
-  int charW = (int)(charH * 0.65f);
-  int stepX = (int)(charW * 0.68f);
-
-  int smallH = std::max(13, (int)(charH * 0.80f));
-  int smallW = (int)(smallH * 0.65f);
-  int smallStep = (int)(smallW * 0.68f);
-
   std::string title = tr(CloudStr::TITLE);
   int tw = Platform::getTextWidth(title, charW, stepX);
   Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + (headerH - charH) / 2 + 8, charW, charH, 255, stepX);
 
-  int curY = modalY + headerH + 16;
-
-  // Botões de Ação na parte inferior
-  int btnH = std::clamp((int)(modalH * 0.10f), 32, 50);
-  int btnMargin = 12;
+  int curY = modalY + headerH + (int)(16.0f * uiScale);
 
   // ---------------------------------------------------------------------------
   // 1. Estado: NÃO AUTENTICADO
@@ -1537,12 +1616,13 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     int l1w = Platform::getTextWidth(line1, smallW, smallStep);
     int l2w = Platform::getTextWidth(line2, smallW, smallStep);
     Platform::drawText(renderer, line1, modalX + (modalW - l1w) / 2, curY, smallW, smallH, 200, smallStep);
-    curY += smallH + 6;
+    curY += smallH + (int)(6.0f * uiScale);
     Platform::drawText(renderer, line2, modalX + (modalW - l2w) / 2, curY, smallW, smallH, 200, smallStep);
-    curY += smallH + 20;
+    curY += smallH + (int)(18.0f * uiScale);
 
     // Cartão Informativo
-    SDL_Rect infoBox = { modalX + 24, curY, modalW - 48, std::clamp((int)(modalH * 0.30f), 70, 120) };
+    int infoBoxH = std::clamp((int)(smallH * 3.5f + 24.0f * uiScale), 75, (int)(160.0f * uiScale));
+    SDL_Rect infoBox = { modalX + 24, curY, modalW - 48, infoBoxH };
     SDL_SetRenderDrawColor(renderer, 18, 24, 34, 255);
     SDL_RenderFillRect(renderer, &infoBox);
     SDL_SetRenderDrawColor(renderer, 50, 70, 95, 255);
@@ -1558,7 +1638,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     } else {
       localSum = lSummary;
     }
-    Platform::drawText(renderer, localSum, infoBox.x + 12, infoBox.y + 14, smallW, smallH, 255, smallStep);
+    Platform::drawText(renderer, localSum, infoBox.x + 16, infoBox.y + (int)(12.0f * uiScale), smallW, smallH, 255, smallStep);
 
     std::string statusStr = "";
     if (s_statusMsgId >= 0 && (size_t)s_statusMsgId < (size_t)CloudStr::STR_COUNT) {
@@ -1566,12 +1646,12 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     } else {
       statusStr = s_statusMessage.empty() ? tr(CloudStr::STATUS_DISCONNECTED) : s_statusMessage;
     }
-    Platform::drawText(renderer, statusStr, infoBox.x + 12, infoBox.y + 14 + smallH + 10, smallW, smallH,
+    Platform::drawText(renderer, statusStr, infoBox.x + 16, infoBox.y + (int)(12.0f * uiScale) + smallH + (int)(10.0f * uiScale), smallW, smallH,
                        (s_state == CloudSaveState::ERROR_NOTIFICATION ? 255 : 180), smallStep);
 
     // Botões
     int btnW = (modalW - 48 - btnMargin) / 2;
-    int by = modalY + modalH - btnH - 16;
+    int by = modalY + modalH - btnH - (int)(18.0f * uiScale);
     s_btnAction1 = { modalX + 24, by, btnW, btnH };
     s_btnCancel  = { modalX + 24 + btnW + btnMargin, by, btnW, btnH };
 
@@ -1601,42 +1681,42 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     std::string step1 = tr(CloudStr::STEP1_ACCESS_LINK);
     int s1w = Platform::getTextWidth(step1, smallW, smallStep);
     Platform::drawText(renderer, step1, modalX + (modalW - s1w) / 2, curY, smallW, smallH, 220, smallStep);
-    curY += smallH + 8;
+    curY += smallH + (int)(8.0f * uiScale);
 
     std::string urlText = s_deviceCode.verificationUrl;
     int uw = Platform::getTextWidth(urlText, charW, stepX);
     Platform::drawText(renderer, urlText, modalX + (modalW - uw) / 2, curY, charW, charH, 255, stepX);
-    curY += charH + 16;
+    curY += charH + (int)(18.0f * uiScale);
 
     std::string step2 = tr(CloudStr::STEP2_ENTER_CODE);
     int s2w = Platform::getTextWidth(step2, smallW, smallStep);
     Platform::drawText(renderer, step2, modalX + (modalW - s2w) / 2, curY, smallW, smallH, 220, smallStep);
-    curY += smallH + 8;
+    curY += smallH + (int)(10.0f * uiScale);
 
     // Caixa de Destaque com o Código
-    int codeBoxW = std::clamp((int)(modalW * 0.65f), 200, 420);
-    int codeBoxH = std::clamp((int)(modalH * 0.14f), 40, 70);
+    int codeBoxW = std::clamp((int)(modalW * 0.72f), 220, 540);
+    int codeBoxH = std::clamp((int)(modalH * 0.16f), 48, (int)(80.0f * uiScale));
     SDL_Rect codeBox = { modalX + (modalW - codeBoxW) / 2, curY, codeBoxW, codeBoxH };
     SDL_SetRenderDrawColor(renderer, 24, 38, 54, 255);
     SDL_RenderFillRect(renderer, &codeBox);
     SDL_SetRenderDrawColor(renderer, 220, 180, 70, 255);
     SDL_RenderDrawRect(renderer, &codeBox);
 
-    int codeH = std::clamp((int)(codeBoxH * 0.55f), 18, 36);
-    int codeW = (int)(codeH * 0.65f);
+    int codeH = std::clamp((int)(codeBoxH * 0.58f), 20, 50);
+    int codeW = (int)(codeH * 0.64f);
     int codeStep = (int)(codeW * 0.68f);
     int cw = Platform::getTextWidth(s_deviceCode.userCode, codeW, codeStep);
     Platform::drawText(renderer, s_deviceCode.userCode, codeBox.x + (codeBoxW - cw) / 2,
                        codeBox.y + (codeBoxH - codeH) / 2, codeW, codeH, 255, codeStep);
-    curY += codeBoxH + 14;
+    curY += codeBoxH + (int)(16.0f * uiScale);
 
     std::string waitMsg = tr(CloudStr::WAITING_BROWSER_AUTH);
     int ww = Platform::getTextWidth(waitMsg, smallW, smallStep);
     Platform::drawText(renderer, waitMsg, modalX + (modalW - ww) / 2, curY, smallW, smallH, 180, smallStep);
 
     // Botão Cancelar
-    int btnW = std::clamp((int)(modalW * 0.50f), 160, 320);
-    int by = modalY + modalH - btnH - 16;
+    int btnW = std::clamp((int)(modalW * 0.50f), 160, 380);
+    int by = modalY + modalH - btnH - (int)(18.0f * uiScale);
     s_btnCancel = { modalX + (modalW - btnW) / 2, by, btnW, btnH };
     SDL_SetRenderDrawColor(renderer, 50, 40, 40, 255);
     SDL_RenderFillRect(renderer, &s_btnCancel);
@@ -1652,7 +1732,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   // ---------------------------------------------------------------------------
   else if (s_state == CloudSaveState::RESTORE_CONFIRM) {
     int warnBoxW = modalW - 48;
-    int warnBoxH = std::clamp((int)(modalH * 0.40f), 110, 180);
+    int warnBoxH = std::clamp((int)(modalH * 0.44f), 130, (int)(240.0f * uiScale));
     SDL_Rect warnBox = { modalX + 24, curY, warnBoxW, warnBoxH };
     SDL_SetRenderDrawColor(renderer, 45, 28, 14, 255);
     SDL_RenderFillRect(renderer, &warnBox);
@@ -1660,18 +1740,19 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderDrawRect(renderer, &warnBox);
 
     std::string wTitle = tr(CloudStr::WARN_RESTORE_TITLE);
-    Platform::drawText(renderer, wTitle, warnBox.x + 14, warnBox.y + 14, smallW, smallH, 255, smallStep);
+    Platform::drawText(renderer, wTitle, warnBox.x + 16, warnBox.y + (int)(14.0f * uiScale), smallW, smallH, 255, smallStep);
 
     std::string w1 = tr(CloudStr::WARN_RESTORE_LINE1);
     std::string w2 = tr(CloudStr::WARN_RESTORE_LINE2);
     std::string w3 = tr(CloudStr::WARN_RESTORE_LINE3);
-    Platform::drawText(renderer, w1, warnBox.x + 14, warnBox.y + 14 + smallH + 8, smallW, smallH, 220, smallStep);
-    Platform::drawText(renderer, w2, warnBox.x + 14, warnBox.y + 14 + (smallH + 8) * 2, smallW, smallH, 220, smallStep);
-    Platform::drawText(renderer, w3, warnBox.x + 14, warnBox.y + 14 + (smallH + 8) * 3, smallW, smallH, 255, smallStep);
+    int lineStep = smallH + (int)(8.0f * uiScale);
+    Platform::drawText(renderer, w1, warnBox.x + 16, warnBox.y + (int)(14.0f * uiScale) + lineStep, smallW, smallH, 220, smallStep);
+    Platform::drawText(renderer, w2, warnBox.x + 16, warnBox.y + (int)(14.0f * uiScale) + lineStep * 2, smallW, smallH, 220, smallStep);
+    Platform::drawText(renderer, w3, warnBox.x + 16, warnBox.y + (int)(14.0f * uiScale) + lineStep * 3, smallW, smallH, 255, smallStep);
 
     // Botões
     int btnW = (modalW - 48 - btnMargin) / 2;
-    int by = modalY + modalH - btnH - 16;
+    int by = modalY + modalH - btnH - (int)(18.0f * uiScale);
     s_btnAction1 = { modalX + 24, by, btnW, btnH };
     s_btnCancel  = { modalX + 24 + btnW + btnMargin, by, btnW, btnH };
 
@@ -1700,10 +1781,10 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     std::string connStr = tr(CloudStr::STATUS_CONNECTED);
     int cw = Platform::getTextWidth(connStr, smallW, smallStep);
     Platform::drawText(renderer, connStr, modalX + (modalW - cw) / 2, curY, smallW, smallH, 180, smallStep);
-    curY += smallH + 12;
+    curY += smallH + (int)(14.0f * uiScale);
 
     // Cartão 1: Nuvem
-    int cardH = std::clamp((int)(modalH * 0.22f), 55, 85);
+    int cardH = std::clamp((int)(smallH * 2.8f + 16.0f * uiScale), 65, (int)(120.0f * uiScale));
     SDL_Rect cloudBox = { modalX + 24, curY, modalW - 48, cardH };
     SDL_SetRenderDrawColor(renderer, 20, 28, 42, 255);
     SDL_RenderFillRect(renderer, &cloudBox);
@@ -1711,12 +1792,12 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderDrawRect(renderer, &cloudBox);
 
     std::string cTitle = tr(CloudStr::CARD_CLOUD);
-    Platform::drawText(renderer, cTitle, cloudBox.x + 12, cloudBox.y + 10, smallW, smallH, 255, smallStep);
+    Platform::drawText(renderer, cTitle, cloudBox.x + 16, cloudBox.y + (int)(10.0f * uiScale), smallW, smallH, 255, smallStep);
 
     std::string cDetails = s_cloudBackup.exists ? (std::string(tr(CloudStr::DATE_PREFIX)) + s_cloudBackup.modifiedTime + " | " + s_cloudBackup.summary)
                                                : tr(CloudStr::NO_CLOUD_BACKUP);
-    Platform::drawText(renderer, cDetails, cloudBox.x + 12, cloudBox.y + 10 + smallH + 6, smallW, smallH, 200, smallStep);
-    curY += cardH + 10;
+    Platform::drawText(renderer, cDetails, cloudBox.x + 16, cloudBox.y + (int)(10.0f * uiScale) + smallH + (int)(8.0f * uiScale), smallW, smallH, 200, smallStep);
+    curY += cardH + (int)(12.0f * uiScale);
 
     // Cartão 2: Local
     SDL_Rect localBox = { modalX + 24, curY, modalW - 48, cardH };
@@ -1727,7 +1808,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
 
     char lTitleBuf[64];
     std::snprintf(lTitleBuf, sizeof(lTitleBuf), tr(CloudStr::CARD_LOCAL), getPlatformName().c_str());
-    Platform::drawText(renderer, lTitleBuf, localBox.x + 12, localBox.y + 10, smallW, smallH, 255, smallStep);
+    Platform::drawText(renderer, lTitleBuf, localBox.x + 16, localBox.y + (int)(10.0f * uiScale), smallW, smallH, 255, smallStep);
 
     std::string lSummary = getLocalSavesSummary();
     std::string lDate = getLocalSavesDate();
@@ -1739,8 +1820,8 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     } else {
       lDetails = lSummary;
     }
-    Platform::drawText(renderer, lDetails, localBox.x + 12, localBox.y + 10 + smallH + 6, smallW, smallH, 200, smallStep);
-    curY += cardH + 12;
+    Platform::drawText(renderer, lDetails, localBox.x + 16, localBox.y + (int)(10.0f * uiScale) + smallH + (int)(8.0f * uiScale), smallW, smallH, 200, smallStep);
+    curY += cardH + (int)(14.0f * uiScale);
 
     std::string displayStatus = "";
     if (s_statusMsgId >= 0 && (size_t)s_statusMsgId < (size_t)CloudStr::STR_COUNT) {
@@ -1755,13 +1836,13 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     }
 
     // Grid de Botões Inferiores (4 botões: Backup, Restaurar, Desconectar, Fechar)
-    int by = modalY + modalH - btnH * 2 - 24;
+    int by = modalY + modalH - btnH * 2 - (int)(24.0f * uiScale);
     int btnW = (modalW - 48 - btnMargin) / 2;
 
     s_btnAction1 = { modalX + 24, by, btnW, btnH };
     s_btnAction2 = { modalX + 24 + btnW + btnMargin, by, btnW, btnH };
-    s_btnAction3 = { modalX + 24, by + btnH + 8, btnW, btnH };
-    s_btnCancel  = { modalX + 24 + btnW + btnMargin, by + btnH + 8, btnW, btnH };
+    s_btnAction3 = { modalX + 24, by + btnH + (int)(8.0f * uiScale), btnW, btnH };
+    s_btnCancel  = { modalX + 24 + btnW + btnMargin, by + btnH + (int)(8.0f * uiScale), btnW, btnH };
 
     // Botão 1: Backup (Enviar)
     SDL_SetRenderDrawColor(renderer, 28, 75, 40, 255);

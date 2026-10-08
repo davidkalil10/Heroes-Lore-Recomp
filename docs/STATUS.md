@@ -214,6 +214,9 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
     - Em partida ativa: exibe confirmação modal de segurança e invoca `bu.d()` para retornar limpo ao menu principal com reciclagem de memória da VM e recarregamento sem crashes.
   - Interface Nobre (Soltia Theme) com suporte a Touch, Teclado e Gamepad:
     - 100% Localizada nos 4 idiomas suportados (Português, Inglês, Italiano e Espanhol), adaptando títulos, cards, avisos e botões em tempo real.
+    - Layout responsivo de alta densidade (High-DPI / Mobile): janela modal, fontes e botões de toque escalam proporcionalmente (`uiScale`) para proporcionar ergonomia e legibilidade perfeita em smartphones verticais (1080p/1440p) e telas grandes.
+    - Portabilidade Universal: conversão de data UTC via algoritmo autônomo `portableTimegm()`, eliminando dependências não-portáveis de libc e garantindo compilação no Nintendo Switch (devkitA64/newlib), Windows, Linux e Android.
+    - Estabilidade JNI no Android: despachador `runAsync` com ciclo de vida gerenciado do SDL e referência global (`NewGlobalRef`) para `SDLActivity.httpExecute`, evitando crashes de runtime no ART ao conectar.
     - Integrado ao Menu de Opções (`be.class`) na Tela de Título e no Pause In-Game como 6º item.
     - Atalho global de teclado via <kbd>F4</kbd>.
 - [ ] Passo 11: Port Imersivo VR / Realidade Mista para Meta Quest (OpenXR, Voxel/Diorama 3D Tabletop & Primeira Pessoa 360°). Detalhado em [`docs/VR_QUEST_CONCEPT.md`](VR_QUEST_CONCEPT.md).

@@ -622,3 +622,23 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - *Diagnóstico:* Após restaurar um save, jogar e voltar à tela de Cloud Save, a mensagem "Save restaurado com sucesso!" continuava aparecendo na tela, inclusive mantendo o idioma anterior caso o jogador tivesse mudado de língua.
   - *Causa Raiz:* `s_statusMessage` não era limpo ao abrir (`openModal`) ou fechar (`closeModal`) a janela modal, e o texto ficava armazenado como string literal no idioma antigo.
   - *Solução:* Criado o identificador dinâmico `s_statusMsgId` mapeado para o enum `CloudStr`. Mensagens de estado passam a ser resolvidas em tempo de renderização via `tr((CloudStr)s_statusMsgId)`, adaptando-se instantaneamente a qualquer troca de idioma. Além disso, `openModal()` e `closeModal()` limpam completamente mensagens residuais e redefinem o estado para neutro (`LOGGED_IN`), garantindo uma tela limpa e sem resquícios a cada abertura.
+
+## Sessão 25 (Portabilidade Switch timegm, Estabilidade JNI Android e Escala Responsiva Mobile)
+- **Portabilidade da Conversão UTC para Nintendo Switch (devkitA64 / newlib):**
+  - *Diagnóstico:* A compilação do Nintendo Switch quebrou no CI do GitHub Actions com o erro: `'timegm' was not declared in this scope; did you mean 'time_t'?`.
+  - *Causa Raiz:* O toolchain devkitPro / devkitA64 utiliza a biblioteca C padrão `newlib`, que não disponibiliza a extensão GNU/BSD `timegm()`, e plataformas Windows usam `_mkgmtime()`.
+  - *Solução:* Implementada a função pura e autocontida `portableTimegm(year, mon, day, hour, min, sec)` baseada em aritmética de calendário gregoriano (dias desde a época Unix 1970 considerando bissextos). A função possui zero dependências de bibliotecas de sistema ou extensões não-portáveis, compilando de forma idêntica em Switch, Windows, Linux e Android.
+- **Estabilidade JNI no Android e Prevenção de Crash Fatal no ART:**
+  - *Diagnóstico:* Ao clicar no botão "Conectar" na versão Android, o jogo fechava abruptamente.
+  - *Causa Raiz:*
+    1. No Android ART, threads nativas de background utilizam o `SystemClassLoader`, o que faz `env->FindClass("org/libsdl/app/SDLActivity")` lançar `ClassNotFoundException`. Sem o `ExceptionClear()`, qualquer invocação subsequente de JNI resulta no encerramento imediato do processo pelo runtime do Android.
+    2. O uso de `std::thread` nativo do C++ sem o ciclo de vida gerenciado do SDL pode disparar `fatal error: native thread exiting without detaching from JavaVM` em versões recentes do Android.
+  - *Solução:*
+    1. Criado `androidCloudInitJni()` que obtém a instância viva do `SDLActivity` via `SDL_AndroidGetActivity()` na thread principal e cria uma referência global persistente (`NewGlobalRef`) para a classe Java e o método estático `httpExecute`.
+    2. Proteção com `env->ExceptionClear()` em todas as chamadas JNI.
+    3. Implementado o despachador `runAsync` que usa `SDL_CreateThread`, garantindo que o SDL faça o `AttachCurrentThread` na inicialização e o `DetachCurrentThread` na finalização de cada thread de background.
+- **Escala Responsiva de Alta Resolução para Mobile (High-DPI / Telas Verticais):**
+  - *Diagnóstico:* Em smartphones modernos (1080x2400+), o modal de Cloud Save aparecia minúsculo e quase ilegível, pois as dimensões estavam com travas de pixels pensadas apenas para desktop/Switch.
+  - *Solução:* Reformulado o layout de `drawModal()` com fator de escala dinâmico `uiScale = std::clamp(baseDim / 480.0f, 1.0f, 2.5f)`. Em orientação retrato (mobile), o modal agora ocupa 94% da largura útil da tela e 64% da altura. As fontes escalam dinamicamente até 42px de altura (garantindo legibilidade cristalina em telas 1080p/1440p) e os botões de ação passam a ter altura de toque ergonômica de até 92px.
+- **Origem Canônica dos Nomes dos Personagens (Decompilação J2ME):**
+  - *Análise:* No código original (`n.java` linhas 730-760 e `a.java` linhas 68-75), os saves RMS (`_k.rms`, `_s.rms`, `_w.rms`) não armazenam strings de nomes personalizados; cada slot corresponde rigidamente à campanha de um herói fixo da história. A tela original de carregar (`a.java`) busca os nomes dinamicamente da tabela `ce.var_z_a` (inicializada em `bu.java:133` a partir de `/char/hero.tdf`). Portanto, o slot 1 é por definição Ronin, o slot 2 é Reah e o slot 3 é Aramor.
