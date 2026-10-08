@@ -52,6 +52,7 @@ struct RecordStoreObj : Object {
   std::string name;
   std::vector<std::vector<uint8_t>> records; // 1-based (index 0 vazio)
   bool open = true;
+  bool dirty = false;
 };
 
 struct PlayerObj : Object {

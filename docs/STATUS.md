@@ -206,6 +206,7 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
   - Resolução centralizada de diretório RMS via `Platform::getRmsDir(VM* vm)` unificada entre a VM/MIDP e o Cloud Save em todas as plataformas.
   - Empacotamento atômico em JSON (`heroes_lore_save.json`) contendo todos os arquivos RMS (`_k.rms`, `_s.rms`, `_w.rms`, `_o.rms`, `_c.rms`) codificados em Base64, preservando integridade perfeita e evitando saves corrompidos/parciais.
   - Extração autêntica de resumo dos slots com nomes canônicos de Heroes Lore: Wind of Soltia (Slot 1 `_k`: **Ronin**, Slot 2 `_s`: **Reah**, Slot 3 `_w`: **Aramor**, lidos de `char/hero.tdf` / strings 685-687) e nível autêntico decodificado via cifra `bq.b`.
+  - Preservação do Timestamp Real do Save: implementação de flag `dirty` no subsistema MIDP RMS (`RecordStoreObj`), impedindo regravações em disco em operações somente de leitura e preservando com 100% de exatidão o `st_mtime` original de quando o save foi gravado in-game.
   - Normalização de Fuso Horário Local: o timestamp UTC retornado pelo Google Drive (`modifiedTime`) é convertido dinamicamente para o fuso horário local do dispositivo via `formatUtcIsoToLocalDate()`, permitindo comparação cronológica direta e precisa entre Nuvem e Local.
   - Limpeza de Estado e Ciclo de Vida do Modal: mensagens de status são redefinidas ao abrir/fechar a janela e resolvidas dinamicamente via `tr(s_statusMsgId)`, eliminando resquícios de operações anteriores e atualizando imediatamente na troca de idioma.
   - Recarregamento inteligente e seguro de dados (Thread-Safe):
@@ -214,7 +215,9 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
     - Em partida ativa: exibe confirmação modal de segurança e invoca `bu.d()` para retornar limpo ao menu principal com reciclagem de memória da VM e recarregamento sem crashes.
   - Interface Nobre (Soltia Theme) com suporte a Touch, Teclado e Gamepad:
     - 100% Localizada nos 4 idiomas suportados (Português, Inglês, Italiano e Espanhol), adaptando títulos, cards, avisos e botões em tempo real.
-    - Layout responsivo de alta densidade (High-DPI / Mobile): janela modal, fontes e botões de toque escalam proporcionalmente (`uiScale`) para proporcionar ergonomia e legibilidade perfeita em smartphones verticais (1080p/1440p) e telas grandes.
+    - Layout responsivo de alta densidade (High-DPI / Mobile):
+      - Em Landscape: cartões de save dispostos lado a lado e 4 botões de ação alinhados horizontalmente com auto-fitting de texto, sem corte e sem sobreposição.
+      - Em Portrait: altura modal ajustada dinamicamente ao conteúdo (`neededH`), fontes ampliadas até 56px (cabeçalho) e 42px (detalhes), e botões táteis ampliados para 96px.
     - Portabilidade Universal: conversão de data UTC via algoritmo autônomo `portableTimegm()`, eliminando dependências não-portáveis de libc e garantindo compilação no Nintendo Switch (devkitA64/newlib), Windows, Linux e Android.
     - Estabilidade JNI no Android: despachador `runAsync` com ciclo de vida gerenciado do SDL e referência global (`NewGlobalRef`) para `SDLActivity.httpExecute`, evitando crashes de runtime no ART ao conectar.
     - Integrado ao Menu de Opções (`be.class`) na Tela de Título e no Pause In-Game como 6º item.

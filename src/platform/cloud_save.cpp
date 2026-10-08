@@ -858,7 +858,8 @@ static int decodeHeroLevel(const std::vector<uint8_t>& rec) {
 
 static std::string getLocalSavesDate() {
   std::string rmsBase = Platform::getRmsDir(s_activeVm);
-  const char* slotFiles[] = { "_k.rms", "_s.rms", "_w.rms", "_o.rms", "_c.rms" };
+  // Apenas arquivos reais de progresso de heróis determinam a data/hora do save
+  const char* slotFiles[] = { "_k.rms", "_s.rms", "_w.rms" };
   time_t newestTime = 0;
 
   for (const char* fn : slotFiles) {
@@ -1538,15 +1539,60 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   // 2. Caixa Modal Proporcional e Responsiva
   bool isPortrait = (winH > winW);
 
-  // Escala responsiva universal para Switch (720p), PC (1080p) e Mobile (1080p/1440p)
-  float baseDim = isPortrait ? (float)winW : (float)winH;
-  float uiScale = std::clamp(baseDim / 480.0f, 1.0f, 2.5f);
+  // Escala responsiva aprimorada para Mobile (High-DPI portrait/landscape), Switch e PC
+  float uiScale = isPortrait ? std::clamp((float)winW / 300.0f, 1.3f, 3.4f)
+                             : std::clamp((float)winH / 360.0f, 1.1f, 2.3f);
 
   int modalW = isPortrait ? std::clamp((int)(winW * 0.94f), 280, 1100)
-                          : std::clamp((int)(winW * 0.68f), 420, 960);
-  int modalH = isPortrait ? std::clamp((int)(winH * 0.64f), 420, 1600)
-                          : std::clamp((int)(winH * 0.82f), 320, 700);
+                          : std::clamp((int)(winW * 0.90f), 520, 1500);
 
+  // Tipografia e Botões Proporcionais e Confortáveis para Touch e Display
+  int charH = std::clamp((int)(22.0f * uiScale), 18, 56);
+  int charW = (int)(charH * 0.64f);
+  int stepX = (int)(charW * 0.68f);
+
+  int smallH = std::clamp((int)(16.0f * uiScale), 14, 42);
+  int smallW = (int)(smallH * 0.64f);
+  int smallStep = (int)(smallW * 0.68f);
+
+  int headerH = std::clamp((int)(48.0f * uiScale), 40, 96);
+  int btnH    = std::clamp((int)(46.0f * uiScale), 38, 96);
+  int btnMargin = std::clamp((int)(12.0f * uiScale), 10, 24);
+  int cardMargin = (int)(16.0f * uiScale);
+  int cardH = std::clamp((int)(smallH * 3.6f + 20.0f * uiScale), 82, (int)(160.0f * uiScale));
+
+  // Cálculo Dinâmico de Altura (Content-Fitted) para eliminar espaços vazios em Portrait e overflow em Landscape
+  int neededH = headerH + (int)(16.0f * uiScale);
+
+  if (s_state == CloudSaveState::NOT_LOGGED_IN || s_state == CloudSaveState::REQUESTING_CODE || s_state == CloudSaveState::ERROR_NOTIFICATION) {
+    int infoBoxH = std::clamp((int)(smallH * 3.6f + 20.0f * uiScale), 75, (int)(160.0f * uiScale));
+    neededH += smallH * 2 + (int)(24.0f * uiScale) + infoBoxH + (int)(18.0f * uiScale) + btnH + (int)(22.0f * uiScale);
+  } else if (s_state == CloudSaveState::WAITING_USER_AUTH) {
+    int codeBoxH = std::clamp((int)(64.0f * uiScale), 48, 100);
+    neededH += smallH + (int)(8.0f * uiScale) + charH + (int)(18.0f * uiScale) + smallH + (int)(10.0f * uiScale) + codeBoxH + (int)(16.0f * uiScale) + smallH + (int)(18.0f * uiScale) + btnH + (int)(22.0f * uiScale);
+  } else if (s_state == CloudSaveState::RESTORE_CONFIRM) {
+    int warnBoxH = std::clamp((int)(smallH * 5.2f + 28.0f * uiScale), 130, (int)(250.0f * uiScale));
+    neededH += warnBoxH + (int)(18.0f * uiScale) + btnH + (int)(22.0f * uiScale);
+  } else {
+    // Autenticado / Sincronização
+    neededH += smallH + (int)(12.0f * uiScale);
+    if (!isPortrait) {
+      neededH += cardH + (int)(16.0f * uiScale);
+    } else {
+      neededH += cardH * 2 + cardMargin + (int)(16.0f * uiScale);
+    }
+    if (s_statusMsgId >= 0 || !s_statusMessage.empty()) {
+      neededH += smallH + (int)(10.0f * uiScale);
+    }
+    if (!isPortrait) {
+      neededH += btnH + (int)(20.0f * uiScale);
+    } else {
+      neededH += btnH * 2 + (int)(12.0f * uiScale) + (int)(20.0f * uiScale);
+    }
+  }
+
+  int maxH = (int)(winH * 0.94f);
+  int modalH = std::min(neededH, maxH);
   int modalX = (winW - modalW) / 2;
   int modalY = (winH - modalH) / 2;
   s_modalRect = { modalX, modalY, modalW, modalH };
@@ -1581,18 +1627,29 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   SDL_RenderFillRect(renderer, &r3);
   SDL_RenderFillRect(renderer, &r4);
 
-  // Tipografia e Botões Proporcionais à Densidade da Tela
-  int charH = std::clamp((int)(20.0f * uiScale), 16, 42);
-  int charW = (int)(charH * 0.64f);
-  int stepX = (int)(charW * 0.68f);
+  // Helper lambda para botões com texto auto-ajustável e perfeitamente centralizado
+  auto drawBtn = [&](const std::string& txt, const SDL_Rect& bRect, SDL_Color bg, SDL_Color border) {
+    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, 255);
+    SDL_RenderFillRect(renderer, &bRect);
+    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, 255);
+    SDL_RenderDrawRect(renderer, &bRect);
 
-  int smallH = std::clamp((int)(15.0f * uiScale), 13, 32);
-  int smallW = (int)(smallH * 0.64f);
-  int smallStep = (int)(smallW * 0.68f);
-
-  int headerH = std::clamp((int)(46.0f * uiScale), 38, 90);
-  int btnH    = std::clamp((int)(46.0f * uiScale), 36, 92);
-  int btnMargin = std::clamp((int)(12.0f * uiScale), 10, 24);
+    int th = std::clamp((int)(bRect.h * 0.42f), 13, smallH);
+    int tw = (int)(th * 0.64f);
+    int tstep = (int)(tw * 0.68f);
+    if ((int)txt.length() > 1) {
+      int maxW = bRect.w - 12;
+      int curW = (int)(txt.length() - 1) * tstep + tw;
+      if (curW > maxW) {
+        tstep = std::max(6, (maxW - tw) / (int)(txt.length() - 1));
+        tw = std::min(tw, tstep + 4);
+      }
+    }
+    int txtW = Platform::getTextWidth(txt, tw, tstep);
+    int tx = bRect.x + (bRect.w - txtW) / 2;
+    int ty = bRect.y + (bRect.h - th) / 2;
+    Platform::drawText(renderer, txt, tx, ty, tw, th, 255, tstep);
+  };
 
   // Cabeçalho
   SDL_Rect headerBox = { modalX + 8, modalY + 8, modalW - 16, headerH };
@@ -1621,7 +1678,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     curY += smallH + (int)(18.0f * uiScale);
 
     // Cartão Informativo
-    int infoBoxH = std::clamp((int)(smallH * 3.5f + 24.0f * uiScale), 75, (int)(160.0f * uiScale));
+    int infoBoxH = std::clamp((int)(smallH * 3.6f + 20.0f * uiScale), 75, (int)(160.0f * uiScale));
     SDL_Rect infoBox = { modalX + 24, curY, modalW - 48, infoBoxH };
     SDL_SetRenderDrawColor(renderer, 18, 24, 34, 255);
     SDL_RenderFillRect(renderer, &infoBox);
@@ -1648,30 +1705,17 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     }
     Platform::drawText(renderer, statusStr, infoBox.x + 16, infoBox.y + (int)(12.0f * uiScale) + smallH + (int)(10.0f * uiScale), smallW, smallH,
                        (s_state == CloudSaveState::ERROR_NOTIFICATION ? 255 : 180), smallStep);
+    curY += infoBoxH + (int)(18.0f * uiScale);
 
     // Botões
     int btnW = (modalW - 48 - btnMargin) / 2;
     int by = modalY + modalH - btnH - (int)(18.0f * uiScale);
+    if (by < curY) by = curY;
     s_btnAction1 = { modalX + 24, by, btnW, btnH };
     s_btnCancel  = { modalX + 24 + btnW + btnMargin, by, btnW, btnH };
 
-    // Botão Conectar
-    SDL_SetRenderDrawColor(renderer, 35, 95, 45, 255);
-    SDL_RenderFillRect(renderer, &s_btnAction1);
-    SDL_SetRenderDrawColor(renderer, 80, 200, 100, 255);
-    SDL_RenderDrawRect(renderer, &s_btnAction1);
-    std::string b1Text = tr(CloudStr::BTN_CONNECT);
-    int b1tw = Platform::getTextWidth(b1Text, smallW, smallStep);
-    Platform::drawText(renderer, b1Text, s_btnAction1.x + (btnW - b1tw) / 2, s_btnAction1.y + (btnH - smallH) / 2, smallW, smallH, 255, smallStep);
-
-    // Botão Fechar
-    SDL_SetRenderDrawColor(renderer, 45, 45, 55, 255);
-    SDL_RenderFillRect(renderer, &s_btnCancel);
-    SDL_SetRenderDrawColor(renderer, 100, 100, 120, 255);
-    SDL_RenderDrawRect(renderer, &s_btnCancel);
-    std::string bcText = tr(CloudStr::BTN_CLOSE);
-    int bctw = Platform::getTextWidth(bcText, smallW, smallStep);
-    Platform::drawText(renderer, bcText, s_btnCancel.x + (btnW - bctw) / 2, s_btnCancel.y + (btnH - smallH) / 2, smallW, smallH, 200, smallStep);
+    drawBtn(tr(CloudStr::BTN_CONNECT), s_btnAction1, {35, 95, 45}, {80, 200, 100});
+    drawBtn(tr(CloudStr::BTN_CLOSE), s_btnCancel, {45, 45, 55}, {100, 100, 120});
   }
 
   // ---------------------------------------------------------------------------
@@ -1695,7 +1739,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
 
     // Caixa de Destaque com o Código
     int codeBoxW = std::clamp((int)(modalW * 0.72f), 220, 540);
-    int codeBoxH = std::clamp((int)(modalH * 0.16f), 48, (int)(80.0f * uiScale));
+    int codeBoxH = std::clamp((int)(64.0f * uiScale), 48, 100);
     SDL_Rect codeBox = { modalX + (modalW - codeBoxW) / 2, curY, codeBoxW, codeBoxH };
     SDL_SetRenderDrawColor(renderer, 24, 38, 54, 255);
     SDL_RenderFillRect(renderer, &codeBox);
@@ -1713,18 +1757,14 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     std::string waitMsg = tr(CloudStr::WAITING_BROWSER_AUTH);
     int ww = Platform::getTextWidth(waitMsg, smallW, smallStep);
     Platform::drawText(renderer, waitMsg, modalX + (modalW - ww) / 2, curY, smallW, smallH, 180, smallStep);
+    curY += smallH + (int)(16.0f * uiScale);
 
     // Botão Cancelar
     int btnW = std::clamp((int)(modalW * 0.50f), 160, 380);
     int by = modalY + modalH - btnH - (int)(18.0f * uiScale);
+    if (by < curY) by = curY;
     s_btnCancel = { modalX + (modalW - btnW) / 2, by, btnW, btnH };
-    SDL_SetRenderDrawColor(renderer, 50, 40, 40, 255);
-    SDL_RenderFillRect(renderer, &s_btnCancel);
-    SDL_SetRenderDrawColor(renderer, 140, 70, 70, 255);
-    SDL_RenderDrawRect(renderer, &s_btnCancel);
-    std::string bcText = tr(CloudStr::BTN_CANCEL);
-    int bctw = Platform::getTextWidth(bcText, smallW, smallStep);
-    Platform::drawText(renderer, bcText, s_btnCancel.x + (btnW - bctw) / 2, s_btnCancel.y + (btnH - smallH) / 2, smallW, smallH, 220, smallStep);
+    drawBtn(tr(CloudStr::BTN_CANCEL), s_btnCancel, {50, 40, 40}, {140, 70, 70});
   }
 
   // ---------------------------------------------------------------------------
@@ -1732,7 +1772,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   // ---------------------------------------------------------------------------
   else if (s_state == CloudSaveState::RESTORE_CONFIRM) {
     int warnBoxW = modalW - 48;
-    int warnBoxH = std::clamp((int)(modalH * 0.44f), 130, (int)(240.0f * uiScale));
+    int warnBoxH = std::clamp((int)(smallH * 5.2f + 28.0f * uiScale), 130, (int)(250.0f * uiScale));
     SDL_Rect warnBox = { modalX + 24, curY, warnBoxW, warnBoxH };
     SDL_SetRenderDrawColor(renderer, 45, 28, 14, 255);
     SDL_RenderFillRect(renderer, &warnBox);
@@ -1749,28 +1789,17 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     Platform::drawText(renderer, w1, warnBox.x + 16, warnBox.y + (int)(14.0f * uiScale) + lineStep, smallW, smallH, 220, smallStep);
     Platform::drawText(renderer, w2, warnBox.x + 16, warnBox.y + (int)(14.0f * uiScale) + lineStep * 2, smallW, smallH, 220, smallStep);
     Platform::drawText(renderer, w3, warnBox.x + 16, warnBox.y + (int)(14.0f * uiScale) + lineStep * 3, smallW, smallH, 255, smallStep);
+    curY += warnBoxH + (int)(18.0f * uiScale);
 
     // Botões
     int btnW = (modalW - 48 - btnMargin) / 2;
     int by = modalY + modalH - btnH - (int)(18.0f * uiScale);
+    if (by < curY) by = curY;
     s_btnAction1 = { modalX + 24, by, btnW, btnH };
     s_btnCancel  = { modalX + 24 + btnW + btnMargin, by, btnW, btnH };
 
-    SDL_SetRenderDrawColor(renderer, 140, 50, 40, 255);
-    SDL_RenderFillRect(renderer, &s_btnAction1);
-    SDL_SetRenderDrawColor(renderer, 230, 80, 70, 255);
-    SDL_RenderDrawRect(renderer, &s_btnAction1);
-    std::string b1Text = tr(CloudStr::BTN_CONFIRM);
-    int b1tw = Platform::getTextWidth(b1Text, smallW, smallStep);
-    Platform::drawText(renderer, b1Text, s_btnAction1.x + (btnW - b1tw) / 2, s_btnAction1.y + (btnH - smallH) / 2, smallW, smallH, 255, smallStep);
-
-    SDL_SetRenderDrawColor(renderer, 45, 45, 55, 255);
-    SDL_RenderFillRect(renderer, &s_btnCancel);
-    SDL_SetRenderDrawColor(renderer, 100, 100, 120, 255);
-    SDL_RenderDrawRect(renderer, &s_btnCancel);
-    std::string bcText = tr(CloudStr::BTN_CANCEL);
-    int bctw = Platform::getTextWidth(bcText, smallW, smallStep);
-    Platform::drawText(renderer, bcText, s_btnCancel.x + (btnW - bctw) / 2, s_btnCancel.y + (btnH - smallH) / 2, smallW, smallH, 200, smallStep);
+    drawBtn(tr(CloudStr::BTN_CONFIRM), s_btnAction1, {140, 50, 40}, {230, 80, 70});
+    drawBtn(tr(CloudStr::BTN_CANCEL), s_btnCancel, {45, 45, 55}, {100, 100, 120});
   }
 
   // ---------------------------------------------------------------------------
@@ -1781,11 +1810,16 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     std::string connStr = tr(CloudStr::STATUS_CONNECTED);
     int cw = Platform::getTextWidth(connStr, smallW, smallStep);
     Platform::drawText(renderer, connStr, modalX + (modalW - cw) / 2, curY, smallW, smallH, 180, smallStep);
-    curY += smallH + (int)(14.0f * uiScale);
+    curY += smallH + (int)(12.0f * uiScale);
 
-    // Cartão 1: Nuvem
-    int cardH = std::clamp((int)(smallH * 2.8f + 16.0f * uiScale), 65, (int)(120.0f * uiScale));
-    SDL_Rect cloudBox = { modalX + 24, curY, modalW - 48, cardH };
+    // Cartões de Save: Lado a Lado em Landscape / Empilhados em Portrait
+    int cardW = (!isPortrait) ? (modalW - 48 - cardMargin) / 2 : (modalW - 48);
+
+    SDL_Rect cloudBox = { modalX + 24, curY, cardW, cardH };
+    SDL_Rect localBox = (!isPortrait) ? SDL_Rect{ modalX + 24 + cardW + cardMargin, curY, cardW, cardH }
+                                      : SDL_Rect{ modalX + 24, curY + cardH + (int)(12.0f * uiScale), cardW, cardH };
+
+    // 1. Cartão Nuvem
     SDL_SetRenderDrawColor(renderer, 20, 28, 42, 255);
     SDL_RenderFillRect(renderer, &cloudBox);
     SDL_SetRenderDrawColor(renderer, 60, 90, 130, 255);
@@ -1794,13 +1828,17 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     std::string cTitle = tr(CloudStr::CARD_CLOUD);
     Platform::drawText(renderer, cTitle, cloudBox.x + 16, cloudBox.y + (int)(10.0f * uiScale), smallW, smallH, 255, smallStep);
 
-    std::string cDetails = s_cloudBackup.exists ? (std::string(tr(CloudStr::DATE_PREFIX)) + s_cloudBackup.modifiedTime + " | " + s_cloudBackup.summary)
-                                               : tr(CloudStr::NO_CLOUD_BACKUP);
-    Platform::drawText(renderer, cDetails, cloudBox.x + 16, cloudBox.y + (int)(10.0f * uiScale) + smallH + (int)(8.0f * uiScale), smallW, smallH, 200, smallStep);
-    curY += cardH + (int)(12.0f * uiScale);
+    if (!s_cloudBackup.exists) {
+      std::string noBkp = tr(CloudStr::NO_CLOUD_BACKUP);
+      Platform::drawText(renderer, noBkp, cloudBox.x + 16, cloudBox.y + (int)(10.0f * uiScale) + smallH + (int)(8.0f * uiScale), smallW, smallH, 180, smallStep);
+    } else {
+      std::string lineHero = s_cloudBackup.summary;
+      std::string lineDate = std::string(tr(CloudStr::DATE_PREFIX)) + s_cloudBackup.modifiedTime;
+      Platform::drawText(renderer, lineHero, cloudBox.x + 16, cloudBox.y + (int)(10.0f * uiScale) + smallH + (int)(6.0f * uiScale), smallW, smallH, 245, smallStep);
+      Platform::drawText(renderer, lineDate, cloudBox.x + 16, cloudBox.y + (int)(10.0f * uiScale) + (smallH + (int)(6.0f * uiScale)) * 2, smallW, smallH, 200, smallStep);
+    }
 
-    // Cartão 2: Local
-    SDL_Rect localBox = { modalX + 24, curY, modalW - 48, cardH };
+    // 2. Cartão Local
     SDL_SetRenderDrawColor(renderer, 20, 28, 42, 255);
     SDL_RenderFillRect(renderer, &localBox);
     SDL_SetRenderDrawColor(renderer, 60, 90, 130, 255);
@@ -1812,16 +1850,23 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
 
     std::string lSummary = getLocalSavesSummary();
     std::string lDate = getLocalSavesDate();
-    std::string lDetails;
     if (lSummary == tr(CloudStr::NO_LOCAL_SAVE)) {
-      lDetails = lSummary;
-    } else if (!lDate.empty()) {
-      lDetails = std::string(tr(CloudStr::DATE_PREFIX)) + lDate + " | " + lSummary;
+      Platform::drawText(renderer, lSummary, localBox.x + 16, localBox.y + (int)(10.0f * uiScale) + smallH + (int)(8.0f * uiScale), smallW, smallH, 180, smallStep);
     } else {
-      lDetails = lSummary;
+      std::string lineHero = lSummary;
+      std::string lineDate = !lDate.empty() ? (std::string(tr(CloudStr::DATE_PREFIX)) + lDate) : "";
+      Platform::drawText(renderer, lineHero, localBox.x + 16, localBox.y + (int)(10.0f * uiScale) + smallH + (int)(6.0f * uiScale), smallW, smallH, 245, smallStep);
+      if (!lineDate.empty()) {
+        Platform::drawText(renderer, lineDate, localBox.x + 16, localBox.y + (int)(10.0f * uiScale) + (smallH + (int)(6.0f * uiScale)) * 2, smallW, smallH, 200, smallStep);
+      }
     }
-    Platform::drawText(renderer, lDetails, localBox.x + 16, localBox.y + (int)(10.0f * uiScale) + smallH + (int)(8.0f * uiScale), smallW, smallH, 200, smallStep);
-    curY += cardH + (int)(14.0f * uiScale);
+
+    // Avanço de Y após os cartões
+    if (!isPortrait) {
+      curY += cardH + (int)(14.0f * uiScale);
+    } else {
+      curY += cardH * 2 + (int)(24.0f * uiScale);
+    }
 
     std::string displayStatus = "";
     if (s_statusMsgId >= 0 && (size_t)s_statusMsgId < (size_t)CloudStr::STR_COUNT) {
@@ -1833,52 +1878,37 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     if (!displayStatus.empty()) {
       int sw = Platform::getTextWidth(displayStatus, smallW, smallStep);
       Platform::drawText(renderer, displayStatus, modalX + (modalW - sw) / 2, curY, smallW, smallH, 255, smallStep);
+      curY += smallH + (int)(8.0f * uiScale);
     }
 
-    // Grid de Botões Inferiores (4 botões: Backup, Restaurar, Desconectar, Fechar)
-    int by = modalY + modalH - btnH * 2 - (int)(24.0f * uiScale);
-    int btnW = (modalW - 48 - btnMargin) / 2;
+    // Botões Inferiores (4 botões: Backup, Restaurar, Desconectar, Fechar)
+    if (!isPortrait) {
+      // Em Landscape: 4 botões distribuídos em linha horizontal para máxima elegância e visibilidade
+      int btnW = (modalW - 48 - btnMargin * 3) / 4;
+      int by = modalY + modalH - btnH - (int)(18.0f * uiScale);
+      if (by < curY + (int)(8.0f * uiScale)) by = curY + (int)(8.0f * uiScale);
 
-    s_btnAction1 = { modalX + 24, by, btnW, btnH };
-    s_btnAction2 = { modalX + 24 + btnW + btnMargin, by, btnW, btnH };
-    s_btnAction3 = { modalX + 24, by + btnH + (int)(8.0f * uiScale), btnW, btnH };
-    s_btnCancel  = { modalX + 24 + btnW + btnMargin, by + btnH + (int)(8.0f * uiScale), btnW, btnH };
+      s_btnAction1 = { modalX + 24, by, btnW, btnH };
+      s_btnAction2 = { modalX + 24 + (btnW + btnMargin), by, btnW, btnH };
+      s_btnAction3 = { modalX + 24 + (btnW + btnMargin) * 2, by, btnW, btnH };
+      s_btnCancel  = { modalX + 24 + (btnW + btnMargin) * 3, by, btnW, btnH };
+    } else {
+      // Em Portrait: Grid 2x2 com botões grandes e confortáveis para toque de polegares
+      int btnW = (modalW - 48 - btnMargin) / 2;
+      int by = modalY + modalH - btnH * 2 - (int)(12.0f * uiScale) - (int)(18.0f * uiScale);
+      if (by < curY + (int)(8.0f * uiScale)) by = curY + (int)(8.0f * uiScale);
 
-    // Botão 1: Backup (Enviar)
-    SDL_SetRenderDrawColor(renderer, 28, 75, 40, 255);
-    SDL_RenderFillRect(renderer, &s_btnAction1);
-    SDL_SetRenderDrawColor(renderer, 65, 175, 95, 255);
-    SDL_RenderDrawRect(renderer, &s_btnAction1);
-    std::string b1 = tr(CloudStr::BTN_UPLOAD);
-    int b1w = Platform::getTextWidth(b1, smallW, smallStep);
-    Platform::drawText(renderer, b1, s_btnAction1.x + (btnW - b1w) / 2, s_btnAction1.y + (btnH - smallH) / 2, smallW, smallH, 255, smallStep);
+      s_btnAction1 = { modalX + 24, by, btnW, btnH };
+      s_btnAction2 = { modalX + 24 + btnW + btnMargin, by, btnW, btnH };
+      s_btnAction3 = { modalX + 24, by + btnH + (int)(12.0f * uiScale), btnW, btnH };
+      s_btnCancel  = { modalX + 24 + btnW + btnMargin, by + btnH + (int)(12.0f * uiScale), btnW, btnH };
+    }
 
-    // Botão 2: Restaurar (Baixar)
-    SDL_SetRenderDrawColor(renderer, 24, 55, 90, 255);
-    SDL_RenderFillRect(renderer, &s_btnAction2);
-    SDL_SetRenderDrawColor(renderer, 65, 130, 210, 255);
-    SDL_RenderDrawRect(renderer, &s_btnAction2);
-    std::string b2 = tr(CloudStr::BTN_RESTORE);
-    int b2w = Platform::getTextWidth(b2, smallW, smallStep);
-    Platform::drawText(renderer, b2, s_btnAction2.x + (btnW - b2w) / 2, s_btnAction2.y + (btnH - smallH) / 2, smallW, smallH, 255, smallStep);
-
-    // Botão 3: Desconectar
-    SDL_SetRenderDrawColor(renderer, 55, 30, 30, 255);
-    SDL_RenderFillRect(renderer, &s_btnAction3);
-    SDL_SetRenderDrawColor(renderer, 130, 60, 60, 255);
-    SDL_RenderDrawRect(renderer, &s_btnAction3);
-    std::string b3 = tr(CloudStr::BTN_DISCONNECT);
-    int b3w = Platform::getTextWidth(b3, smallW, smallStep);
-    Platform::drawText(renderer, b3, s_btnAction3.x + (btnW - b3w) / 2, s_btnAction3.y + (btnH - smallH) / 2, smallW, smallH, 220, smallStep);
-
-    // Botão 4: Fechar
-    SDL_SetRenderDrawColor(renderer, 40, 45, 55, 255);
-    SDL_RenderFillRect(renderer, &s_btnCancel);
-    SDL_SetRenderDrawColor(renderer, 90, 100, 120, 255);
-    SDL_RenderDrawRect(renderer, &s_btnCancel);
-    std::string bc = tr(CloudStr::BTN_CLOSE);
-    int bcw = Platform::getTextWidth(bc, smallW, smallStep);
-    Platform::drawText(renderer, bc, s_btnCancel.x + (btnW - bcw) / 2, s_btnCancel.y + (btnH - smallH) / 2, smallW, smallH, 200, smallStep);
+    // Renderização dos 4 botões com as cores e rótulos
+    drawBtn(tr(CloudStr::BTN_UPLOAD), s_btnAction1, {28, 75, 40}, {65, 175, 95});
+    drawBtn(tr(CloudStr::BTN_RESTORE), s_btnAction2, {24, 55, 90}, {65, 130, 210});
+    drawBtn(tr(CloudStr::BTN_DISCONNECT), s_btnAction3, {55, 30, 30}, {130, 60, 60});
+    drawBtn(tr(CloudStr::BTN_CLOSE), s_btnCancel, {40, 45, 55}, {90, 100, 120});
   }
 }
 

@@ -531,6 +531,7 @@ static void RecordStore_addRecord(VM& vm, Value* args, Value* ret) {
     rec.assign(arr->data.begin() + off, arr->data.begin() + off + len);
   }
   rs->records.push_back(std::move(rec));
+  rs->dirty = true;
   ret[0].i = (int)rs->records.size() - 1;
 }
 
@@ -551,6 +552,7 @@ static void RecordStore_setRecord(VM& vm, Value* args, Value*) {
     rec.assign(arr->data.begin() + off, arr->data.begin() + off + len);
   }
   rs->records[id] = std::move(rec);
+  rs->dirty = true;
 }
 
 static void RecordStore_getRecord(VM& vm, Value* args, Value* ret) {
@@ -589,6 +591,11 @@ static void RecordStore_closeRecordStore(VM& vm, Value* args, Value*) {
   RecordStoreObj* rs = static_cast<RecordStoreObj*>(args[0].o);
   if (!rs || !rs->open) return;
   rs->open = false;
+
+  if (!rs->dirty) {
+    return; // Não houve alterações; preserva a data/hora original de modificação do arquivo em disco!
+  }
+  rs->dirty = false;
 
   std::string path = rmsDir(vm) + "/" + rs->name + ".rms";
   std::ofstream f(path, std::ios::binary);
