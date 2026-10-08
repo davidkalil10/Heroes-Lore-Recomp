@@ -38,6 +38,7 @@ add_library(main SHARED
     "${PROJECT_ROOT}/src/platform/platform_sdl.cpp"
     "${PROJECT_ROOT}/src/platform/midi_synth.cpp"
     "${PROJECT_ROOT}/src/platform/updater.cpp"
+    "${PROJECT_ROOT}/src/platform/cloud_save.cpp"
 )
 
 target_include_directories(main PRIVATE

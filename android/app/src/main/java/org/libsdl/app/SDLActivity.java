@@ -1911,6 +1911,54 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         return "";
     }
 
+    public static String httpExecute(String urlStr, String method, String headersStr, String bodyStr) {
+        try {
+            java.net.URL url = new java.net.URL(urlStr);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setRequestMethod(method);
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(20000);
+            conn.setInstanceFollowRedirects(true);
+            if (headersStr != null && !headersStr.isEmpty()) {
+                String[] lines = headersStr.split("\n");
+                for (String line : lines) {
+                    int colon = line.indexOf(':');
+                    if (colon > 0) {
+                        String key = line.substring(0, colon).trim();
+                        String val = line.substring(colon + 1).trim();
+                        conn.setRequestProperty(key, val);
+                    }
+                }
+            }
+            if (bodyStr != null && !bodyStr.isEmpty()) {
+                conn.setDoOutput(true);
+                byte[] data = bodyStr.getBytes("UTF-8");
+                java.io.OutputStream os = conn.getOutputStream();
+                os.write(data);
+                os.flush();
+                os.close();
+            }
+            int code = conn.getResponseCode();
+            java.io.InputStream in = (code >= 200 && code < 400) ? conn.getInputStream() : conn.getErrorStream();
+            String respBody = "";
+            if (in != null) {
+                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[4096];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    out.write(buf, 0, n);
+                }
+                in.close();
+                respBody = out.toString("UTF-8");
+            }
+            conn.disconnect();
+            return String.valueOf(code) + "\n" + respBody;
+        } catch (Exception e) {
+            Log.e("SDL", "httpExecute error: " + e.getMessage());
+            return "0\n" + e.getMessage();
+        }
+    }
+
     public static boolean downloadFile(String urlStr, String destPath) {
         try {
             String currentUrl = urlStr;

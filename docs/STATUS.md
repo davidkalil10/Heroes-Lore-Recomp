@@ -200,7 +200,17 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
   - Prevenção total de deadlocks via detecção de posse do GIL (`VM::isGilOwner()`).
   - Persistência em `hl_settings.ini` sob `[Localization]\nlanguage=...`.
   - Atalho de teclado rápido via <kbd>F2</kbd> com banner OSD instantâneo.
-- [ ] Passo 9: Cloud Save & Sincronização Cruzada (PC/Linux <-> Celular <-> Switch).
+- [x] Passo 9: Cloud Save & Sincronização Cruzada (PC/Linux <-> Celular <-> Switch) (Em validação de testes):
+  - Integração com Google Drive API utilizando a pasta oculta e isolada do aplicativo (`appDataFolder`, escopo `drive.appdata`).
+  - Autenticação Universal OAuth 2.0 Device Flow (RFC 8628): permite login no Nintendo Switch, Android, PC e Linux sem requerer navegador embutido ou popups no jogo (usuário autoriza com código de 8 letras via celular ou computador em `google.com/device`).
+  - Empacotamento atômico em JSON (`heroes_lore_save.json`) contendo todos os arquivos RMS (`_k.rms`, `_s.rms`, `_w.rms`, `_o.rms`, `_c.rms`) codificados em Base64, preservando integridade perfeita e evitando saves corrompidos/parciais.
+  - Extração inteligente de resumo dos slots (nome e nível dos heróis descriptografados via chave J2ME em tempo real) exibidos no modal.
+  - Recarregamento inteligente e seguro de dados:
+    - Na Tela de Título: invoca `n.p()` para atualizar os slots e habilitar o botão "Carregar Jogo" imediatamente.
+    - Em partida ativa: exibe confirmação modal de segurança e invoca `bu.d()` para retornar limpo ao menu principal com reciclagem de memória da VM e recarregamento sem crashes.
+  - Interface Nobre (Soltia Theme) com suporte a Touch, Teclado e Gamepad:
+    - Integrado ao Menu de Opções (`be.class`) na Tela de Título e no Pause In-Game como 6º item.
+    - Atalho global de teclado via <kbd>F4</kbd>.
 - [ ] Passo 11: Port Imersivo VR / Realidade Mista para Meta Quest (OpenXR, Voxel/Diorama 3D Tabletop & Primeira Pessoa 360°). Detalhado em [`docs/VR_QUEST_CONCEPT.md`](VR_QUEST_CONCEPT.md).
 
 

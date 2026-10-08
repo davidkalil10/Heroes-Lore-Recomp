@@ -565,6 +565,19 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - *Diagnóstico:* A ferramenta inicial `tools/create_spanish_lang.py` continha apenas um dicionário manual de 49 strings de menus e termos essenciais (`es_map`). Todas as 3.708 strings restantes (incluindo todos os 1.761 diálogos de NPCs e missões) foram clonadas do pacote em inglês (`lang_en.bin`).
   - *Solução:* Desenvolvido `tools/translate_spanish_dialogues.py`, traduzindo em lote todas as 3.951 strings com sanitização para o conjunto de caracteres da fonte bitmap J2ME (`az.java` / `small.mf`, restrito a ASCII 32..126: conversão sistemática de acentos `á/é/í/ó/ú -> a/e/i/o/u`, `ñ -> n`, remoção de `¿`, `¡` e preservação de tags `|`, `$`, `[Personagem]` e `;`). Binário oficial Babble `lang_es.bin` (182.947 bytes) gerado e sincronizado em todos os diretórios do projeto.
 
+## Sessão 21 (Passo 9: Cloud Save & Sincronização Cruzada com Google Drive)
+- **OAuth 2.0 Device Authorization Flow (RFC 8628) Multiplataforma:**
+  - *Desafio:* Plataformas embarcadas e consoles portáteis como o Nintendo Switch Homebrew (`libnx`) e certos ambientes no Linux e Android não possuem um navegador web interno configurável para abrir abas ou callbacks HTTP locais (`localhost:port`).
+  - *Solução:* Utilizado o fluxo oficial Google OAuth 2.0 Device Flow (Tipo de cliente: *TVs and Limited Input devices*). O jogo requisita `https://oauth2.googleapis.com/device/code`, exibindo na tela uma URL amigável (`google.com/device`) e um código alfanumérico de 8 caracteres. O usuário autoriza em seu celular ou PC. Enquanto isso, o jogo faz polling no endpoint de token com intervalos de 5 segundos. Ao detectar a concessão, salva o `refresh_token` e `access_token` em `cloud_auth.json` no armazenamento persistente do usuário.
+- **Isolamento de Dados via `appDataFolder` (`drive.appdata`):**
+  - O aplicativo não acessa nem vasculha arquivos pessoais do Google Drive do usuário. Utiliza exclusivamente o espaço isolado e protegido `appDataFolder`, invisível na listagem geral do Drive comum, garantindo privacidade absoluta e eliminando necessidade de auditorias restritas do Google Cloud.
+- **Empacotamento Atômico em JSON e Descriptografia de Resumos:**
+  - Saves RMS J2ME (`_k.rms`, `_s.rms`, `_w.rms`, `_o.rms`, `_c.rms`) são lidos e empacotados em um único arquivo estruturado `heroes_lore_save.json` com conteúdo codificado em Base64.
+  - Para exibir na interface quem está salvo sem carregar a partida, o C++ inspeciona o primeiro record de cada arquivo `.rms`, descriptografa os primeiros bytes com a chave XOR J2ME `{5, 11, 8, 81, 3, 20}` e extrai a classe e o nível dos heróis (`Karis Nv.25`, etc.).
+- **Restauração Segura sem Descompasso de Memória da JVM:**
+  - Se o usuário restaurar um save enquanto estiver em uma partida ativa, os arquivos em disco seriam sobrescritos, mas a RAM da VM permaneceria no estado anterior, gerando corrupção no próximo salvamento.
+  - *Mecanismo Inteligente:* O sistema detecta se há herói ativo em mapa (`n.var_ao_a != null`). Se houver, exige confirmação prévia e invoca `bu.d()` (retorno canônico ao Main Menu do bytecode), liberando os recursos antigos e reabrindo a tela de título onde `n.p()` relê os novos arquivos de disco de forma 100% íntegra.
+
 
 
 

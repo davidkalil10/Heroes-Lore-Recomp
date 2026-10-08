@@ -1,6 +1,7 @@
 // platform_sdl.cpp — backend SDL2 com renderização 240x320 escalada, áudio SDL_mixer e mapeamento de teclado
 #include "platform.h"
 #include "updater.h"
+#include "cloud_save.h"
 #include "midi_synth.h"
 #include "midp/midp.h"
 #include "vm/vm.h"
@@ -588,8 +589,11 @@ bool Platform::init(int scale) {
 #elif defined(__SWITCH__)
   Platform::showOsdMessage("Heroes Lore: Wind of Soltia\n[R3: FPS | Sel+Start: 16:9 | Sel+R3: Moldura]");
 #else
-  Platform::showOsdMessage("Heroes Lore: Wind of Soltia\n[F5: Moldura | F6: FPS | F7: 16:9 | F9: Atualizar | F11: Tela Cheia]");
+  Platform::showOsdMessage("Heroes Lore: Wind of Soltia\n[F4: Nuvem | F5: Moldura | F6: FPS | F7: 16:9 | F9: Atualizar | F11: Tela Cheia]");
 #endif
+
+  // Inicializa o subsistema de Cloud Save (Google Drive)
+  CloudSave::init();
 
   // Inicializa o subsistema de atualização OTA e dispara checagem em background
   Updater::init();
@@ -1341,6 +1345,53 @@ bool Platform::pollEvents(VM& vm) {
       continue; // Bloqueia propagação para o motor de jogo enquanto o modal estiver aberto
     }
 
+    // Se o diálogo modal do CloudSave estiver ativo, direciona os eventos com prioridade total
+    if (CloudSave::isModalActive()) {
+      int key = 0;
+      if (ev.type == SDL_KEYDOWN) {
+        if (ev.key.keysym.sym == SDLK_RETURN || ev.key.keysym.sym == SDLK_KP_ENTER ||
+            ev.key.keysym.sym == SDLK_SPACE || ev.key.keysym.sym == SDLK_5 || ev.key.keysym.sym == SDLK_KP_5) {
+          key = 53; // Confirmar
+        } else if (ev.key.keysym.sym == SDLK_ESCAPE || ev.key.keysym.sym == SDLK_BACKSPACE ||
+                   ev.key.keysym.sym == SDLK_7 || ev.key.keysym.sym == SDLK_KP_7) {
+          key = -7; // Cancelar
+        } else if (ev.key.keysym.sym == SDLK_1 || ev.key.keysym.sym == SDLK_KP_1) {
+          key = 49; // 1 (Backup)
+        } else if (ev.key.keysym.sym == SDLK_2 || ev.key.keysym.sym == SDLK_KP_2) {
+          key = 50; // 2 (Restaurar)
+        } else if (ev.key.keysym.sym == SDLK_3 || ev.key.keysym.sym == SDLK_KP_3) {
+          key = 51; // 3 (Desconectar)
+        }
+      } else if (ev.type == SDL_CONTROLLERBUTTONDOWN) {
+        int mkey = mapControllerButton(ev.cbutton.button);
+        if (mkey == 53) {
+          key = 53; // Confirmar (A no Switch, A no Xbox/PC)
+        } else if (mkey == -7 || mkey == -8) {
+          key = -7; // Cancelar (B no Switch, B no Xbox/PC)
+        } else if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_X) {
+          key = 50; // X -> Restaurar
+        } else if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_Y) {
+          key = 51; // Y -> Desconectar
+        }
+      } else if (ev.type == SDL_FINGERDOWN) {
+        int winW = 0, winH = 0;
+        SDL_GetWindowSize(s_window, &winW, &winH);
+        float tx = 0, ty = 0;
+        int tw = 0, th = 0;
+        getTouchCoords(ev.tfinger, winW, winH, tx, ty, tw, th);
+        CloudSave::handleClick((int)tx, (int)ty, &vm);
+        continue;
+      } else if (ev.type == SDL_MOUSEBUTTONDOWN) {
+        CloudSave::handleClick(ev.button.x, ev.button.y, &vm);
+        continue;
+      }
+
+      if (key != 0) {
+        CloudSave::handleInput(key, &vm);
+      }
+      continue; // Bloqueia propagação para o motor de jogo enquanto o modal estiver aberto
+    }
+
     if (ev.type == SDL_QUIT) {
       s_quit = true;
       return false;
@@ -1543,6 +1594,9 @@ bool Platform::pollEvents(VM& vm) {
     else if (ev.type == SDL_KEYDOWN) {
       if (ev.key.keysym.sym == SDLK_F2) {
         if (!ev.key.repeat) Platform::nextLanguage(&vm);
+        continue;
+      } else if (ev.key.keysym.sym == SDLK_F4) {
+        if (!ev.key.repeat) Platform::openCloudSave(&vm);
         continue;
       } else if (ev.key.keysym.sym == SDLK_F5) {
         if (!ev.key.repeat) Platform::toggleBezel();
@@ -1994,10 +2048,16 @@ void Platform::present() {
     Updater::drawModal(s_renderer, winW, winH);
   }
 
+  // Renderiza diálogo modal do Cloud Save se estiver ativo
+  if (CloudSave::isModalActive()) {
+    CloudSave::drawModal(s_renderer, winW, winH);
+  }
+
   SDL_RenderPresent(s_renderer);
 }
 
 void Platform::shutdown() {
+  CloudSave::shutdown();
   Updater::shutdown();
   MidiSynth::shutdown();
   for (auto* pad : s_controllers) {
@@ -2875,6 +2935,10 @@ void Platform::reloadLanguage(VM& vm) {
   if (needUnlock) {
     vm.gilUnlock();
   }
+}
+
+void Platform::openCloudSave(VM* vm) {
+  CloudSave::openModal(vm);
 }
 
 } // namespace hl

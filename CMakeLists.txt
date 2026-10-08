@@ -20,6 +20,7 @@ set(SOURCES
     src/platform/platform_sdl.cpp
     src/platform/midi_synth.cpp
     src/platform/updater.cpp
+    src/platform/cloud_save.cpp
 )
 
 add_executable(heroes_lore ${SOURCES})

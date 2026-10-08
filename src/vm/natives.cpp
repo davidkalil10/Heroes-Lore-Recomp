@@ -2,6 +2,7 @@
 #include "vm.h"
 #include "../platform/platform.h"
 #include "../platform/updater.h"
+#include "../platform/cloud_save.h"
 #include "../midp/midp.h"
 #include <cstdio>
 #include <cstdlib>
@@ -1764,12 +1765,12 @@ static void be_a_native(VM& vm, Value* args, Value* ret) {
   int n2 = args[1].i; // GameAction
   int n3 = args[2].i; // KeyCode
 
-  // Garante que o menu possui 5 itens (0: Audio, 1: Jogo, 2: Textos, 3: Camera, 4: Idioma)
+  // Garante que o menu possui 6 itens (0: Audio, 1: Jogo, 2: Textos, 3: Camera, 4: Idioma, 5: Nuvem)
   ClassInfo* cbClass = vm.findClass("cb");
   FieldInfo* fByteA = cbClass ? vm.findField(cbClass, "a:B") : nullptr;
   FieldInfo* fByteB = cbClass ? vm.findField(cbClass, "b:B") : nullptr;
   if (fByteA && fByteA->index >= 0 && fByteA->index < (int)inst->f.size()) {
-    inst->f[fByteA->index].i = 5;
+    inst->f[fByteA->index].i = 6;
   }
 
   // 1. Invoca this.b(n2, n3) para submenus se houver
@@ -1876,6 +1877,10 @@ static void be_a_native(VM& vm, Value* args, Value* ret) {
         }
         break;
       }
+      case 5: { // NUVEM / CLOUD SAVE!
+        Platform::openCloudSave(&vm);
+        break;
+      }
     }
     ret[0].i = 1;
     return;
@@ -1957,7 +1962,7 @@ static void be_draw_native(VM& vm, Value* args, Value*) {
   FieldInfo* fByteA = cbClass ? vm.findField(cbClass, "a:B") : nullptr;
   FieldInfo* fByteB = cbClass ? vm.findField(cbClass, "b:B") : nullptr;
   if (fByteA && fByteA->index >= 0 && fByteA->index < (int)inst->f.size()) {
-    inst->f[fByteA->index].i = 5;
+    inst->f[fByteA->index].i = 6;
   }
   int selectedRow = (fByteB && fByteB->index >= 0 && fByteB->index < (int)inst->f.size()) ? inst->f[fByteB->index].i : 0;
 
@@ -2083,20 +2088,25 @@ static void be_draw_native(VM& vm, Value* args, Value*) {
   std::string lblLang = (curLang == "en") ? "Language" : ((curLang == "it") ? "Lingua" : "Idioma");
   std::string valLang = (curLang == "pt") ? "PT-BR" : ((curLang == "en") ? "English" : ((curLang == "it") ? "Italiano" : "Espanol"));
 
+  std::string lblCloud = (curLang == "en") ? "Cloud" : "Nuvem";
+  std::string valCloud = CloudSave::isLoggedIn() ? ((curLang == "en") ? "Online" : "Online")
+                                                : ((curLang == "en") ? "Offline" : "Offline");
+
   int n6 = n3;
   drawRow(0, n6, lblAudio, txtAudio);
   drawRow(1, n6 += 20, lblGame, txtSpd);
   drawRow(2, n6 += 20, lblText, txtText);
   drawRow(3, n6 += 20, lblCam, txtCam);
   drawRow(4, n6 += 20, lblLang, valLang);
+  drawRow(5, n6 += 20, lblCloud, valCloud);
 
-  // Desenha as setas < e > nas 5 linhas
+  // Desenha as setas < e > nas 6 linhas
   if (ceClass) {
     FieldInfo* fImgP = vm.findField(ceClass, "p:Ljavax/microedition/lcdui/Image;");
     FieldInfo* fImgE = vm.findField(ceClass, "e:Ljavax/microedition/lcdui/Image;");
     ImageObj* imgP = (fImgP && fImgP->isStatic && fImgP->index >= 0 && fImgP->index < (int)ceClass->statics.size()) ? static_cast<ImageObj*>(ceClass->statics[fImgP->index].o) : nullptr;
     ImageObj* imgE = (fImgE && fImgE->isStatic && fImgE->index >= 0 && fImgE->index < (int)ceClass->statics.size()) ? static_cast<ImageObj*>(ceClass->statics[fImgE->index].o) : nullptr;
-    for (int row = 0; row < 5; ++row) {
+    for (int row = 0; row < 6; ++row) {
       if (imgP) g->drawImage(imgP, n2 + 42, n3 + row * 20, 20);
       if (imgE) g->drawImage(imgE, n2 + 92, n3 + row * 20, 20);
     }

@@ -38,6 +38,9 @@ public:
   static void drawText(void* renderer, const std::string& text, int x, int y, int charW, int charH, uint8_t alpha = 255, int stepX = 0);
   static int getTextWidth(const std::string& text, int charW, int stepX = 0);
 
+  // Recursos Passo 9: Cloud Save & Sincronização Cruzada (Google Drive)
+  static void openCloudSave(VM* vm = nullptr);
+
   // Passo 10: Localização e Idiomas (PT, EN, IT, ES)
   static std::string getCurrentLanguage();
   static void setLanguage(const std::string& langCode);
