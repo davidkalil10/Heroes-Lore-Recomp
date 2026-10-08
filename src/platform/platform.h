@@ -52,6 +52,7 @@ public:
   // Sistema de Arquivos / Assets Portável (PC, Android APK, Switch RomFS)
   static std::vector<uint8_t> readAsset(const std::string& path);
   static std::string getStorageDir();
+  static std::string getRmsDir(VM* vm = nullptr);
   static void cleanupRomfs();
 };
 

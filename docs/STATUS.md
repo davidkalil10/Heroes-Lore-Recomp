@@ -201,8 +201,9 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
   - Persistência em `hl_settings.ini` sob `[Localization]\nlanguage=...`.
   - Atalho de teclado rápido via <kbd>F2</kbd> com banner OSD instantâneo.
 - [x] Passo 9: Cloud Save & Sincronização Cruzada (PC/Linux <-> Celular <-> Switch) (Em validação de testes):
-  - Integração com Google Drive API utilizando a pasta oculta e isolada do aplicativo (`appDataFolder`, escopo `drive.appdata`).
-  - Autenticação Universal OAuth 2.0 Device Flow (RFC 8628): permite login no Nintendo Switch, Android, PC e Linux sem requerer navegador embutido ou popups no jogo (usuário autoriza com código de 8 letras via celular ou computador em `google.com/device`).
+  - Integração com Google Drive API utilizando o escopo seguro e compatível com Device Flow `drive.file` (`https://www.googleapis.com/auth/drive.file`), garantindo isolamento total (o jogo acessa exclusivamente o arquivo de save que ele próprio cria).
+  - Autenticação Universal OAuth 2.0 Device Flow (RFC 8628): permite login no Nintendo Switch, Android, PC e Linux sem requerer navegador embutido ou popups no jogo (usuário autoriza com código via celular ou computador em `google.com/device`).
+  - Resolução centralizada de diretório RMS via `Platform::getRmsDir(VM* vm)` unificada entre a VM/MIDP e o Cloud Save em todas as plataformas.
   - Empacotamento atômico em JSON (`heroes_lore_save.json`) contendo todos os arquivos RMS (`_k.rms`, `_s.rms`, `_w.rms`, `_o.rms`, `_c.rms`) codificados em Base64, preservando integridade perfeita e evitando saves corrompidos/parciais.
   - Extração inteligente de resumo dos slots (nome e nível dos heróis descriptografados via chave J2ME em tempo real) exibidos no modal.
   - Recarregamento inteligente e seguro de dados:

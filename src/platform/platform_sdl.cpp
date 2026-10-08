@@ -26,6 +26,7 @@
 #include <vector>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -2351,6 +2352,66 @@ std::string Platform::getStorageDir() {
 #else
   return ".";
 #endif
+}
+
+std::string Platform::getRmsDir(VM* vm) {
+  static std::string s_cachedRmsDir;
+
+  std::string base = getStorageDir();
+  if (base != ".") {
+    std::string d = base + "/rms";
+    std::error_code ec;
+    std::filesystem::create_directories(d, ec);
+    return d;
+  }
+
+  // No PC (Windows/Desktop onde getStorageDir() retorna ".")
+  if (vm && !vm->dataDir.empty()) {
+    std::string d = vm->dataDir + "/rms";
+    std::error_code ec;
+    std::filesystem::create_directories(d, ec);
+    s_cachedRmsDir = d;
+    return d;
+  }
+
+  if (!s_cachedRmsDir.empty() && std::filesystem::exists(s_cachedRmsDir)) {
+    return s_cachedRmsDir;
+  }
+
+  // Procura pastas RMS que já possuam saves de jogo (.rms)
+  const char* candidates[] = {
+    "assets/rms",
+    "build/assets/rms",
+    "reference/extracted/rms",
+    "build/reference/extracted/rms",
+    "../reference/extracted/rms",
+    "../assets/rms",
+    "rms"
+  };
+  for (const char* c : candidates) {
+    if (std::filesystem::exists(std::string(c) + "/_k.rms") ||
+        std::filesystem::exists(std::string(c) + "/_c.rms") ||
+        std::filesystem::exists(std::string(c) + "/_s.rms") ||
+        std::filesystem::exists(std::string(c) + "/_w.rms") ||
+        std::filesystem::exists(std::string(c) + "/_o.rms")) {
+      s_cachedRmsDir = c;
+      return c;
+    }
+  }
+
+  if (std::filesystem::exists("assets")) {
+    s_cachedRmsDir = "assets/rms";
+  } else if (std::filesystem::exists("build/assets")) {
+    s_cachedRmsDir = "build/assets/rms";
+  } else if (std::filesystem::exists("reference/extracted")) {
+    s_cachedRmsDir = "reference/extracted/rms";
+  } else {
+    s_cachedRmsDir = "rms";
+  }
+
+  std::error_code ec;
+  std::filesystem::create_directories(s_cachedRmsDir, ec);
+  return s_cachedRmsDir;
 }
 
 void Platform::checkForUpdates() {

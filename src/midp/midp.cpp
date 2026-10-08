@@ -482,11 +482,7 @@ static void MIDlet_platformRequest(VM&, Value*, Value* ret) {
 // javax/microedition/rms/RecordStore
 // -------------------------------------------------------------
 static std::string rmsDir(VM& vm) {
-  std::string base = Platform::getStorageDir();
-  std::string d = (base == "." ? vm.dataDir : base) + "/rms";
-  std::error_code ec;
-  std::filesystem::create_directories(d, ec);
-  return d;
+  return Platform::getRmsDir(&vm);
 }
 
 static void RecordStore_openRecordStore(VM& vm, Value* args, Value* ret) {

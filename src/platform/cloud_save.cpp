@@ -53,6 +53,7 @@ static std::atomic<bool> s_loginActive{false};
 static std::string s_accessToken = "";
 static std::string s_refreshToken = "";
 static uint64_t s_tokenExpiryEpoch = 0;
+static VM* s_activeVm = nullptr;
 
 static SDL_Rect s_modalRect = {0, 0, 0, 0};
 static SDL_Rect s_btnAction1 = {0, 0, 0, 0};
@@ -456,7 +457,7 @@ static bool ensureValidAccessToken() {
 // Resumo dos Saves Locais (Slot Karis, Shion, Luiel)
 // -----------------------------------------------------------------------------
 static std::string getLocalSavesSummary() {
-  std::string rmsBase = Platform::getStorageDir() + "/rms";
+  std::string rmsBase = Platform::getRmsDir(s_activeVm);
   std::string summary = "";
 
   struct SlotCheck {
@@ -464,14 +465,14 @@ static std::string getLocalSavesSummary() {
     const char* defaultHero;
   };
   SlotCheck slots[] = {
-    {"/_k.rms", "Karis"},
-    {"/_s.rms", "Shion"},
-    {"/_w.rms", "Luiel"}
+    {"_k.rms", "Karis"},
+    {"_s.rms", "Shion"},
+    {"_w.rms", "Luiel"}
   };
 
   int foundCount = 0;
   for (const auto& sc : slots) {
-    std::string path = rmsBase + sc.filename;
+    std::string path = (rmsBase.empty() || rmsBase.back() == '/' ? rmsBase : rmsBase + "/") + sc.filename;
     std::ifstream f(path, std::ios::binary);
     if (!f) continue;
 
@@ -566,7 +567,8 @@ bool CloudSave::isModalActive() {
   return s_modalActive;
 }
 
-void CloudSave::openModal(VM* /*vm*/) {
+void CloudSave::openModal(VM* vm) {
+  if (vm) s_activeVm = vm;
   s_modalActive = true;
   if (isLoggedIn() && !s_cloudBackup.exists) {
     queryCloudBackupAsync();
@@ -595,7 +597,7 @@ void CloudSave::startLogin() {
       "Content-Type: application/x-www-form-urlencoded"
     };
     std::string body = "client_id=" + urlEncode(getGoogleClientId()) +
-                       "&scope=" + urlEncode("https://www.googleapis.com/auth/drive.appdata");
+                       "&scope=" + urlEncode("https://www.googleapis.com/auth/drive.file");
 
     HttpResponse resp = httpExecute("POST", url, headers, body);
     if (resp.statusCode != 200) {
@@ -711,9 +713,9 @@ void CloudSave::queryCloudBackupAsync() {
   std::thread([]() {
     if (!ensureValidAccessToken()) return;
 
-    // Busca arquivo heroes_lore_save.json em appDataFolder
-    std::string url = "https://www.googleapis.com/drive/v3/files?spaces=appDataFolder"
-                      "&fields=files(id,name,modifiedTime,size,description)"
+    // Busca arquivo heroes_lore_save.json
+    std::string url = "https://www.googleapis.com/drive/v3/files?orderBy=modifiedTime%20desc"
+                      "&fields=" + urlEncode("files(id,name,modifiedTime,size,description)") +
                       "&q=" + urlEncode("name='heroes_lore_save.json' and trashed=false");
     std::vector<std::string> headers = {
       "Authorization: Bearer " + s_accessToken
@@ -760,7 +762,7 @@ void CloudSave::uploadBackupAsync() {
       return;
     }
 
-    std::string rmsBase = Platform::getStorageDir() + "/rms";
+    std::string rmsBase = Platform::getRmsDir(s_activeVm);
     const char* filesToPack[] = {
       "_k.rms", "_s.rms", "_w.rms", "_o.rms", "_c.rms"
     };
@@ -784,7 +786,7 @@ void CloudSave::uploadBackupAsync() {
 
     bool firstFile = true;
     for (const char* fn : filesToPack) {
-      std::string path = rmsBase + "/" + fn;
+      std::string path = (rmsBase.empty() || rmsBase.back() == '/' ? rmsBase : rmsBase + "/") + fn;
       std::ifstream f(path, std::ios::binary);
       if (!f) continue;
 
@@ -821,7 +823,7 @@ void CloudSave::uploadBackupAsync() {
     } else {
       std::string postUrl = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
       std::string boundary = "HL_CLOUD_BOUNDARY_1289";
-      std::string metaJson = "{\"name\": \"heroes_lore_save.json\", \"parents\": [\"appDataFolder\"], "
+      std::string metaJson = "{\"name\": \"heroes_lore_save.json\", "
                              "\"description\": \"" + jsonEscape(plat + " | " + localSummary) + "\"}";
 
       std::ostringstream multipart;
@@ -842,9 +844,16 @@ void CloudSave::uploadBackupAsync() {
     }
 
     if (resp.statusCode == 200) {
-      std::lock_guard<std::mutex> lock(s_cloudMutex);
-      s_state = CloudSaveState::SUCCESS_NOTIFICATION;
-      s_statusMessage = "Backup enviado para o Google Drive com sucesso!";
+      std::string newId = extractJsonString(resp.body, "id");
+      {
+        std::lock_guard<std::mutex> lock(s_cloudMutex);
+        if (!newId.empty()) {
+          s_cloudBackup.fileId = newId;
+          s_cloudBackup.exists = true;
+        }
+        s_state = CloudSaveState::SUCCESS_NOTIFICATION;
+        s_statusMessage = "Backup enviado para o Google Drive com sucesso!";
+      }
       Platform::showOsdMessage("Backup na nuvem realizado com sucesso!");
       queryCloudBackupAsync();
     } else {
@@ -899,7 +908,7 @@ void CloudSave::confirmRestore(VM* vm) {
     }
 
     // Grava arquivos .rms descompactados
-    std::string rmsBase = Platform::getStorageDir() + "/rms";
+    std::string rmsBase = Platform::getRmsDir(vm ? vm : s_activeVm);
     std::error_code ec;
     std::filesystem::create_directories(rmsBase, ec);
 
@@ -915,7 +924,7 @@ void CloudSave::confirmRestore(VM* vm) {
       std::vector<uint8_t> data = base64Decode(b64);
       if (data.empty()) continue;
 
-      std::string outPath = rmsBase + "/" + fn;
+      std::string outPath = (rmsBase.empty() || rmsBase.back() == '/' ? rmsBase : rmsBase + "/") + fn;
       std::ofstream f(outPath, std::ios::binary | std::ios::trunc);
       if (f) {
         f.write((const char*)data.data(), data.size());
@@ -978,6 +987,7 @@ void CloudSave::confirmRestore(VM* vm) {
 // Manipulação de Entrada no Modal
 // -----------------------------------------------------------------------------
 bool CloudSave::handleInput(int key, VM* vm) {
+  if (vm) s_activeVm = vm;
   if (!s_modalActive) return false;
 
   // Tecla Cancelar / Voltar (B / ESC / RSK)
@@ -1021,6 +1031,7 @@ bool CloudSave::handleInput(int key, VM* vm) {
 }
 
 void CloudSave::handleClick(int x, int y, VM* vm) {
+  if (vm) s_activeVm = vm;
   if (!s_modalActive) return;
 
   auto inRect = [](int px, int py, const SDL_Rect& r) {

@@ -578,6 +578,17 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - Se o usuário restaurar um save enquanto estiver em uma partida ativa, os arquivos em disco seriam sobrescritos, mas a RAM da VM permaneceria no estado anterior, gerando corrupção no próximo salvamento.
   - *Mecanismo Inteligente:* O sistema detecta se há herói ativo em mapa (`n.var_ao_a != null`). Se houver, exige confirmação prévia e invoca `bu.d()` (retorno canônico ao Main Menu do bytecode), liberando os recursos antigos e reabrindo a tela de título onde `n.p()` relê os novos arquivos de disco de forma 100% íntegra.
 
+## Sessão 22 (Ajuste de Escopo Google Device Flow e Unificação de Diretórios RMS)
+- **Erro 400 no Device Flow do Google Cloud (`invalid_scope`):**
+  - *Diagnóstico:* Ao clicar em "Conectar", o jogo exibia "Erro ao conectar com Google Cloud (400)".
+  - *Causa Raiz:* O Google OAuth 2.0 Device Flow (RFC 8628 para TVs & Limited Input Devices) restringe estritamente escopos que podem ser autorizados sem um navegador embutido. Ao enviar `scope=https://www.googleapis.com/auth/drive.appdata`, os servidores da Google rejeitam a requisição com `HTTP 400: {"error": "invalid_scope", "error_description": "Invalid device flow scope: https://www.googleapis.com/auth/drive.appdata"}`.
+  - *Solução:* Atualizado o escopo para `https://www.googleapis.com/auth/drive.file`. Este escopo é expressamente permitido pelo Google no Device Flow (retornando HTTP 200 com `device_code` e `user_code`) e é o modelo recomendado de privacidade e segurança: o aplicativo obtém acesso apenas aos arquivos criados por ele mesmo (`heroes_lore_save.json`), sem visualizar nenhum outro documento pessoal do Google Drive do usuário. A listagem e o multipart upload foram ajustados removendo `spaces=appDataFolder` e `parents: ["appDataFolder"]`.
+
+- **Detecção de "Nenhum save local" mesmo com Saves Existentes no PC:**
+  - *Diagnóstico:* O modal de Cloud Save exibia "Save local: Nenhum save local", apesar de o jogador possuir um save ativo no jogo (Karis Nv.4).
+  - *Causa Raiz:* No Windows e Linux onde `Platform::getStorageDir()` retorna `"."`, o backend de `midp.cpp` (`rmsDir`) salva os dados em `vm.dataDir + "/rms"` (por exemplo, `build/assets/rms` ou `reference/extracted/rms`). No entanto, `cloud_save.cpp` estava concatenando `Platform::getStorageDir() + "/rms"`, resultando em `./rms` (inexistente).
+  - *Solução:* Unificado o cálculo de diretório RMS na função canônica `Platform::getRmsDir(VM* vm = nullptr)`. A função avalia a VM ativa, armazena em cache o diretório RMS em uso e realiza busca de fallback nos candidatos (`assets/rms`, `build/assets/rms`, `reference/extracted/rms`). Agora tanto a VM (`midp.cpp`) quanto o Cloud Save (`cloud_save.cpp`) leem, gravam e restauram os saves exatamente na mesma pasta de arquivos, exibindo corretamente `Save local: Karis Nv.4`.
+
 
 
 
