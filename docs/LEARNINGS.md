@@ -693,8 +693,9 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
     - **No Android / Mobile Touch:** Botões são 100% limpos e focados no toque (`ENVIAR BACKUP`, `RESTAURAR`, `DESCONECTAR`, `FECHAR`), eliminando qualquer atalho confuso de teclado físico (`[ 1 / A ]`, etc.).
     - **No Nintendo Switch:** Exibe os botões físicos característicos do Joy-Con: `( A ) ENVIAR BACKUP`, `( X ) RESTAURAR`, `( Y ) DESCONECTAR`, `( B ) FECHAR`.
     - **No Desktop / PC:** Atalhos discretos exibidos em segunda linha.
-  - *Novo Botão Fechar [X] no Cabeçalho:*
-    - Adicionado um botão tátil de fechar `[ X ]` no canto superior direito do cabeçalho do modal (`s_btnCloseX`), permitindo fechar o modal com um toque direto e intuitivo no celular a qualquer momento.
-  - *Acabamento Gráfico Nobre (Soltia Theme):*
-    - Fundo ardósia escuro com moldura interna dourada `(190, 150, 60)`, barra lateral azul celeste no card de Nuvem e verde esmeralda no card Local, badges de status estilizados e botões com relevo chanfrado iluminado.
+  - *Calibração de Escala Dinâmica por Resolução Real (Paridade com Mockup IA):*
+    - *Diagnóstico:* Embora a janela estivesse perfeita no Windows (720p/960p), em smartphones com telas de alta densidade (1080x2400 / 2400x1080), as travas rígidas de clamp (ex: `max 25px` para texto, `max 76px` para botões e largura horizontal travada em `1150px`) faziam o diálogo parecer pequeno e com botões finos em telas de 6 polegadas.
+    - *Solução:* Substituído o clamp rígido pelo fator de escala dinâmico proporcional à resolução real: `scaleFactor = std::max(0.85f, minDim / 720.0f) * 1.15f` no mobile touch.
+    - Em 720p (Windows / Switch), a escala se mantém em `1.0f`, preservando 100% da estética aprovada no desktop.
+    - Em 1080p móvel (Android), a escala sobe para `~1.72f`, elevando o título para ~43px, botões para ~90px táteis, e cartões para ~136px de altura, atingindo paridade visual exata com os mockups gerados pelo usuário. Em modo paisagem ultrawide (2400x1080), a largura do modal expande até 70% da tela (~1680px), eliminando o aspecto de "caixa espremida".
 

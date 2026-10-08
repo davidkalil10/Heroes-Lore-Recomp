@@ -1551,28 +1551,36 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   bool isMobile = false;
 #endif
 
+  // Escala Dinâmica por Resolução Real:
+  // Em 720p (Windows / Switch): refDim = 720 -> scaleFactor = 1.0f
+  // Em 1080p (Mobile Portrait 1080x2400 ou Landscape 2400x1080): refDim = 1080 -> scaleFactor = 1.50f
+  // Em 1440p (Mobile QHD): refDim = 1440 -> scaleFactor = 2.0f
+  float refDim = (float)std::min(winW, winH);
+  float scaleFactor = std::max(0.85f, refDim / 720.0f);
+  if (isMobile) {
+    // No mobile, telas são seguradas com as mãos e exigem botões e tipografia com toque confortável
+    scaleFactor *= 1.15f;
+  }
+
   // Dimensões do Modal Adaptativas
-  int modalW = isPortrait ? std::clamp((int)(winW * 0.94f), 280, 1080)
-                          : std::clamp((int)(winW * 0.82f), 560, 1150);
+  // Em Portrait: preenche 93% da largura útil da tela (deixa margem lateral limpa de 3.5%)
+  // Em Landscape: preenche cerca de 70% da largura ultrawide (em 2400px = ~1680px, em 1280px = ~920px)
+  int modalW = isPortrait ? (int)(winW * 0.93f)
+                          : std::clamp((int)(winW * 0.70f), (int)(winH * 1.15f), (int)(winW * 0.88f));
 
-  // Dimensionamento Tipográfico Responsivo (High-DPI / Flutter feel)
-  float scaleFactor = isPortrait ? ((float)winW / 360.0f) : ((float)winH / 400.0f);
-  scaleFactor = std::clamp(scaleFactor, 0.9f, 2.6f);
+  int titleFontSize    = (int)(25.0f * scaleFactor);
+  int headerH          = (int)(58.0f * scaleFactor);
+  int statusFontSize   = (int)(18.0f * scaleFactor);
+  int bodyFontSize     = (int)(21.0f * scaleFactor);
+  int subFontSize      = (int)(17.0f * scaleFactor);
+  int metaFontSize     = (int)(15.0f * scaleFactor);
+  int btnFontSize      = (int)(18.0f * scaleFactor);
+  int shortcutFontSize = (int)(13.5f * scaleFactor);
 
-  int titleFontSize    = std::clamp((int)(19.0f * scaleFactor), 17, 30);
-  int headerH          = std::clamp((int)(46.0f * scaleFactor), 44, 76);
-  int bodyFontSize     = std::clamp((int)(16.0f * scaleFactor), 14, 25);
-  int subFontSize      = std::clamp((int)(14.0f * scaleFactor), 12, 22);
-  int metaFontSize     = std::clamp((int)(13.0f * scaleFactor), 11, 20);
-  int btnFontSize      = std::clamp((int)(15.0f * scaleFactor), 13, 23);
-  int shortcutFontSize = std::clamp((int)(12.0f * scaleFactor), 10, 18);
-
-  int padX = isPortrait ? std::clamp((int)(16.0f * scaleFactor), 14, 30)
-                        : std::clamp((int)(20.0f * scaleFactor), 16, 36);
+  int padX = (int)(20.0f * scaleFactor);
   int contentW = modalW - padX * 2;
-  int btnH = isPortrait ? std::clamp((int)(54.0f * scaleFactor), 48, 76)
-                        : std::clamp((int)(48.0f * scaleFactor), 44, 68);
-  int btnSpacing = std::clamp((int)(10.0f * scaleFactor), 8, 16);
+  int btnH = isPortrait ? (int)(52.0f * scaleFactor) : (int)(44.0f * scaleFactor);
+  int btnSpacing = (int)(12.0f * scaleFactor);
 
   // Atalhos por Plataforma (Mobile Touch limpo / Switch Joy-Con / PC)
   std::string sc1 = "";
@@ -1598,25 +1606,25 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   int neededH = headerH + (int)(16.0f * scaleFactor);
 
   if (s_state == CloudSaveState::NOT_LOGGED_IN || s_state == CloudSaveState::REQUESTING_CODE || s_state == CloudSaveState::ERROR_NOTIFICATION) {
-    int infoH = subFontSize * 2 + (int)(24.0f * scaleFactor) + bodyFontSize * 2 + (int)(32.0f * scaleFactor);
-    neededH += infoH + btnH + (int)(24.0f * scaleFactor);
+    int infoH = subFontSize * 2 + (int)(20.0f * scaleFactor) + bodyFontSize * 2 + (int)(32.0f * scaleFactor);
+    neededH += infoH + btnH + (int)(28.0f * scaleFactor);
   } else if (s_state == CloudSaveState::WAITING_USER_AUTH) {
-    int codeBoxH = std::clamp((int)(60.0f * scaleFactor), 46, 92);
-    neededH += subFontSize * 2 + bodyFontSize + codeBoxH + subFontSize + btnH + (int)(64.0f * scaleFactor);
+    int codeBoxH = std::clamp((int)(64.0f * scaleFactor), 50, 110);
+    neededH += subFontSize * 2 + bodyFontSize + codeBoxH + subFontSize + btnH + (int)(70.0f * scaleFactor);
   } else if (s_state == CloudSaveState::RESTORE_CONFIRM) {
-    int warnH = subFontSize + bodyFontSize * 3 + (int)(42.0f * scaleFactor);
-    neededH += warnH + btnH + (int)(28.0f * scaleFactor);
+    int warnH = subFontSize + bodyFontSize * 3 + (int)(48.0f * scaleFactor);
+    neededH += warnH + btnH + (int)(32.0f * scaleFactor);
   } else {
     // Autenticado / Visualização de Saves
-    int badgeH = subFontSize + (int)(12.0f * scaleFactor);
-    int cardSingleH = subFontSize + bodyFontSize + metaFontSize + (int)(32.0f * scaleFactor);
+    int badgeH = statusFontSize + (int)(14.0f * scaleFactor);
+    int cardSingleH = subFontSize + bodyFontSize + metaFontSize + (int)(28.0f * scaleFactor);
     int cardsAreaH = isPortrait ? (cardSingleH * 2 + (int)(12.0f * scaleFactor)) : cardSingleH;
     int btnsAreaH = isPortrait ? (btnH * 2 + btnSpacing) : btnH;
-    int statusExtraH = (s_statusMsgId >= 0 || !s_statusMessage.empty()) ? (subFontSize + (int)(10.0f * scaleFactor)) : 0;
-    neededH += badgeH + cardsAreaH + statusExtraH + btnsAreaH + (int)(30.0f * scaleFactor);
+    int statusExtraH = (s_statusMsgId >= 0 || !s_statusMessage.empty()) ? (subFontSize + (int)(12.0f * scaleFactor)) : 0;
+    neededH += badgeH + cardsAreaH + statusExtraH + btnsAreaH + (int)(36.0f * scaleFactor);
   }
 
-  int maxH = (int)(winH * 0.94f);
+  int maxH = (int)(winH * 0.95f);
   int modalH = std::min(neededH, maxH);
   int modalX = (winW - modalW) / 2;
   int modalY = (winH - modalH) / 2;
@@ -1654,9 +1662,9 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   Platform::drawTextColored(renderer, title, modalX + (modalW - titleW) / 2, modalY + (headerH - titleFontSize) / 2 + 2,
                             titleFontSize, 240, 205, 110, 255);
 
-  // Botão Fechar [X] no Cabeçalho
-  int closeSize = headerH - 16;
-  s_btnCloseX = { modalX + modalW - closeSize - 10, modalY + 8, closeSize, closeSize };
+  // Botão Fechar [X] no Cabeçalho (Quadrado e Confortável para Touch)
+  int closeSize = headerH - (int)(16.0f * scaleFactor);
+  s_btnCloseX = { modalX + modalW - closeSize - (int)(10.0f * scaleFactor), modalY + (headerH - closeSize) / 2, closeSize, closeSize };
   SDL_SetRenderDrawColor(renderer, 38, 48, 68, 220);
   SDL_RenderFillRect(renderer, &s_btnCloseX);
   SDL_SetRenderDrawColor(renderer, 110, 130, 165, 255);
@@ -1690,15 +1698,15 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     // Ajuste de fonte caso o texto seja maior que a largura
     int effFontSize = btnFontSize;
     int tw = Platform::getTextWidth(bTitle, effFontSize);
-    if (tw > bRect.w - 12 && bRect.w > 20) {
-      effFontSize = std::max(11, (int)(effFontSize * (float)(bRect.w - 12) / (float)tw));
+    if (tw > bRect.w - (int)(16.0f * scaleFactor) && bRect.w > 20) {
+      effFontSize = std::max(12, (int)(effFontSize * (float)(bRect.w - (int)(16.0f * scaleFactor)) / (float)tw));
       tw = Platform::getTextWidth(bTitle, effFontSize);
     }
 
     if (bSc.empty()) {
       int tx = bRect.x + (bRect.w - tw) / 2;
       int ty = bRect.y + (bRect.h - effFontSize) / 2;
-      Platform::drawTextColored(renderer, bTitle, tx, ty, effFontSize, 245, 248, 255, 255);
+      Platform::drawTextColored(renderer, bTitle, tx, ty, effFontSize, 255, 255, 255, 255);
     } else {
       int effScSize = shortcutFontSize;
       int scw = Platform::getTextWidth(bSc, effScSize);
@@ -1707,7 +1715,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
       int ty2 = ty1 + effFontSize + 3;
 
       int tx1 = bRect.x + (bRect.w - tw) / 2;
-      Platform::drawTextColored(renderer, bTitle, tx1, ty1, effFontSize, 245, 248, 255, 255);
+      Platform::drawTextColored(renderer, bTitle, tx1, ty1, effFontSize, 255, 255, 255, 255);
 
       int tx2 = bRect.x + (bRect.w - scw) / 2;
       Platform::drawTextColored(renderer, bSc, tx2, ty2, effScSize, 205, 220, 240, 220);
@@ -1721,8 +1729,9 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_SetRenderDrawColor(renderer, 20, 26, 40, 255);
     SDL_RenderFillRect(renderer, &cRect);
 
-    // Barra lateral de identificação
-    SDL_Rect sideBar = { cRect.x, cRect.y, 4, cRect.h };
+    // Barra lateral de identificação sólida
+    int barW = std::max(4, (int)(4.0f * scaleFactor));
+    SDL_Rect sideBar = { cRect.x, cRect.y, barW, cRect.h };
     if (isCloud) {
       SDL_SetRenderDrawColor(renderer, 65, 145, 235, 255); // Azul nuvem
     } else {
@@ -1733,23 +1742,23 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_SetRenderDrawColor(renderer, 45, 65, 95, 255);
     SDL_RenderDrawRect(renderer, &cRect);
 
-    int textX = cRect.x + 14;
-    int curCardY = cRect.y + 8;
+    int textX = cRect.x + barW + (int)(12.0f * scaleFactor);
+    int curCardY = cRect.y + (int)(10.0f * scaleFactor);
 
     uint8_t tr_ = isCloud ? 140 : 130;
     uint8_t tg_ = isCloud ? 190 : 215;
     uint8_t tb_ = isCloud ? 245 : 155;
     Platform::drawTextColored(renderer, cardTitle, textX, curCardY, subFontSize, tr_, tg_, tb_, 255);
-    curCardY += subFontSize + 6;
+    curCardY += subFontSize + (int)(6.0f * scaleFactor);
 
     if (!exists) {
       std::string emptyMsg = isCloud ? tr(CloudStr::NO_CLOUD_BACKUP) : tr(CloudStr::NO_LOCAL_SAVE);
-      Platform::drawTextColored(renderer, emptyMsg, textX, curCardY + 4, bodyFontSize, 175, 185, 200, 200);
+      Platform::drawTextColored(renderer, emptyMsg, textX, curCardY + (int)(4.0f * scaleFactor), bodyFontSize, 175, 185, 200, 200);
     } else {
-      Platform::drawTextColored(renderer, heroLine, textX, curCardY, bodyFontSize, 245, 248, 255, 255);
-      curCardY += bodyFontSize + 4;
+      Platform::drawTextColored(renderer, heroLine, textX, curCardY, bodyFontSize, 255, 255, 255, 255);
+      curCardY += bodyFontSize + (int)(4.0f * scaleFactor);
       if (!metaLine.empty()) {
-        Platform::drawTextColored(renderer, metaLine, textX, curCardY, metaFontSize, 160, 180, 205, 220);
+        Platform::drawTextColored(renderer, metaLine, textX, curCardY, metaFontSize, 165, 180, 205, 220);
       }
     }
   };
@@ -1763,9 +1772,9 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     int l1w = Platform::getTextWidth(line1, subFontSize);
     int l2w = Platform::getTextWidth(line2, subFontSize);
     Platform::drawTextColored(renderer, line1, modalX + (modalW - l1w) / 2, curY, subFontSize, 210, 225, 245, 220);
-    curY += subFontSize + 4;
+    curY += subFontSize + (int)(4.0f * scaleFactor);
     Platform::drawTextColored(renderer, line2, modalX + (modalW - l2w) / 2, curY, subFontSize, 210, 225, 245, 220);
-    curY += subFontSize + (int)(14.0f * scaleFactor);
+    curY += subFontSize + (int)(16.0f * scaleFactor);
 
     // Card Local
     char lTitleBuf[64];
@@ -1778,7 +1787,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     int cardH = subFontSize + bodyFontSize + metaFontSize + (int)(28.0f * scaleFactor);
     SDL_Rect localBox = { modalX + padX, curY, contentW, cardH };
     drawSaveCard(localBox, lTitleBuf, lSummary, metaStr, false, lExists);
-    curY += cardH + (int)(12.0f * scaleFactor);
+    curY += cardH + (int)(14.0f * scaleFactor);
 
     // Status da Conexão
     std::string statusStr = "";
@@ -1787,11 +1796,11 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     } else {
       statusStr = s_statusMessage.empty() ? tr(CloudStr::STATUS_DISCONNECTED) : s_statusMessage;
     }
-    int stw = Platform::getTextWidth(statusStr, subFontSize);
+    int stw = Platform::getTextWidth(statusStr, statusFontSize);
     uint8_t sr = (s_state == CloudSaveState::ERROR_NOTIFICATION) ? 245 : 180;
     uint8_t sg = (s_state == CloudSaveState::ERROR_NOTIFICATION) ? 90  : 200;
     uint8_t sb = (s_state == CloudSaveState::ERROR_NOTIFICATION) ? 80  : 225;
-    Platform::drawTextColored(renderer, statusStr, modalX + (modalW - stw) / 2, curY, subFontSize, sr, sg, sb, 255);
+    Platform::drawTextColored(renderer, statusStr, modalX + (modalW - stw) / 2, curY, statusFontSize, sr, sg, sb, 255);
 
     // Botões
     int by = modalY + modalH - btnH - (int)(16.0f * scaleFactor);
@@ -1799,8 +1808,8 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     s_btnAction1 = { modalX + padX, by, bW, btnH };
     s_btnCancel  = { modalX + padX + bW + btnSpacing, by, bW, btnH };
 
-    drawModernBtn(tr(CloudStr::BTN_CONNECT), sc1, s_btnAction1, {28, 92, 50, 255}, {65, 185, 105, 255});
-    drawModernBtn(tr(CloudStr::BTN_CLOSE), scCancel, s_btnCancel, {42, 48, 62, 255}, {90, 105, 130, 255});
+    drawModernBtn(tr(CloudStr::BTN_CONNECT), sc1, s_btnAction1, {32, 105, 52, 255}, {55, 175, 90, 255});
+    drawModernBtn(tr(CloudStr::BTN_CLOSE), scCancel, s_btnCancel, {42, 48, 62, 255}, {85, 98, 120, 255});
   }
 
   // ---------------------------------------------------------------------------
@@ -1810,7 +1819,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     std::string step1 = tr(CloudStr::STEP1_ACCESS_LINK);
     int s1w = Platform::getTextWidth(step1, subFontSize);
     Platform::drawTextColored(renderer, step1, modalX + (modalW - s1w) / 2, curY, subFontSize, 215, 225, 245, 230);
-    curY += subFontSize + 6;
+    curY += subFontSize + (int)(6.0f * scaleFactor);
 
     std::string urlText = s_deviceCode.verificationUrl;
     int uw = Platform::getTextWidth(urlText, bodyFontSize);
@@ -1820,22 +1829,22 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     std::string step2 = tr(CloudStr::STEP2_ENTER_CODE);
     int s2w = Platform::getTextWidth(step2, subFontSize);
     Platform::drawTextColored(renderer, step2, modalX + (modalW - s2w) / 2, curY, subFontSize, 215, 225, 245, 230);
-    curY += subFontSize + 8;
+    curY += subFontSize + (int)(8.0f * scaleFactor);
 
     // Caixa de Destaque para o Código
-    int codeBoxW = std::clamp((int)(contentW * 0.75f), 220, 520);
-    int codeBoxH = std::clamp((int)(56.0f * scaleFactor), 46, 84);
+    int codeBoxW = std::clamp((int)(contentW * 0.75f), 240, (int)(560.0f * scaleFactor));
+    int codeBoxH = std::clamp((int)(64.0f * scaleFactor), 50, (int)(100.0f * scaleFactor));
     SDL_Rect codeBox = { modalX + (modalW - codeBoxW) / 2, curY, codeBoxW, codeBoxH };
     SDL_SetRenderDrawColor(renderer, 26, 36, 54, 255);
     SDL_RenderFillRect(renderer, &codeBox);
     SDL_SetRenderDrawColor(renderer, 215, 175, 65, 255);
     SDL_RenderDrawRect(renderer, &codeBox);
 
-    int codeFontSize = std::clamp((int)(codeBoxH * 0.55f), 20, 44);
+    int codeFontSize = std::clamp((int)(codeBoxH * 0.55f), 20, 52);
     int cw = Platform::getTextWidth(s_deviceCode.userCode, codeFontSize);
     Platform::drawTextColored(renderer, s_deviceCode.userCode, codeBox.x + (codeBoxW - cw) / 2,
                               codeBox.y + (codeBoxH - codeFontSize) / 2, codeFontSize, 255, 220, 100, 255);
-    curY += codeBoxH + (int)(12.0f * scaleFactor);
+    curY += codeBoxH + (int)(14.0f * scaleFactor);
 
     std::string waitMsg = tr(CloudStr::WAITING_BROWSER_AUTH);
     int ww = Platform::getTextWidth(waitMsg, subFontSize);
@@ -1843,7 +1852,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
 
     // Botão Cancelar
     int by = modalY + modalH - btnH - (int)(16.0f * scaleFactor);
-    int bW = std::clamp((int)(contentW * 0.55f), 160, 360);
+    int bW = std::clamp((int)(contentW * 0.55f), 180, (int)(400.0f * scaleFactor));
     s_btnCancel = { modalX + (modalW - bW) / 2, by, bW, btnH };
     drawModernBtn(tr(CloudStr::BTN_CANCEL), scCancel, s_btnCancel, {55, 42, 42, 255}, {145, 75, 75, 255});
   }
@@ -1852,27 +1861,27 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   // 3. Estado: CONFIRMAÇÃO DE RESTAURAÇÃO
   // ---------------------------------------------------------------------------
   else if (s_state == CloudSaveState::RESTORE_CONFIRM) {
-    int warnBoxH = subFontSize + bodyFontSize * 3 + (int)(38.0f * scaleFactor);
+    int warnBoxH = subFontSize + bodyFontSize * 3 + (int)(44.0f * scaleFactor);
     SDL_Rect warnBox = { modalX + padX, curY, contentW, warnBoxH };
     SDL_SetRenderDrawColor(renderer, 48, 24, 18, 255);
     SDL_RenderFillRect(renderer, &warnBox);
     SDL_SetRenderDrawColor(renderer, 220, 110, 40, 255);
     SDL_RenderDrawRect(renderer, &warnBox);
 
-    int textX = warnBox.x + 16;
-    int curW = warnBox.y + 12;
+    int textX = warnBox.x + (int)(16.0f * scaleFactor);
+    int curW = warnBox.y + (int)(12.0f * scaleFactor);
 
     std::string wTitle = tr(CloudStr::WARN_RESTORE_TITLE);
     Platform::drawTextColored(renderer, wTitle, textX, curW, subFontSize, 255, 195, 70, 255);
-    curW += subFontSize + 8;
+    curW += subFontSize + (int)(8.0f * scaleFactor);
 
     std::string w1 = tr(CloudStr::WARN_RESTORE_LINE1);
     std::string w2 = tr(CloudStr::WARN_RESTORE_LINE2);
     std::string w3 = tr(CloudStr::WARN_RESTORE_LINE3);
     Platform::drawTextColored(renderer, w1, textX, curW, bodyFontSize, 240, 220, 215, 240);
-    curW += bodyFontSize + 4;
+    curW += bodyFontSize + (int)(4.0f * scaleFactor);
     Platform::drawTextColored(renderer, w2, textX, curW, bodyFontSize, 240, 220, 215, 240);
-    curW += bodyFontSize + 6;
+    curW += bodyFontSize + (int)(6.0f * scaleFactor);
     Platform::drawTextColored(renderer, w3, textX, curW, bodyFontSize, 255, 140, 120, 255);
 
     // Botões Confirmar / Cancelar
@@ -1882,7 +1891,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     s_btnCancel  = { modalX + padX + bW + btnSpacing, by, bW, btnH };
 
     drawModernBtn(tr(CloudStr::BTN_CONFIRM), sc1, s_btnAction1, {130, 42, 35, 255}, {225, 75, 65, 255});
-    drawModernBtn(tr(CloudStr::BTN_CANCEL), scCancel, s_btnCancel, {42, 48, 62, 255}, {90, 105, 130, 255});
+    drawModernBtn(tr(CloudStr::BTN_CANCEL), scCancel, s_btnCancel, {42, 48, 62, 255}, {85, 98, 120, 255});
   }
 
   // ---------------------------------------------------------------------------
@@ -1891,9 +1900,9 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   else {
     // Badge de Conexão Central
     std::string connStr = tr(CloudStr::STATUS_CONNECTED);
-    int cw = Platform::getTextWidth(connStr, subFontSize);
-    Platform::drawTextColored(renderer, connStr, modalX + (modalW - cw) / 2, curY, subFontSize, 95, 210, 140, 255);
-    curY += subFontSize + (int)(12.0f * scaleFactor);
+    int cw = Platform::getTextWidth(connStr, statusFontSize);
+    Platform::drawTextColored(renderer, connStr, modalX + (modalW - cw) / 2, curY, statusFontSize, 75, 215, 120, 255);
+    curY += statusFontSize + (int)(14.0f * scaleFactor);
 
     // Informações dos Saves
     std::string cloudHero = s_cloudBackup.exists ? s_cloudBackup.summary : "";
@@ -1912,20 +1921,20 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
       // Mobile Vertical: Cards Empilhados com respiro
       SDL_Rect cloudBox = { modalX + padX, curY, contentW, cardH };
       drawSaveCard(cloudBox, tr(CloudStr::CARD_CLOUD), cloudHero, cloudMeta, true, s_cloudBackup.exists);
-      curY += cardH + (int)(10.0f * scaleFactor);
+      curY += cardH + (int)(12.0f * scaleFactor);
 
       SDL_Rect localBox = { modalX + padX, curY, contentW, cardH };
       drawSaveCard(localBox, lTitleBuf, lSummary, localMeta, false, lExists);
-      curY += cardH + (int)(12.0f * scaleFactor);
+      curY += cardH + (int)(14.0f * scaleFactor);
     } else {
       // Landscape: Cards Lado a Lado
-      int cardSpacing = 14;
+      int cardSpacing = (int)(16.0f * scaleFactor);
       int cardW = (contentW - cardSpacing) / 2;
       SDL_Rect cloudBox = { modalX + padX, curY, cardW, cardH };
       SDL_Rect localBox = { modalX + padX + cardW + cardSpacing, curY, cardW, cardH };
       drawSaveCard(cloudBox, tr(CloudStr::CARD_CLOUD), cloudHero, cloudMeta, true, s_cloudBackup.exists);
       drawSaveCard(localBox, lTitleBuf, lSummary, localMeta, false, lExists);
-      curY += cardH + (int)(12.0f * scaleFactor);
+      curY += cardH + (int)(14.0f * scaleFactor);
     }
 
     // Mensagem de Status (se houver)
@@ -1936,9 +1945,9 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
       displayStatus = s_statusMessage;
     }
     if (!displayStatus.empty()) {
-      int sw = Platform::getTextWidth(displayStatus, subFontSize);
-      Platform::drawTextColored(renderer, displayStatus, modalX + (modalW - sw) / 2, curY, subFontSize, 220, 235, 255, 255);
-      curY += subFontSize + 6;
+      int sw = Platform::getTextWidth(displayStatus, statusFontSize);
+      Platform::drawTextColored(renderer, displayStatus, modalX + (modalW - sw) / 2, curY, statusFontSize, 220, 235, 255, 255);
+      curY += statusFontSize + (int)(6.0f * scaleFactor);
     }
 
     // Botões Inferiores (4 Botões)
@@ -1970,10 +1979,10 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
       s_btnCancel  = { modalX + padX + (bW + btnSpacing) * 3, by, bW, btnH };
     }
 
-    drawModernBtn(b1, sc1, s_btnAction1, {28, 92, 50, 255}, {65, 185, 105, 255});
-    drawModernBtn(b2, sc2, s_btnAction2, {26, 68, 120, 255}, {65, 145, 235, 255});
-    drawModernBtn(b3, sc3, s_btnAction3, {90, 32, 32, 255}, {185, 65, 65, 255});
-    drawModernBtn(bc, scCancel, s_btnCancel, {42, 48, 62, 255}, {90, 105, 130, 255});
+    drawModernBtn(b1, sc1, s_btnAction1, {32, 105, 52, 255}, {55, 175, 90, 255});
+    drawModernBtn(b2, sc2, s_btnAction2, {26, 75, 135, 255}, {50, 130, 220, 255});
+    drawModernBtn(b3, sc3, s_btnAction3, {105, 35, 35, 255}, {190, 60, 60, 255});
+    drawModernBtn(bc, scCancel, s_btnCancel, {42, 48, 62, 255}, {85, 98, 120, 255});
   }
 }
 
