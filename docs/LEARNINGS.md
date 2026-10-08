@@ -605,3 +605,20 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
 - **Localização Multilíngue Completa nos 4 Idiomas (PT, EN, IT, ES):**
   - Todas as strings da interface do Cloud Save (títulos, subtítulos, cards, botões de ação, avisos de confirmação de restore, instruções de login do Device Flow e banners OSD de status) foram mapeadas no enum `CloudStr` e na matriz de tradução `s_translations` em `cloud_save.cpp`.
   - O idioma exibido acompanha instantaneamente a configuração ativa de `Platform::getCurrentLanguageIndex()` (Português, Inglês, Italiano ou Espanhol).
+
+## Sessão 24 (Protagonistas Canônicos Ronin/Reah/Aramor, Fuso Horário Local e Ciclo de Mensagens)
+- **Identificação Canônica dos Protagonistas em Heroes Lore: Wind of Soltia:**
+  - *Diagnóstico:* O modal de Cloud Save exibia o slot 1 como "Karis Nv.1". O usuário apontou que o personagem principal se chama "Ronin".
+  - *Investigação do Bytecode e Assets:* No arquivo `char/hero.tdf`, os 3 primeiros IDs de strings referenciados pela tela de carregamento de saves (`a.java` / `ce.var_z_a` / string IDs 685, 686, 687) são:
+    - ID 685: **Ronin** (espada/cavaleiro — slot `_k.rms`)
+    - ID 686: **Reah** (refinadora/lança — slot `_s.rms`)
+    - ID 687: **Aramor** (cavaleiro protetor/escudo — slot `_w.rms`)
+  - Os nomes foram corrigidos para a trilogia canônica de Wind of Soltia. Além disso, backups antigos existentes no Google Drive que ainda contenham "Karis" têm sua descrição sanitizada para "Ronin" na leitura através de `sanitizeCloudSummary()`.
+- **Normalização de Fuso Horário (UTC para Horário Local):**
+  - *Diagnóstico:* Ao enviar o backup, a data do Google Drive exibia 3 horas à frente do save local (ex: `18:21` na nuvem vs `15:19` no local).
+  - *Causa Raiz:* A API do Google Drive retorna o timestamp de modificação `modifiedTime` em formato ISO-8601 em tempo UTC (ex: `2026-10-08T18:21:00Z`). O código estava exibindo a string bruta cortada (`18:21`), enquanto o timestamp do arquivo local era formatado via `std::localtime` (fuso de Brasília UTC-3, `15:19`).
+  - *Solução:* Implementada a função `formatUtcIsoToLocalDate()` que faz o parse da data UTC e converte para o horário local do jogador via `_mkgmtime` / `timegm` e `std::localtime`. Agora tanto o save na nuvem quanto o local exibem o mesmo fuso horário, permitindo comparação cronológica exata.
+- **Limpeza de Estado e Ciclo de Vida de Mensagens no Modal:**
+  - *Diagnóstico:* Após restaurar um save, jogar e voltar à tela de Cloud Save, a mensagem "Save restaurado com sucesso!" continuava aparecendo na tela, inclusive mantendo o idioma anterior caso o jogador tivesse mudado de língua.
+  - *Causa Raiz:* `s_statusMessage` não era limpo ao abrir (`openModal`) ou fechar (`closeModal`) a janela modal, e o texto ficava armazenado como string literal no idioma antigo.
+  - *Solução:* Criado o identificador dinâmico `s_statusMsgId` mapeado para o enum `CloudStr`. Mensagens de estado passam a ser resolvidas em tempo de renderização via `tr((CloudStr)s_statusMsgId)`, adaptando-se instantaneamente a qualquer troca de idioma. Além disso, `openModal()` e `closeModal()` limpam completamente mensagens residuais e redefinem o estado para neutro (`LOGGED_IN`), garantindo uma tela limpa e sem resquícios a cada abertura.

@@ -48,7 +48,7 @@ struct CloudBackupInfo {
   bool exists = false;
   std::string fileId;
   std::string modifiedTime;     // Data/hora da última sincronização
-  std::string summary;          // Resumo dos heróis (ex: "Karis Nvl 24, Luiel Nvl 15")
+  std::string summary;          // Resumo dos heróis (ex: "Ronin Nv 24, Reah Nv 15")
   std::string platformName;     // Plataforma de origem (ex: "Windows", "Switch", "Android")
   size_t fileSize = 0;
 };

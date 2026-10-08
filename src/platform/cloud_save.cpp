@@ -48,6 +48,7 @@ static CloudSaveState s_state = CloudSaveState::NOT_LOGGED_IN;
 static DeviceCodeInfo s_deviceCode;
 static CloudBackupInfo s_cloudBackup;
 static std::string s_statusMessage = "";
+static int s_statusMsgId = -1;
 static std::mutex s_cloudMutex;
 static bool s_modalActive = false;
 static std::atomic<bool> s_loginActive{false};
@@ -228,7 +229,7 @@ static const char* s_translations[(size_t)CloudStr::STR_COUNT][4] = {
     "Backup enviado para o Google Drive com sucesso!",
     "Backup successfully uploaded to Google Drive!",
     "Backup caricato su Google Drive con successo!",
-    "¡Copia enviada a Google Drive con exito!"
+    "Copia enviada a Google Drive con exito!"
   },
   /* STATUS_DOWNLOADING */ {
     "Baixando save da nuvem e restaurando arquivos...",
@@ -240,7 +241,7 @@ static const char* s_translations[(size_t)CloudStr::STR_COUNT][4] = {
     "Save restaurado com sucesso!",
     "Save successfully restored!",
     "Salvataggio ripristinato con successo!",
-    "¡Partida restaurada con exito!"
+    "Partida restaurada con exito!"
   },
   /* STATUS_AUTH_EXPIRED */ {
     "Autorizacao cancelada ou expirada.",
@@ -745,8 +746,48 @@ static bool ensureValidAccessToken() {
 }
 
 // -----------------------------------------------------------------------------
-// Resumo dos Saves Locais (Slot Karis, Shion, Luiel)
+// Resumo dos Saves Locais e Conversão de Datas (Ronin, Reah, Aramor)
 // -----------------------------------------------------------------------------
+static std::string formatUtcIsoToLocalDate(const std::string& iso) {
+  if (iso.size() < 16) return iso;
+  int y = 0, m = 0, d = 0, hr = 0, mn = 0, sec = 0;
+  if (std::sscanf(iso.c_str(), "%d-%d-%dT%d:%d:%d", &y, &m, &d, &hr, &mn, &sec) >= 5) {
+    std::tm tmUtc = {};
+    tmUtc.tm_year = y - 1900;
+    tmUtc.tm_mon = m - 1;
+    tmUtc.tm_mday = d;
+    tmUtc.tm_hour = hr;
+    tmUtc.tm_min = mn;
+    tmUtc.tm_sec = sec;
+    tmUtc.tm_isdst = -1;
+
+#if defined(_WIN32)
+    time_t t = _mkgmtime(&tmUtc);
+#else
+    time_t t = timegm(&tmUtc);
+#endif
+    if (t != (time_t)-1) {
+      char buf[32];
+      std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", std::localtime(&t));
+      return std::string(buf);
+    }
+  }
+  return iso.substr(0, 10) + " " + iso.substr(11, 5);
+}
+
+static void sanitizeCloudSummary(std::string& s) {
+  auto replaceAll = [](std::string& str, const std::string& from, const std::string& to) {
+    size_t pos = 0;
+    while ((pos = str.find(from, pos)) != std::string::npos) {
+      str.replace(pos, from.length(), to);
+      pos += to.length();
+    }
+  };
+  replaceAll(s, "Karis", "Ronin");
+  replaceAll(s, "Shion", "Reah");
+  replaceAll(s, "Luiel", "Aramor");
+}
+
 static int decodeHeroLevel(const std::vector<uint8_t>& rec) {
   if (rec.size() < 4) return 0;
   int s2 = (rec[0] << 8) | rec[1];
@@ -799,9 +840,9 @@ static std::string getLocalSavesSummary() {
     const char* defaultHero;
   };
   SlotCheck slots[] = {
-    {"_k.rms", "Karis"},
-    {"_s.rms", "Shion"},
-    {"_w.rms", "Luiel"}
+    {"_k.rms", "Ronin"},
+    {"_s.rms", "Reah"},
+    {"_w.rms", "Aramor"}
   };
 
   int foundCount = 0;
@@ -932,6 +973,11 @@ bool CloudSave::isModalActive() {
 void CloudSave::openModal(VM* vm) {
   if (vm) s_activeVm = vm;
   s_modalActive = true;
+  s_statusMessage.clear();
+  s_statusMsgId = -1;
+  if (s_state == CloudSaveState::SUCCESS_NOTIFICATION || s_state == CloudSaveState::ERROR_NOTIFICATION) {
+    s_state = isLoggedIn() ? CloudSaveState::LOGGED_IN : CloudSaveState::NOT_LOGGED_IN;
+  }
   if (isLoggedIn() && !s_cloudBackup.exists) {
     queryCloudBackupAsync();
   }
@@ -939,8 +985,12 @@ void CloudSave::openModal(VM* vm) {
 
 void CloudSave::closeModal() {
   s_modalActive = false;
+  s_statusMessage.clear();
+  s_statusMsgId = -1;
   if (s_state == CloudSaveState::WAITING_USER_AUTH || s_state == CloudSaveState::REQUESTING_CODE) {
     cancelLogin();
+  } else if (s_state == CloudSaveState::SUCCESS_NOTIFICATION || s_state == CloudSaveState::ERROR_NOTIFICATION) {
+    s_state = isLoggedIn() ? CloudSaveState::LOGGED_IN : CloudSaveState::NOT_LOGGED_IN;
   }
 }
 
@@ -1090,15 +1140,11 @@ void CloudSave::queryCloudBackupAsync() {
         std::lock_guard<std::mutex> lock(s_cloudMutex);
         s_cloudBackup.exists = true;
         s_cloudBackup.fileId = id;
-        s_cloudBackup.modifiedTime = extractJsonString(resp.body, "modifiedTime");
+        std::string rawIso = extractJsonString(resp.body, "modifiedTime");
+        s_cloudBackup.modifiedTime = formatUtcIsoToLocalDate(rawIso);
         s_cloudBackup.summary = extractJsonString(resp.body, "description");
+        sanitizeCloudSummary(s_cloudBackup.summary);
         s_cloudBackup.fileSize = (size_t)extractJsonInt(resp.body, "size", 0);
-
-        // Formata data amigável se disponível (2026-10-08T12:00:00Z -> 2026-10-08 12:00)
-        if (s_cloudBackup.modifiedTime.size() >= 16) {
-          s_cloudBackup.modifiedTime = s_cloudBackup.modifiedTime.substr(0, 10) + " " +
-                                       s_cloudBackup.modifiedTime.substr(11, 5);
-        }
       } else {
         std::lock_guard<std::mutex> lock(s_cloudMutex);
         s_cloudBackup.exists = false;
@@ -1214,15 +1260,17 @@ void CloudSave::uploadBackupAsync() {
           s_cloudBackup.exists = true;
         }
         s_state = CloudSaveState::SUCCESS_NOTIFICATION;
-        s_statusMessage = "Backup enviado para o Google Drive com sucesso!";
+        s_statusMsgId = (int)CloudStr::STATUS_UPLOAD_SUCCESS;
+        s_statusMessage.clear();
       }
-      Platform::showOsdMessage("Backup na nuvem realizado com sucesso!");
+      Platform::showOsdMessage(tr(CloudStr::OSD_UPLOAD_SUCCESS));
       queryCloudBackupAsync();
     } else {
       std::lock_guard<std::mutex> lock(s_cloudMutex);
       s_state = CloudSaveState::ERROR_NOTIFICATION;
+      s_statusMsgId = -1;
       s_statusMessage = "Falha ao enviar backup (" + std::to_string(resp.statusCode) + ")";
-      Platform::showOsdMessage("Erro ao enviar backup para a nuvem.");
+      Platform::showOsdMessage(tr(CloudStr::OSD_UPLOAD_ERROR));
     }
   }).detach();
 }
@@ -1232,7 +1280,8 @@ void CloudSave::uploadBackupAsync() {
 // -----------------------------------------------------------------------------
 void CloudSave::requestRestore() {
   if (!s_cloudBackup.exists) {
-    s_statusMessage = "Nenhum backup encontrado na nuvem para restaurar.";
+    s_statusMsgId = (int)CloudStr::NO_CLOUD_BACKUP;
+    s_statusMessage.clear();
     return;
   }
   s_state = CloudSaveState::RESTORE_CONFIRM;
@@ -1265,7 +1314,7 @@ void CloudSave::confirmRestore(VM* vm) {
       std::lock_guard<std::mutex> lock(s_cloudMutex);
       s_state = CloudSaveState::ERROR_NOTIFICATION;
       s_statusMessage = "Falha ao baixar backup da nuvem (" + std::to_string(resp.statusCode) + ")";
-      Platform::showOsdMessage("Erro ao baixar save da nuvem.");
+      Platform::showOsdMessage(tr(CloudStr::OSD_DOWNLOAD_ERROR));
       return;
     }
 
@@ -1305,7 +1354,8 @@ void CloudSave::confirmRestore(VM* vm) {
       std::lock_guard<std::mutex> lock(s_cloudMutex);
       s_pendingVmReload = true;
       s_state = CloudSaveState::SUCCESS_NOTIFICATION;
-      s_statusMessage = tr(CloudStr::STATUS_DOWNLOAD_SUCCESS);
+      s_statusMsgId = (int)CloudStr::STATUS_DOWNLOAD_SUCCESS;
+      s_statusMessage.clear();
     }
     Platform::showOsdMessage(tr(CloudStr::OSD_DOWNLOAD_SUCCESS));
   }).detach();
@@ -1510,7 +1560,12 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     }
     Platform::drawText(renderer, localSum, infoBox.x + 12, infoBox.y + 14, smallW, smallH, 255, smallStep);
 
-    std::string statusStr = s_statusMessage.empty() ? tr(CloudStr::STATUS_DISCONNECTED) : s_statusMessage;
+    std::string statusStr = "";
+    if (s_statusMsgId >= 0 && (size_t)s_statusMsgId < (size_t)CloudStr::STR_COUNT) {
+      statusStr = tr((CloudStr)s_statusMsgId);
+    } else {
+      statusStr = s_statusMessage.empty() ? tr(CloudStr::STATUS_DISCONNECTED) : s_statusMessage;
+    }
     Platform::drawText(renderer, statusStr, infoBox.x + 12, infoBox.y + 14 + smallH + 10, smallW, smallH,
                        (s_state == CloudSaveState::ERROR_NOTIFICATION ? 255 : 180), smallStep);
 
@@ -1687,9 +1742,16 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     Platform::drawText(renderer, lDetails, localBox.x + 12, localBox.y + 10 + smallH + 6, smallW, smallH, 200, smallStep);
     curY += cardH + 12;
 
-    if (!s_statusMessage.empty()) {
-      int sw = Platform::getTextWidth(s_statusMessage, smallW, smallStep);
-      Platform::drawText(renderer, s_statusMessage, modalX + (modalW - sw) / 2, curY, smallW, smallH, 255, smallStep);
+    std::string displayStatus = "";
+    if (s_statusMsgId >= 0 && (size_t)s_statusMsgId < (size_t)CloudStr::STR_COUNT) {
+      displayStatus = tr((CloudStr)s_statusMsgId);
+    } else if (!s_statusMessage.empty()) {
+      displayStatus = s_statusMessage;
+    }
+
+    if (!displayStatus.empty()) {
+      int sw = Platform::getTextWidth(displayStatus, smallW, smallStep);
+      Platform::drawText(renderer, displayStatus, modalX + (modalW - sw) / 2, curY, smallW, smallH, 255, smallStep);
     }
 
     // Grid de Botões Inferiores (4 botões: Backup, Restaurar, Desconectar, Fechar)
