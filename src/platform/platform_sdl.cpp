@@ -1307,6 +1307,7 @@ bool Platform::pollEvents(VM& vm) {
     return false;
   }
 #endif
+  CloudSave::update(&vm);
   SDL_Event ev;
   while (SDL_PollEvent(&ev)) {
     // Se o diálogo modal do Updater estiver ativo, direciona os eventos com prioridade total

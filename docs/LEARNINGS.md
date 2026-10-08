@@ -589,6 +589,19 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
   - *Causa Raiz:* No Windows e Linux onde `Platform::getStorageDir()` retorna `"."`, o backend de `midp.cpp` (`rmsDir`) salva os dados em `vm.dataDir + "/rms"` (por exemplo, `build/assets/rms` ou `reference/extracted/rms`). No entanto, `cloud_save.cpp` estava concatenando `Platform::getStorageDir() + "/rms"`, resultando em `./rms` (inexistente).
   - *Solução:* Unificado o cálculo de diretório RMS na função canônica `Platform::getRmsDir(VM* vm = nullptr)`. A função avalia a VM ativa, armazena em cache o diretório RMS em uso e realiza busca de fallback nos candidatos (`assets/rms`, `build/assets/rms`, `reference/extracted/rms`). Agora tanto a VM (`midp.cpp`) quanto o Cloud Save (`cloud_save.cpp`) leem, gravam e restauram os saves exatamente na mesma pasta de arquivos, exibindo corretamente `Save local: Karis Nv.4`.
 
-
-
-
+## Sessão 23 (Aperfeiçoamento do Cloud Save: Nível Autêntico, Data Local, Recarregamento Seguro e 4 Idiomas)
+- **Decodificação Autêntica do Nível do Herói (`decodeHeroLevel`):**
+  - *Diagnóstico:* Um personagem recém-criado de Nível 1 era exibido no modal do Cloud Save como "Karis Nv 2".
+  - *Causa Raiz:* No bytecode original de `n.java` (linhas 746-758), o método `bq.b` decifra os registros de save aplicando a cifra XOR com a chave cíclica `{5, 11, 8, 81, 3, 20}`. O byte no índice 0 representa a classe do herói e o índice 1 armazena o nível. Durante a decodificação de `n.p()`, o cursor da chave avança: o byte 0 consome `key[1]` (11) e o byte 1 consome `key[2]` (8). O cálculo anterior lia um offset deslocado (`rec[3] ^ 11`), que para um save de Karis Lv.1 (`9`) gerava `9 ^ 11 = 2`.
+  - *Solução:* Implementado o algoritmo autêntico de `bq.b` em `decodeHeroLevel()`. Decodificando o byte de índice 1 com a chave correspondente `key[2] = 8`: `9 ^ 8 = 1`, retornando fielmente `Karis Nv.1`.
+- **Timestamp do Save Local para Comparação Clara:**
+  - Implementada a função `getLocalSavesDate()` utilizando `stat()` / `st_mtime` sobre os arquivos `.rms` locais (`_k.rms`, etc.).
+  - A data de modificação é formatada como `YYYY.MM.DD HH:MM`.
+  - O card `LOCAL` agora exibe `Data: YYYY.MM.DD HH:MM | <Plataforma> | Karis Nv.1`, no mesmo padrão visual do card `NUVEM`. O jogador compara imediatamente os horários para saber qual save é o mais recente.
+- **Eliminação do Fechamento Involuntário no Restore (Thread Safety da VM):**
+  - *Diagnóstico:* Ao clicar em "Restaurar", os arquivos eram baixados com sucesso, mas a aplicação fechava subitamente. Ao reabrir, o save estava restaurado.
+  - *Causa Raiz:* A rotina de restauração rodava em uma `std::thread` secundária de rede e chamava `s_vm->invoke(mNp)` (ou `bu.d()`). Na arquitetura da VM, `vm->invoke` depende estritamente do contexto de thread ativa (`tctx`). Em threads secundárias criadas fora da VM, `tctx` é `nullptr`, disparando a checagem fatal do interpretador que encerrava o processo.
+  - *Solução:* A thread de background apenas substitui os arquivos RMS em disco e seta a flag atômica `s_pendingVmReload = true;`. A execução da atualização de memória da VM é despachada para a **thread principal** através de `CloudSave::update(VM* vm)`, chamada periodicamente em `Platform::pollEvents` e no loop modal de `CloudSave::drawModal`. O jogo não fecha mais, exibe mensagem de sucesso imediata e atualiza os cards do modal em tempo real.
+- **Localização Multilíngue Completa nos 4 Idiomas (PT, EN, IT, ES):**
+  - Todas as strings da interface do Cloud Save (títulos, subtítulos, cards, botões de ação, avisos de confirmação de restore, instruções de login do Device Flow e banners OSD de status) foram mapeadas no enum `CloudStr` e na matriz de tradução `s_translations` em `cloud_save.cpp`.
+  - O idioma exibido acompanha instantaneamente a configuração ativa de `Platform::getCurrentLanguageIndex()` (Português, Inglês, Italiano ou Espanhol).

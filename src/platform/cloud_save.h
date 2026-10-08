@@ -57,6 +57,7 @@ class CloudSave {
 public:
   static void init();
   static void shutdown();
+  static void update(VM* vm = nullptr);
 
   // Estado e Informações
   static bool isLoggedIn();

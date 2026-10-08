@@ -13,6 +13,7 @@
 #include <thread>
 #include <algorithm>
 #include <filesystem>
+#include <sys/stat.h>
 
 #if defined(_WIN32)
   #ifndef WIN32_LEAN_AND_MEAN
@@ -50,6 +51,7 @@ static std::string s_statusMessage = "";
 static std::mutex s_cloudMutex;
 static bool s_modalActive = false;
 static std::atomic<bool> s_loginActive{false};
+static std::atomic<bool> s_pendingVmReload{false};
 static std::string s_accessToken = "";
 static std::string s_refreshToken = "";
 static uint64_t s_tokenExpiryEpoch = 0;
@@ -84,6 +86,295 @@ std::string getGoogleClientSecret() {
   s.reserve(sizeof(enc));
   for (uint8_t b : enc) s.push_back((char)(b ^ 0x5A));
   return s;
+}
+
+// -----------------------------------------------------------------------------
+// Passo 10 / Passo 9: Localização Multilíngue (PT, EN, IT, ES)
+// -----------------------------------------------------------------------------
+enum class CloudStr {
+  TITLE,
+  SUBTITLE_1,
+  SUBTITLE_2,
+  CARD_CLOUD,
+  CARD_LOCAL,
+  DATE_PREFIX,
+  NO_CLOUD_BACKUP,
+  NO_LOCAL_SAVE,
+  STATUS_DISCONNECTED,
+  STATUS_CONNECTED,
+  STATUS_REQUESTING_CODE,
+  STEP1_ACCESS_LINK,
+  STEP2_ENTER_CODE,
+  WAITING_BROWSER_AUTH,
+  STATUS_UPLOADING,
+  STATUS_UPLOAD_SUCCESS,
+  STATUS_DOWNLOADING,
+  STATUS_DOWNLOAD_SUCCESS,
+  STATUS_AUTH_EXPIRED,
+  STATUS_LOGGED_OUT,
+  WARN_RESTORE_TITLE,
+  WARN_RESTORE_LINE1,
+  WARN_RESTORE_LINE2,
+  WARN_RESTORE_LINE3,
+  BTN_CONNECT,
+  BTN_CLOSE,
+  BTN_CANCEL,
+  BTN_UPLOAD,
+  BTN_RESTORE,
+  BTN_CONFIRM,
+  BTN_DISCONNECT,
+  LEVEL_PREFIX,
+  OSD_CONNECTED,
+  OSD_DISCONNECTED,
+  OSD_UPLOAD_SUCCESS,
+  OSD_UPLOAD_ERROR,
+  OSD_DOWNLOAD_SUCCESS,
+  OSD_DOWNLOAD_ERROR,
+  STR_COUNT
+};
+
+static const char* s_translations[(size_t)CloudStr::STR_COUNT][4] = {
+  /* TITLE */ {
+    "GOOGLE DRIVE - CLOUD SAVE",
+    "GOOGLE DRIVE - CLOUD SAVE",
+    "GOOGLE DRIVE - CLOUD SAVE",
+    "GOOGLE DRIVE - CLOUD SAVE"
+  },
+  /* SUBTITLE_1 */ {
+    "Sincronize seus dados de jogo entre",
+    "Sync your game saves across",
+    "Sincronizza i tuoi salvataggi tra",
+    "Sincroniza tus partidas entre"
+  },
+  /* SUBTITLE_2 */ {
+    "PC, Android e Nintendo Switch!",
+    "PC, Android and Nintendo Switch!",
+    "PC, Android e Nintendo Switch!",
+    "PC, Android y Nintendo Switch!"
+  },
+  /* CARD_CLOUD */ {
+    "NUVEM (Google Drive):",
+    "CLOUD (Google Drive):",
+    "CLOUD (Google Drive):",
+    "NUBE (Google Drive):"
+  },
+  /* CARD_LOCAL */ {
+    "LOCAL (%s):",
+    "LOCAL (%s):",
+    "LOCALE (%s):",
+    "LOCAL (%s):"
+  },
+  /* DATE_PREFIX */ {
+    "Data: ",
+    "Date: ",
+    "Data: ",
+    "Fecha: "
+  },
+  /* NO_CLOUD_BACKUP */ {
+    "Nenhum backup encontrado na nuvem.",
+    "No cloud backup found.",
+    "Nessun backup trovato nel cloud.",
+    "No se encontro copia en la nube."
+  },
+  /* NO_LOCAL_SAVE */ {
+    "Nenhum save local",
+    "No local save",
+    "Nessun salvataggio locale",
+    "Ninguna partida local"
+  },
+  /* STATUS_DISCONNECTED */ {
+    "Status: Desconectado",
+    "Status: Disconnected",
+    "Stato: Disconnesso",
+    "Estado: Desconectado"
+  },
+  /* STATUS_CONNECTED */ {
+    "STATUS: CONECTADO AO GOOGLE DRIVE",
+    "STATUS: CONNECTED TO GOOGLE DRIVE",
+    "STATO: CONNESSO A GOOGLE DRIVE",
+    "ESTADO: CONECTADO A GOOGLE DRIVE"
+  },
+  /* STATUS_REQUESTING_CODE */ {
+    "Solicitando codigo de acesso ao Google...",
+    "Requesting access code from Google...",
+    "Richiesta codice di accesso a Google...",
+    "Solicitando codigo de acceso a Google..."
+  },
+  /* STEP1_ACCESS_LINK */ {
+    "1. No celular ou PC, acesse o link:",
+    "1. On phone or PC, open the link:",
+    "1. Su telefono o PC, apri il link:",
+    "1. En celular o PC, entra al enlace:"
+  },
+  /* STEP2_ENTER_CODE */ {
+    "2. Digite este codigo de autorizacao:",
+    "2. Enter this authorization code:",
+    "2. Inserisci questo codice di autorizzazione:",
+    "2. Ingresa este codigo de autorizacion:"
+  },
+  /* WAITING_BROWSER_AUTH */ {
+    "Aguardando confirmacao no navegador...",
+    "Waiting for confirmation in browser...",
+    "In attesa di conferma nel browser...",
+    "Esperando confirmacion en el navegador..."
+  },
+  /* STATUS_UPLOADING */ {
+    "Empacotando e enviando saves para o Google Drive...",
+    "Packing and uploading saves to Google Drive...",
+    "Invio dei salvataggi su Google Drive...",
+    "Empaquetando y enviando partidas a Google Drive..."
+  },
+  /* STATUS_UPLOAD_SUCCESS */ {
+    "Backup enviado para o Google Drive com sucesso!",
+    "Backup successfully uploaded to Google Drive!",
+    "Backup caricato su Google Drive con successo!",
+    "¡Copia enviada a Google Drive con exito!"
+  },
+  /* STATUS_DOWNLOADING */ {
+    "Baixando save da nuvem e restaurando arquivos...",
+    "Downloading cloud save and restoring files...",
+    "Download del salvataggio e ripristino file...",
+    "Descargando partida de la nube y restaurando..."
+  },
+  /* STATUS_DOWNLOAD_SUCCESS */ {
+    "Save restaurado com sucesso!",
+    "Save successfully restored!",
+    "Salvataggio ripristinato con successo!",
+    "¡Partida restaurada con exito!"
+  },
+  /* STATUS_AUTH_EXPIRED */ {
+    "Autorizacao cancelada ou expirada.",
+    "Authorization cancelled or expired.",
+    "Autorizzazione annullata o scaduta.",
+    "Autorizacion cancelada o expirada."
+  },
+  /* STATUS_LOGGED_OUT */ {
+    "Conta desconectada.",
+    "Account disconnected.",
+    "Account disconnesso.",
+    "Cuenta desconectada."
+  },
+  /* WARN_RESTORE_TITLE */ {
+    "ATENCAO: RESTAURAR SAVE DA NUVEM",
+    "WARNING: RESTORE CLOUD SAVE",
+    "ATTENZIONE: RIPRISTINA DA CLOUD",
+    "ATENCION: RESTAURAR DE LA NUBE"
+  },
+  /* WARN_RESTORE_LINE1 */ {
+    "A restauracao substituira todos os saves locais",
+    "Restoring will overwrite all local game saves",
+    "Il ripristino sovrascrivera tutti i salvataggi locali",
+    "La restauracion sobrescribira todas las partidas locales"
+  },
+  /* WARN_RESTORE_LINE2 */ {
+    "pelos dados salvos na sua nuvem Google Drive.",
+    "with the backup stored on your Google Drive.",
+    "con i dati salvati sul tuo Google Drive.",
+    "con los datos guardados en tu Google Drive."
+  },
+  /* WARN_RESTORE_LINE3 */ {
+    "Se estiver em partida, o jogo sera reiniciado.",
+    "If in-game, the match will be cleanly reset.",
+    "Se sei in partita, il gioco sara riavviato.",
+    "Si estas en partida, el juego se reiniciara."
+  },
+  /* BTN_CONNECT */ {
+    "[ 1 / A ]: CONECTAR",
+    "[ 1 / A ]: CONNECT",
+    "[ 1 / A ]: CONNETTI",
+    "[ 1 / A ]: CONECTAR"
+  },
+  /* BTN_CLOSE */ {
+    "[ B / ESC ]: FECHAR",
+    "[ B / ESC ]: CLOSE",
+    "[ B / ESC ]: CHIUDI",
+    "[ B / ESC ]: CERRAR"
+  },
+  /* BTN_CANCEL */ {
+    "[ B / ESC ]: CANCELAR",
+    "[ B / ESC ]: CANCEL",
+    "[ B / ESC ]: ANNULLA",
+    "[ B / ESC ]: CANCELAR"
+  },
+  /* BTN_UPLOAD */ {
+    "[ 1 / A ]: ENVIAR BACKUP",
+    "[ 1 / A ]: UPLOAD BACKUP",
+    "[ 1 / A ]: CARICA BACKUP",
+    "[ 1 / A ]: SUBIR COPIA"
+  },
+  /* BTN_RESTORE */ {
+    "[ 2 / X ]: RESTAURAR",
+    "[ 2 / X ]: RESTORE",
+    "[ 2 / X ]: RIPRISTINA",
+    "[ 2 / X ]: RESTAURAR"
+  },
+  /* BTN_CONFIRM */ {
+    "[ 1 / A ]: CONFIRMAR",
+    "[ 1 / A ]: CONFIRM",
+    "[ 1 / A ]: CONFERMA",
+    "[ 1 / A ]: CONFIRMAR"
+  },
+  /* BTN_DISCONNECT */ {
+    "[ 3 / Y ]: DESCONECTAR",
+    "[ 3 / Y ]: DISCONNECT",
+    "[ 3 / Y ]: DISCONNETTI",
+    "[ 3 / Y ]: DESCONECTAR"
+  },
+  /* LEVEL_PREFIX */ {
+    " Nv.",
+    " Lv.",
+    " Liv.",
+    " Nv."
+  },
+  /* OSD_CONNECTED */ {
+    "Google Drive conectado!",
+    "Google Drive connected!",
+    "Google Drive connesso!",
+    "¡Google Drive conectado!"
+  },
+  /* OSD_DISCONNECTED */ {
+    "Conta Google Drive desconectada.",
+    "Google Drive account disconnected.",
+    "Account Google Drive disconnesso.",
+    "Cuenta Google Drive desconectada."
+  },
+  /* OSD_UPLOAD_SUCCESS */ {
+    "Backup na nuvem realizado com sucesso!",
+    "Cloud backup completed successfully!",
+    "Backup su cloud completato con successo!",
+    "¡Copia en la nube completada con exito!"
+  },
+  /* OSD_UPLOAD_ERROR */ {
+    "Erro ao enviar backup para a nuvem.",
+    "Error uploading backup to cloud.",
+    "Errore caricamento backup su cloud.",
+    "Error al subir copia a la nube."
+  },
+  /* OSD_DOWNLOAD_SUCCESS */ {
+    "Save restaurado da nuvem!",
+    "Save restored from cloud!",
+    "Salvataggio ripristinato dal cloud!",
+    "¡Partida restaurada de la nube!"
+  },
+  /* OSD_DOWNLOAD_ERROR */ {
+    "Erro ao baixar save da nuvem.",
+    "Error downloading save from cloud.",
+    "Errore download save da cloud.",
+    "Error al descargar partida de la nube."
+  }
+};
+
+static int getLangIndex() {
+  std::string lang = Platform::getCurrentLanguage();
+  if (lang == "en") return 1;
+  if (lang == "it") return 2;
+  if (lang == "es") return 3;
+  return 0; // "pt"
+}
+
+static const char* tr(CloudStr id) {
+  int l = getLangIndex();
+  return s_translations[(size_t)id][l];
 }
 
 // -----------------------------------------------------------------------------
@@ -456,6 +747,49 @@ static bool ensureValidAccessToken() {
 // -----------------------------------------------------------------------------
 // Resumo dos Saves Locais (Slot Karis, Shion, Luiel)
 // -----------------------------------------------------------------------------
+static int decodeHeroLevel(const std::vector<uint8_t>& rec) {
+  if (rec.size() < 4) return 0;
+  int s2 = (rec[0] << 8) | rec[1];
+  if (s2 <= 2 || s2 > (int)rec.size() - 2) return 0;
+
+  static const uint8_t key[] = {5, 11, 8, 81, 3, 20};
+  int n4 = 0;
+  uint8_t level = 0;
+
+  for (int n2 = 0; n2 < s2 - 1; ++n2) {
+    if (++n4 == 6) n4 = 0;
+    uint8_t decByte = rec[2 + n2] ^ key[n4];
+    if (n2 == 1) {
+      level = decByte; // object[1] em n.java é o nível autêntico do herói
+      break;
+    }
+  }
+
+  if (level >= 1 && level <= 99) return (int)level;
+  return 0;
+}
+
+static std::string getLocalSavesDate() {
+  std::string rmsBase = Platform::getRmsDir(s_activeVm);
+  const char* slotFiles[] = { "_k.rms", "_s.rms", "_w.rms", "_o.rms", "_c.rms" };
+  time_t newestTime = 0;
+
+  for (const char* fn : slotFiles) {
+    std::string path = (rmsBase.empty() || rmsBase.back() == '/' ? rmsBase : rmsBase + "/") + fn;
+    struct stat st;
+    if (stat(path.c_str(), &st) == 0) {
+      if (st.st_mtime > newestTime) {
+        newestTime = st.st_mtime;
+      }
+    }
+  }
+
+  if (newestTime == 0) return "";
+  char buf[32];
+  std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", std::localtime(&newestTime));
+  return std::string(buf);
+}
+
 static std::string getLocalSavesSummary() {
   std::string rmsBase = Platform::getRmsDir(s_activeVm);
   std::string summary = "";
@@ -480,28 +814,22 @@ static std::string getLocalSavesSummary() {
     if (!summary.empty()) summary += ", ";
     summary += sc.defaultHero;
 
-    // Tenta ler o primeiro record para obter o nível
+    // Tenta ler o primeiro record para obter o nível usando bq.b
     uint32_t count = 0;
     if (f.read((char*)&count, 4) && count > 0) {
       uint32_t sz = 0;
       if (f.read((char*)&sz, 4) && sz >= 4) {
         std::vector<uint8_t> rec(sz);
         f.read((char*)rec.data(), sz);
-        if (sz > 2) {
-          int s2 = (rec[0] << 8) | rec[1];
-          if (s2 > 0 && s2 <= (int)sz - 2) {
-            uint8_t key[] = {5, 11, 8, 81, 3, 20};
-            uint8_t decLevel = rec[2 + 1] ^ key[1 % 6];
-            if (decLevel >= 1 && decLevel <= 99) {
-              summary += " Nv." + std::to_string(decLevel);
-            }
-          }
+        int lvl = decodeHeroLevel(rec);
+        if (lvl > 0) {
+          summary += std::string(tr(CloudStr::LEVEL_PREFIX)) + std::to_string(lvl);
         }
       }
     }
   }
 
-  if (foundCount == 0) return "Nenhum save local";
+  if (foundCount == 0) return tr(CloudStr::NO_LOCAL_SAVE);
   return summary;
 }
 
@@ -541,6 +869,40 @@ void CloudSave::init() {
 void CloudSave::shutdown() {
   s_loginActive = false;
   s_modalActive = false;
+}
+
+void CloudSave::update(VM* vm) {
+  if (vm) s_activeVm = vm;
+  if (s_pendingVmReload.exchange(false)) {
+    if (s_activeVm) {
+      s_activeVm->gilLock();
+      try {
+        ClassInfo* nClass = s_activeVm->findClass("n");
+        FieldInfo* fAoA = nClass ? s_activeVm->findField(nClass, "a:Lao;") : nullptr;
+        bool inGame = false;
+
+        if (fAoA && fAoA->isStatic && fAoA->index >= 0 && fAoA->index < (int)nClass->statics.size()) {
+          inGame = (nClass->statics[fAoA->index].o != nullptr);
+        }
+
+        if (inGame) {
+          ClassInfo* buClass = s_activeVm->findClass("bu");
+          Method* mBuD = buClass ? s_activeVm->findMethod(buClass, "d:()V") : nullptr;
+          if (mBuD) {
+            Value ret[2];
+            s_activeVm->invoke(mBuD, nullptr, ret);
+          }
+        } else {
+          Method* mNp = nClass ? s_activeVm->findMethod(nClass, "p:()V") : nullptr;
+          if (mNp) {
+            Value ret[2];
+            s_activeVm->invoke(mNp, nullptr, ret);
+          }
+        }
+      } catch (...) {}
+      s_activeVm->gilUnlock();
+    }
+  }
 }
 
 bool CloudSave::isLoggedIn() {
@@ -939,47 +1301,13 @@ void CloudSave::confirmRestore(VM* vm) {
       return;
     }
 
-    // -------------------------------------------------------------------------
-    // Recarregamento Inteligente e Seguro sem Corromper Memória
-    // -------------------------------------------------------------------------
-    if (vm) {
-      vm->gilLock();
-      try {
-        ClassInfo* nClass = vm->findClass("n");
-        FieldInfo* fAoA = nClass ? vm->findField(nClass, "a:Lao;") : nullptr;
-        bool inGame = false;
-
-        // Se n.var_ao_a != null, há herói instanciado em mapa ativo
-        if (fAoA && fAoA->isStatic && fAoA->index >= 0 && fAoA->index < (int)nClass->statics.size()) {
-          inGame = (nClass->statics[fAoA->index].o != nullptr);
-        }
-
-        if (inGame) {
-          // Em partida: aciona retorno limpo e canônico ao menu inicial (bu.d() -> Main Menu)
-          ClassInfo* buClass = vm->findClass("bu");
-          Method* mBuD = buClass ? vm->findMethod(buClass, "d:()V") : nullptr;
-          if (mBuD) {
-            Value ret[2];
-            vm->invoke(mBuD, nullptr, ret);
-          }
-        } else {
-          // Na tela de título: atualiza o scan dos slots e habilita o botão Carregar (n.p())
-          Method* mNp = nClass ? vm->findMethod(nClass, "p:()V") : nullptr;
-          if (mNp) {
-            Value ret[2];
-            vm->invoke(mNp, nullptr, ret);
-          }
-        }
-      } catch (...) {}
-      vm->gilUnlock();
-    }
-
     {
       std::lock_guard<std::mutex> lock(s_cloudMutex);
+      s_pendingVmReload = true;
       s_state = CloudSaveState::SUCCESS_NOTIFICATION;
-      s_statusMessage = "Save restaurado com sucesso (" + std::to_string(restoredCount) + " arquivos)!";
-      Platform::showOsdMessage("Save restaurado da nuvem!");
+      s_statusMessage = tr(CloudStr::STATUS_DOWNLOAD_SUCCESS);
     }
+    Platform::showOsdMessage(tr(CloudStr::OSD_DOWNLOAD_SUCCESS));
   }).detach();
 }
 
@@ -1140,7 +1468,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   int smallW = (int)(smallH * 0.65f);
   int smallStep = (int)(smallW * 0.68f);
 
-  std::string title = "GOOGLE DRIVE - CLOUD SAVE";
+  std::string title = tr(CloudStr::TITLE);
   int tw = Platform::getTextWidth(title, charW, stepX);
   Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + (headerH - charH) / 2 + 8, charW, charH, 255, stepX);
 
@@ -1154,8 +1482,8 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   // 1. Estado: NÃO AUTENTICADO
   // ---------------------------------------------------------------------------
   if (s_state == CloudSaveState::NOT_LOGGED_IN || s_state == CloudSaveState::REQUESTING_CODE || s_state == CloudSaveState::ERROR_NOTIFICATION) {
-    std::string line1 = "Sincronize seus dados de jogo entre";
-    std::string line2 = "PC, Android e Nintendo Switch!";
+    std::string line1 = tr(CloudStr::SUBTITLE_1);
+    std::string line2 = tr(CloudStr::SUBTITLE_2);
     int l1w = Platform::getTextWidth(line1, smallW, smallStep);
     int l2w = Platform::getTextWidth(line2, smallW, smallStep);
     Platform::drawText(renderer, line1, modalX + (modalW - l1w) / 2, curY, smallW, smallH, 200, smallStep);
@@ -1170,10 +1498,19 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_SetRenderDrawColor(renderer, 50, 70, 95, 255);
     SDL_RenderDrawRect(renderer, &infoBox);
 
-    std::string localSum = "Save local: " + getLocalSavesSummary();
+    std::string lSummary = getLocalSavesSummary();
+    std::string lDate = getLocalSavesDate();
+    std::string localSum;
+    if (lSummary == tr(CloudStr::NO_LOCAL_SAVE)) {
+      localSum = lSummary;
+    } else if (!lDate.empty()) {
+      localSum = std::string(tr(CloudStr::DATE_PREFIX)) + lDate + " | " + lSummary;
+    } else {
+      localSum = lSummary;
+    }
     Platform::drawText(renderer, localSum, infoBox.x + 12, infoBox.y + 14, smallW, smallH, 255, smallStep);
 
-    std::string statusStr = s_statusMessage.empty() ? "Status: Desconectado" : s_statusMessage;
+    std::string statusStr = s_statusMessage.empty() ? tr(CloudStr::STATUS_DISCONNECTED) : s_statusMessage;
     Platform::drawText(renderer, statusStr, infoBox.x + 12, infoBox.y + 14 + smallH + 10, smallW, smallH,
                        (s_state == CloudSaveState::ERROR_NOTIFICATION ? 255 : 180), smallStep);
 
@@ -1188,7 +1525,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderFillRect(renderer, &s_btnAction1);
     SDL_SetRenderDrawColor(renderer, 80, 200, 100, 255);
     SDL_RenderDrawRect(renderer, &s_btnAction1);
-    std::string b1Text = "[ 1 / A ]: CONECTAR";
+    std::string b1Text = tr(CloudStr::BTN_CONNECT);
     int b1tw = Platform::getTextWidth(b1Text, smallW, smallStep);
     Platform::drawText(renderer, b1Text, s_btnAction1.x + (btnW - b1tw) / 2, s_btnAction1.y + (btnH - smallH) / 2, smallW, smallH, 255, smallStep);
 
@@ -1197,7 +1534,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderFillRect(renderer, &s_btnCancel);
     SDL_SetRenderDrawColor(renderer, 100, 100, 120, 255);
     SDL_RenderDrawRect(renderer, &s_btnCancel);
-    std::string bcText = "[ B / ESC ]: FECHAR";
+    std::string bcText = tr(CloudStr::BTN_CLOSE);
     int bctw = Platform::getTextWidth(bcText, smallW, smallStep);
     Platform::drawText(renderer, bcText, s_btnCancel.x + (btnW - bctw) / 2, s_btnCancel.y + (btnH - smallH) / 2, smallW, smallH, 200, smallStep);
   }
@@ -1206,7 +1543,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   // 2. Estado: AGUARDANDO AUTORIZAÇÃO DO USUÁRIO (CÓDIGO NA TELA)
   // ---------------------------------------------------------------------------
   else if (s_state == CloudSaveState::WAITING_USER_AUTH) {
-    std::string step1 = "1. No celular ou PC, acesse o link:";
+    std::string step1 = tr(CloudStr::STEP1_ACCESS_LINK);
     int s1w = Platform::getTextWidth(step1, smallW, smallStep);
     Platform::drawText(renderer, step1, modalX + (modalW - s1w) / 2, curY, smallW, smallH, 220, smallStep);
     curY += smallH + 8;
@@ -1216,7 +1553,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     Platform::drawText(renderer, urlText, modalX + (modalW - uw) / 2, curY, charW, charH, 255, stepX);
     curY += charH + 16;
 
-    std::string step2 = "2. Digite este codigo de autorizacao:";
+    std::string step2 = tr(CloudStr::STEP2_ENTER_CODE);
     int s2w = Platform::getTextWidth(step2, smallW, smallStep);
     Platform::drawText(renderer, step2, modalX + (modalW - s2w) / 2, curY, smallW, smallH, 220, smallStep);
     curY += smallH + 8;
@@ -1238,7 +1575,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
                        codeBox.y + (codeBoxH - codeH) / 2, codeW, codeH, 255, codeStep);
     curY += codeBoxH + 14;
 
-    std::string waitMsg = "Aguardando confirmacao no navegador...";
+    std::string waitMsg = tr(CloudStr::WAITING_BROWSER_AUTH);
     int ww = Platform::getTextWidth(waitMsg, smallW, smallStep);
     Platform::drawText(renderer, waitMsg, modalX + (modalW - ww) / 2, curY, smallW, smallH, 180, smallStep);
 
@@ -1250,7 +1587,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderFillRect(renderer, &s_btnCancel);
     SDL_SetRenderDrawColor(renderer, 140, 70, 70, 255);
     SDL_RenderDrawRect(renderer, &s_btnCancel);
-    std::string bcText = "[ B / ESC ]: CANCELAR";
+    std::string bcText = tr(CloudStr::BTN_CANCEL);
     int bctw = Platform::getTextWidth(bcText, smallW, smallStep);
     Platform::drawText(renderer, bcText, s_btnCancel.x + (btnW - bctw) / 2, s_btnCancel.y + (btnH - smallH) / 2, smallW, smallH, 220, smallStep);
   }
@@ -1267,12 +1604,12 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_SetRenderDrawColor(renderer, 220, 140, 40, 255);
     SDL_RenderDrawRect(renderer, &warnBox);
 
-    std::string wTitle = "ATENCAO: RESTAURAR SAVE DA NUVEM";
+    std::string wTitle = tr(CloudStr::WARN_RESTORE_TITLE);
     Platform::drawText(renderer, wTitle, warnBox.x + 14, warnBox.y + 14, smallW, smallH, 255, smallStep);
 
-    std::string w1 = "A restauracao substituira todos os saves locais";
-    std::string w2 = "pelos dados salvos na sua nuvem Google Drive.";
-    std::string w3 = "Se estiver em partida, o jogo sera reiniciado.";
+    std::string w1 = tr(CloudStr::WARN_RESTORE_LINE1);
+    std::string w2 = tr(CloudStr::WARN_RESTORE_LINE2);
+    std::string w3 = tr(CloudStr::WARN_RESTORE_LINE3);
     Platform::drawText(renderer, w1, warnBox.x + 14, warnBox.y + 14 + smallH + 8, smallW, smallH, 220, smallStep);
     Platform::drawText(renderer, w2, warnBox.x + 14, warnBox.y + 14 + (smallH + 8) * 2, smallW, smallH, 220, smallStep);
     Platform::drawText(renderer, w3, warnBox.x + 14, warnBox.y + 14 + (smallH + 8) * 3, smallW, smallH, 255, smallStep);
@@ -1287,7 +1624,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderFillRect(renderer, &s_btnAction1);
     SDL_SetRenderDrawColor(renderer, 230, 80, 70, 255);
     SDL_RenderDrawRect(renderer, &s_btnAction1);
-    std::string b1Text = "[ 1 / A ]: CONFIRMAR";
+    std::string b1Text = tr(CloudStr::BTN_CONFIRM);
     int b1tw = Platform::getTextWidth(b1Text, smallW, smallStep);
     Platform::drawText(renderer, b1Text, s_btnAction1.x + (btnW - b1tw) / 2, s_btnAction1.y + (btnH - smallH) / 2, smallW, smallH, 255, smallStep);
 
@@ -1295,7 +1632,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderFillRect(renderer, &s_btnCancel);
     SDL_SetRenderDrawColor(renderer, 100, 100, 120, 255);
     SDL_RenderDrawRect(renderer, &s_btnCancel);
-    std::string bcText = "[ B / ESC ]: CANCELAR";
+    std::string bcText = tr(CloudStr::BTN_CANCEL);
     int bctw = Platform::getTextWidth(bcText, smallW, smallStep);
     Platform::drawText(renderer, bcText, s_btnCancel.x + (btnW - bctw) / 2, s_btnCancel.y + (btnH - smallH) / 2, smallW, smallH, 200, smallStep);
   }
@@ -1305,7 +1642,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   // ---------------------------------------------------------------------------
   else {
     // Badge de Conexão
-    std::string connStr = "STATUS: CONECTADO AO GOOGLE DRIVE";
+    std::string connStr = tr(CloudStr::STATUS_CONNECTED);
     int cw = Platform::getTextWidth(connStr, smallW, smallStep);
     Platform::drawText(renderer, connStr, modalX + (modalW - cw) / 2, curY, smallW, smallH, 180, smallStep);
     curY += smallH + 12;
@@ -1318,11 +1655,11 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_SetRenderDrawColor(renderer, 60, 90, 130, 255);
     SDL_RenderDrawRect(renderer, &cloudBox);
 
-    std::string cTitle = "NUVEM (Google Drive):";
+    std::string cTitle = tr(CloudStr::CARD_CLOUD);
     Platform::drawText(renderer, cTitle, cloudBox.x + 12, cloudBox.y + 10, smallW, smallH, 255, smallStep);
 
-    std::string cDetails = s_cloudBackup.exists ? ("Data: " + s_cloudBackup.modifiedTime + " | " + s_cloudBackup.summary)
-                                               : "Nenhum backup encontrado na nuvem.";
+    std::string cDetails = s_cloudBackup.exists ? (std::string(tr(CloudStr::DATE_PREFIX)) + s_cloudBackup.modifiedTime + " | " + s_cloudBackup.summary)
+                                               : tr(CloudStr::NO_CLOUD_BACKUP);
     Platform::drawText(renderer, cDetails, cloudBox.x + 12, cloudBox.y + 10 + smallH + 6, smallW, smallH, 200, smallStep);
     curY += cardH + 10;
 
@@ -1333,9 +1670,20 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_SetRenderDrawColor(renderer, 60, 90, 130, 255);
     SDL_RenderDrawRect(renderer, &localBox);
 
-    std::string lTitle = "LOCAL (" + getPlatformName() + "):";
-    Platform::drawText(renderer, lTitle, localBox.x + 12, localBox.y + 10, smallW, smallH, 255, smallStep);
-    std::string lDetails = getLocalSavesSummary();
+    char lTitleBuf[64];
+    std::snprintf(lTitleBuf, sizeof(lTitleBuf), tr(CloudStr::CARD_LOCAL), getPlatformName().c_str());
+    Platform::drawText(renderer, lTitleBuf, localBox.x + 12, localBox.y + 10, smallW, smallH, 255, smallStep);
+
+    std::string lSummary = getLocalSavesSummary();
+    std::string lDate = getLocalSavesDate();
+    std::string lDetails;
+    if (lSummary == tr(CloudStr::NO_LOCAL_SAVE)) {
+      lDetails = lSummary;
+    } else if (!lDate.empty()) {
+      lDetails = std::string(tr(CloudStr::DATE_PREFIX)) + lDate + " | " + lSummary;
+    } else {
+      lDetails = lSummary;
+    }
     Platform::drawText(renderer, lDetails, localBox.x + 12, localBox.y + 10 + smallH + 6, smallW, smallH, 200, smallStep);
     curY += cardH + 12;
 
@@ -1358,7 +1706,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderFillRect(renderer, &s_btnAction1);
     SDL_SetRenderDrawColor(renderer, 65, 175, 95, 255);
     SDL_RenderDrawRect(renderer, &s_btnAction1);
-    std::string b1 = "[ 1 / A ]: ENVIAR BACKUP";
+    std::string b1 = tr(CloudStr::BTN_UPLOAD);
     int b1w = Platform::getTextWidth(b1, smallW, smallStep);
     Platform::drawText(renderer, b1, s_btnAction1.x + (btnW - b1w) / 2, s_btnAction1.y + (btnH - smallH) / 2, smallW, smallH, 255, smallStep);
 
@@ -1367,7 +1715,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderFillRect(renderer, &s_btnAction2);
     SDL_SetRenderDrawColor(renderer, 65, 130, 210, 255);
     SDL_RenderDrawRect(renderer, &s_btnAction2);
-    std::string b2 = "[ 2 / X ]: RESTAURAR";
+    std::string b2 = tr(CloudStr::BTN_RESTORE);
     int b2w = Platform::getTextWidth(b2, smallW, smallStep);
     Platform::drawText(renderer, b2, s_btnAction2.x + (btnW - b2w) / 2, s_btnAction2.y + (btnH - smallH) / 2, smallW, smallH, 255, smallStep);
 
@@ -1376,7 +1724,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderFillRect(renderer, &s_btnAction3);
     SDL_SetRenderDrawColor(renderer, 130, 60, 60, 255);
     SDL_RenderDrawRect(renderer, &s_btnAction3);
-    std::string b3 = "[ 3 / Y ]: DESCONECTAR";
+    std::string b3 = tr(CloudStr::BTN_DISCONNECT);
     int b3w = Platform::getTextWidth(b3, smallW, smallStep);
     Platform::drawText(renderer, b3, s_btnAction3.x + (btnW - b3w) / 2, s_btnAction3.y + (btnH - smallH) / 2, smallW, smallH, 220, smallStep);
 
@@ -1385,7 +1733,7 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderFillRect(renderer, &s_btnCancel);
     SDL_SetRenderDrawColor(renderer, 90, 100, 120, 255);
     SDL_RenderDrawRect(renderer, &s_btnCancel);
-    std::string bc = "[ B / ESC ]: FECHAR";
+    std::string bc = tr(CloudStr::BTN_CLOSE);
     int bcw = Platform::getTextWidth(bc, smallW, smallStep);
     Platform::drawText(renderer, bc, s_btnCancel.x + (btnW - bcw) / 2, s_btnCancel.y + (btnH - smallH) / 2, smallW, smallH, 200, smallStep);
   }
