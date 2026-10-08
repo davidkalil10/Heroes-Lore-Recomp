@@ -3,7 +3,7 @@
 [![Build & Release](https://github.com/davidkalil10/Heroes-Lore-Recomp/actions/workflows/build.yml/badge.svg)](https://github.com/davidkalil10/Heroes-Lore-Recomp/actions/workflows/build.yml)
 [![GitHub Release](https://img.shields.io/github/v/release/davidkalil10/Heroes-Lore-Recomp?color=blue&label=Latest%20Release)](https://github.com/davidkalil10/Heroes-Lore-Recomp/releases)
 [![Language](https://img.shields.io/badge/Language-C%2B%2B17-blue.svg)](https://en.cppreference.com/w/cpp/17)
-[![Game Lang](https://img.shields.io/badge/Game%20Lang-Portugu%C3%AAs--BR%20(Open%20Mind%20v0.0.2)-yellow.svg)]()
+[![Game Lang](https://img.shields.io/badge/Game%20Lang-PT--BR%20%7C%20EN%20%7C%20IT%20%7C%20ES-brightgreen.svg)]()
 [![Status](https://img.shields.io/badge/Status-100%25%20Playable%20%26%20Save%20Working-brightgreen.svg)]()
 
 Port nativo, determinístico e de alta performance do lendário RPG J2ME **Heroes Lore: Wind of Soltia** (*Hands-On Mobile / EA Mobile*), baseado na versão oficial brasileira de resolução 240x320.
@@ -27,6 +27,11 @@ Os binários compilados oficiais e prontos para jogar de cada plataforma estão 
 
 ## 🌟 Destaques do Projeto
 
+- **Localização Completa Multi-idioma em Tempo Real (PT-BR, EN, IT, ES):**
+  - **4 idiomas suportados** com 3.951 strings alinhadas por ID: Português do Brasil (Open Mind Team 2008), Inglês oficial, Italiano oficial (BiNPDA) e Espanhol completo (diálogos, missões, itens e menus adaptados ao charset J2ME).
+  - **Alternância Dinâmica:** Mude o idioma a qualquer momento pelo menu de **Opções** (na tela de título ou no menu de pause in-game) ou instantaneamente pelo atalho de teclado <kbd>F2</kbd>.
+  - **Hot-Reload Imediato em C++:** O buffer de textos, itens/equipamentos do inventário, telas de status, submenus e os diálogos do mapa ativo (mesmo com balão de fala aberto na tela) são recarregados instantaneamente em menos de 1 ms a 30 FPS sem congelamentos, deadlocks ou necessidade de reiniciar o jogo.
+  - **Persistência Automática:** A preferência de idioma é salva em `hl_settings.ini` e preservada entre sessões.
 - **Fidelidade Matemática e Lógica 1:1:** O jogo executa a partir dos binários `.class` originais do JAR, garantindo que a física, colisões, progressão de nível e IA de chefes sejam idênticos ao jogo original de celular.
 - **True Widescreen (16:9 — 568x320):** Expansão real da área de visão do mapa, exibindo até **35 colunas de tiles simultaneamente** (em comparação com 15 colunas do original de 240p), pixel-perfect e sem qualquer distorção anamórfica de sprites.
 - **Molduras Temáticas Clássicas (Bezels):** Para quem prefere a nostalgia da proporção 3:4 original, estão disponíveis artes laterais dedicadas (*Soltia Ancestral*, *Ardósia Escura* e *Preto Clássico*).
@@ -75,7 +80,8 @@ O mapeamento foi planejado com ergonomia moderna para controles USB/Bluetooth, t
 | **Mover para a Direita** | <kbd>D</kbd> ou <kbd>→</kbd> | <kbd>Num 6</kbd> | `RIGHT` / `6` |
 | **Atacar (Arma) / Confirmar / Interagir** | <kbd>Espaço</kbd>, <kbd>Enter</kbd>, <kbd>J</kbd>, <kbd>Z</kbd> | <kbd>Num 5</kbd> | `FIRE` / `5` |
 | **Menu Principal / Inventário** | <kbd>Tab</kbd>, <kbd>Esc</kbd>, <kbd>F1</kbd>, <kbd>C</kbd> | — | `CLR` (-8) |
-| **Status / Cancelar / Fechar** | <kbd>F2</kbd>, <kbd>Backspace</kbd> | — | `RSK` (-7) |
+| **Status / Cancelar / Fechar** | <kbd>Backspace</kbd> | — | `RSK` (-7) |
+| 🌐 **Alternar Idioma (PT-BR, EN, IT, ES)** | <kbd>F2</kbd> | — | — |
 | **Ataque 1 do Guardião** | <kbd>Q</kbd> ou <kbd>U</kbd> | <kbd>Num 1</kbd> | `1` |
 | **Ataque 2 do Guardião** | <kbd>E</kbd> ou <kbd>I</kbd> | <kbd>Num 3</kbd> | `3` |
 | **Ataque Secundário / Habilidade** | <kbd>K</kbd> ou <kbd>X</kbd> | <kbd>Num 7</kbd> | `7` |
@@ -215,7 +221,11 @@ Para detalhes sobre a engenharia reversa das 90 classes ofuscadas, resolução d
 
 - **Port Nativo & Recompilação (Windows, Linux, Android, Nintendo Switch):** [David Kalil Braga](https://github.com/davidkalil10) (2026)
 - **Desenvolvimento Original J2ME:** *Hands-On Mobile* & *Electronic Arts (EA Mobile)*
-- **Tradução Português-BR (J2ME Original):** *Open Mind Team* (Bruno Freire, Bruno Vilhena, John Peres) — Versão `v.0.0.2` (2008)
+- **Localizações e Traduções:**
+  - **Português-BR (J2ME Original):** *Open Mind Team* (Bruno Freire, Bruno Vilhena, John Peres) — Versão `v.0.0.2` (2008)
+  - **Inglês:** Versão de varejo original Nokia / Hands-On Mobile (2008)
+  - **Italiano:** Versão de varejo oficial S60v3 / BiNPDA (2008)
+  - **Espanhol:** Localização completa de diálogos e textos adaptada para o recompilador nativo (2026)
 
 ---
 

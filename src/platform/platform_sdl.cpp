@@ -682,6 +682,9 @@ static bool s_touchOverlayEnabled = true;
 static bool s_touchOverlayEnabled = false;
 #endif
 
+// Passo 10: Localização e Idiomas
+static std::string s_currentLanguage = "pt"; // "pt", "en", "it", "es"
+
 static bool isTouchKeyHeld(int key) {
   for (const auto& f : s_activeFingers) {
     if (f.key == key) return true;
@@ -715,7 +718,13 @@ static void loadSettings() {
   char line[256];
   while (fgets(line, sizeof(line), f)) {
     int val = 0;
-    if (sscanf(line, "bezel_mode=%d", &val) == 1) {
+    char strVal[64] = {0};
+    if (sscanf(line, "language=%63s", strVal) == 1) {
+      if (strcmp(strVal, "pt") == 0 || strcmp(strVal, "en") == 0 ||
+          strcmp(strVal, "it") == 0 || strcmp(strVal, "es") == 0) {
+        s_currentLanguage = strVal;
+      }
+    } else if (sscanf(line, "bezel_mode=%d", &val) == 1) {
       if (val >= 0 && val < BEZEL_COUNT) s_bezelMode = static_cast<BezelMode>(val);
     } else if (sscanf(line, "target_fps=%d", &val) == 1) {
       if (val == 15 || val == 30) s_targetFps = val;
@@ -755,6 +764,8 @@ static void saveSettings() {
     fprintf(f, "window_w=%d\n", curW);
     fprintf(f, "window_h=%d\n", curH);
   }
+  fprintf(f, "[Localization]\n");
+  fprintf(f, "language=%s\n", s_currentLanguage.c_str());
   fclose(f);
 }
 
@@ -1530,7 +1541,10 @@ bool Platform::pollEvents(VM& vm) {
 
     // Teclado
     else if (ev.type == SDL_KEYDOWN) {
-      if (ev.key.keysym.sym == SDLK_F5) {
+      if (ev.key.keysym.sym == SDLK_F2) {
+        if (!ev.key.repeat) Platform::nextLanguage(&vm);
+        continue;
+      } else if (ev.key.keysym.sym == SDLK_F5) {
         if (!ev.key.repeat) Platform::toggleBezel();
         continue;
       } else if (ev.key.keysym.sym == SDLK_F6 || ev.key.keysym.sym == SDLK_F8) {
@@ -2157,6 +2171,19 @@ std::vector<uint8_t> Platform::readAsset(const std::string& path) {
     clean = clean.substr(1);
   }
 
+  // Intercepta leitura de idioma para fornecer o pacote ativo (Passo 10)
+  if (clean == "lang.en-GB" || clean.rfind("/lang.en-GB") != std::string::npos || clean.rfind("\\lang.en-GB") != std::string::npos) {
+    std::string candidate = "lang/lang_" + s_currentLanguage + ".bin";
+    std::vector<uint8_t> langData = Platform::readAsset(candidate);
+    if (!langData.empty()) {
+      return langData;
+    }
+    langData = Platform::readAsset("lang/lang_pt.bin");
+    if (!langData.empty()) {
+      return langData;
+    }
+  }
+
   // 1. Tenta o caminho exato
   SDL_RWops* rw = SDL_RWFromFile(clean.c_str(), "rb");
   
@@ -2305,6 +2332,549 @@ int Platform::getTextWidth(const std::string& text, int charW, int stepX) {
   if (text.empty()) return 0;
   if (stepX <= 0) stepX = charW;
   return (int)(text.length() - 1) * stepX + charW;
+}
+
+// -------------------------------------------------------------
+// Passo 10: Localização e Gerenciamento de Idiomas
+// -------------------------------------------------------------
+std::string Platform::getCurrentLanguage() {
+  return s_currentLanguage;
+}
+
+void Platform::setLanguage(const std::string& langCode) {
+  if (langCode == "pt" || langCode == "en" || langCode == "it" || langCode == "es") {
+    s_currentLanguage = langCode;
+    saveSettings();
+  }
+}
+
+std::string Platform::getLanguageDisplayName(const std::string& langCode) {
+  if (langCode == "pt") return "Portugues";
+  if (langCode == "en") return "English";
+  if (langCode == "it") return "Italiano";
+  if (langCode == "es") return "Espanol";
+  return langCode;
+}
+
+void Platform::nextLanguage(VM* vm) {
+  const char* langs[] = { "pt", "en", "it", "es" };
+  int cur = 0;
+  for (int i = 0; i < 4; ++i) {
+    if (s_currentLanguage == langs[i]) { cur = i; break; }
+  }
+  cur = (cur + 1) % 4;
+  s_currentLanguage = langs[cur];
+  saveSettings();
+  if (vm) reloadLanguage(*vm);
+  showOsdMessage("Idioma: " + getLanguageDisplayName(s_currentLanguage));
+}
+
+void Platform::prevLanguage(VM* vm) {
+  const char* langs[] = { "pt", "en", "it", "es" };
+  int cur = 0;
+  for (int i = 0; i < 4; ++i) {
+    if (s_currentLanguage == langs[i]) { cur = i; break; }
+  }
+  cur = (cur + 3) % 4;
+  s_currentLanguage = langs[cur];
+  saveSettings();
+  if (vm) reloadLanguage(*vm);
+  showOsdMessage("Idioma: " + getLanguageDisplayName(s_currentLanguage));
+}
+
+static std::string getBabbleString(const std::vector<uint8_t>& data, int id) {
+  if (id < 0 || (size_t)(id * 4 + 4) > data.size()) return "";
+  uint32_t relOffset = ((uint32_t)data[id * 4] << 24) |
+                       ((uint32_t)data[id * 4 + 1] << 16) |
+                       ((uint32_t)data[id * 4 + 2] << 8) |
+                       ((uint32_t)data[id * 4 + 3]);
+  size_t pos = (size_t)(id * 4) + 4 + (size_t)(int32_t)relOffset;
+  if (pos + 4 > data.size()) return "";
+  pos += 2; // pula block_len (uint16)
+  uint16_t utfLen = ((uint16_t)data[pos] << 8) | data[pos + 1];
+  pos += 2;
+  if (pos + utfLen > data.size()) return "";
+  std::string s(reinterpret_cast<const char*>(data.data() + pos), utfLen);
+  for (char& c : s) if (c == ';') c = '\n';
+  return s;
+}
+
+void Platform::reloadLanguage(VM& vm) {
+  bool needUnlock = false;
+  if (!vm.isGilOwner()) {
+    vm.gilLock();
+    needUnlock = true;
+  }
+
+  try {
+    std::string candidate = "lang/lang_" + s_currentLanguage + ".bin";
+    std::vector<uint8_t> langData = Platform::readAsset(candidate);
+    if (langData.empty()) {
+      langData = Platform::readAsset("lang/lang_pt.bin");
+    }
+    if (langData.size() >= 4) {
+      // Pula os primeiros 4 bytes (cabeçalho n4 de tamanho do payload)
+      std::vector<uint8_t> babbleBytes(langData.begin() + 4, langData.end());
+
+      // 1. Atualiza buffer de strings do singleton cj.var_cj_a
+      ClassInfo* cjClass = vm.findClass("cj");
+      if (cjClass) {
+        FieldInfo* fCjA = vm.findField(cjClass, "a:Lcj;");
+        if (fCjA && fCjA->isStatic && fCjA->index >= 0 && fCjA->index < (int)cjClass->statics.size()) {
+          Object* cjInstObj = cjClass->statics[fCjA->index].o;
+          if (cjInstObj && cjInstObj->kind == K_INST) {
+            Instance* cjInst = static_cast<Instance*>(cjInstObj);
+
+            // Atualiza DataInputStream (campo a:Ljava/io/DataInputStream;)
+            FieldInfo* fDisA = vm.findField(cjClass, "a:Ljava/io/DataInputStream;");
+            if (fDisA && fDisA->index >= 0 && fDisA->index < (int)cjInst->f.size()) {
+              Object* disObj = cjInst->f[fDisA->index].o;
+              if (disObj && disObj->kind == K_DIS) {
+                Dis* dis = static_cast<Dis*>(disObj);
+                if (dis->in && dis->in->kind == K_BAIS) {
+                  Bais* bais = static_cast<Bais*>(dis->in);
+                  bais->data = babbleBytes;
+                  bais->pos = 0;
+                }
+              }
+            }
+
+            // Atualiza byte[] (campo a:[B)
+            FieldInfo* fByteArrA = vm.findField(cjClass, "a:[B");
+            if (fByteArrA && fByteArrA->index >= 0 && fByteArrA->index < (int)cjInst->f.size()) {
+              Object* byteArrObj = cjInst->f[fByteArrA->index].o;
+              if (byteArrObj && byteArrObj->kind == K_ARRAY) {
+                Array* byteArr = static_cast<Array*>(byteArrObj);
+                byteArr->len = (int)babbleBytes.size();
+                byteArr->data = babbleBytes;
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Atualiza textos e matriz de botões da UI em bh
+      ClassInfo* bhClass = vm.findClass("bh");
+      if (bhClass) {
+        auto makeCharArr = [&](int strId) -> Array* {
+          std::string s = getBabbleString(babbleBytes, strId);
+          std::u16string u16 = fromUtf8(s);
+          Array* a = vm.newArray('C', (int)u16.size());
+          for (size_t i = 0; i < u16.size(); ++i) a->as<uint16_t>()[i] = u16[i];
+          return a;
+        };
+
+        auto makeStr = [&](int strId, const char* suffix = "") -> Str* {
+          std::string s = getBabbleString(babbleBytes, strId) + suffix;
+          return vm.newStr(fromUtf8(s));
+        };
+
+        auto setField = [&](const char* name, Object* val) {
+          FieldInfo* fi = vm.findField(bhClass, name);
+          if (fi && fi->isStatic && fi->index >= 0 && fi->index < (int)bhClass->statics.size()) {
+            bhClass->statics[fi->index].o = val;
+          }
+        };
+
+        // Strings globais
+        setField("a:Ljava/lang/String;", makeStr(3902, " "));
+        setField("b:Ljava/lang/String;", makeStr(3903));
+        setField("c:Ljava/lang/String;", makeStr(3949));
+        setField("d:Ljava/lang/String;", makeStr(3948));
+
+        // Arrays de char[] da UI
+        setField("a:[C", makeCharArr(3904));
+        setField("b:[C", makeCharArr(3906));
+        setField("c:[C", makeCharArr(3907));
+        setField("d:[C", makeCharArr(3908));
+        setField("e:[C", makeCharArr(3909));
+        setField("f:[C", makeCharArr(3910));
+        setField("g:[C", makeCharArr(3911));
+        setField("h:[C", makeCharArr(3912));
+        setField("i:[C", makeCharArr(3913));
+        setField("j:[C", makeCharArr(3914));
+        setField("k:[C", makeCharArr(3915));
+        setField("l:[C", makeCharArr(3916));
+        setField("s:[C", makeCharArr(3932));
+        setField("n:[C", makeCharArr(3946));
+        setField("t:[C", makeCharArr(3947));
+        setField("q:[C", makeCharArr(3950));
+
+        // Matriz de botões do menu principal: bh.var_char_arr_arr_a (a:[[C)
+        FieldInfo* fMat = vm.findField(bhClass, "a:[[C");
+        if (fMat && fMat->isStatic && fMat->index >= 0 && fMat->index < (int)bhClass->statics.size()) {
+          Object* matObj = bhClass->statics[fMat->index].o;
+          if (matObj && matObj->kind == K_ARRAY) {
+            Array* mat = static_cast<Array*>(matObj);
+            int ids[7] = { 3920, 3921, 3922, 3923, 3924, 3925, 3926 };
+            for (int i = 0; i < 7 && i < mat->len; ++i) {
+              mat->as<Object*>()[i] = makeCharArr(ids[i]);
+            }
+          }
+        }
+      }
+
+      // 3. Atualiza nomes e descrições de todos os itens e equipamentos em memória (ad, e, t, l)
+      ClassInfo* adClass = vm.findClass("ad");
+      if (adClass) {
+        FieldInfo* fF = vm.findField(adClass, "f:B");
+        FieldInfo* fG = vm.findField(adClass, "g:B");
+        FieldInfo* fA = vm.findField(adClass, "a:[C");
+        FieldInfo* fB = vm.findField(adClass, "b:[C");
+        if (fF && fG && fA && fB) {
+          std::unordered_map<int, std::vector<uint8_t>> itmCache;
+          for (Object* obj : vm.allObjs) {
+            if (!obj || obj->kind != K_INST || !vm.isSubclass(obj->cls, adClass)) continue;
+            Instance* itemInst = static_cast<Instance*>(obj);
+            if (fF->index < 0 || fF->index >= (int)itemInst->f.size() ||
+                fG->index < 0 || fG->index >= (int)itemInst->f.size() ||
+                fA->index < 0 || fA->index >= (int)itemInst->f.size() ||
+                fB->index < 0 || fB->index >= (int)itemInst->f.size()) continue;
+
+            int f = itemInst->f[fF->index].i;
+            int g = itemInst->f[fG->index].i;
+            if (f < 0 || g < 0) continue;
+
+            if (itmCache.find(f) == itmCache.end()) {
+              char itmPath[32];
+              snprintf(itmPath, sizeof(itmPath), "itm/%02d", f);
+              itmCache[f] = Platform::readAsset(itmPath);
+            }
+            const auto& itmData = itmCache[f];
+            if (itmData.empty()) continue;
+
+            // Encontra a entrada g em itmData
+            size_t pos = 0;
+            for (int i = 0; i < g && pos < itmData.size(); ++i) {
+              uint8_t sz = itmData[pos++];
+              pos += sz;
+            }
+            if (pos >= itmData.size()) continue;
+            uint8_t entryLen = itmData[pos++];
+            if (pos + entryLen > itmData.size() || entryLen < 3) continue;
+
+            size_t epos = pos + 1;
+            size_t eEnd = pos + entryLen;
+            if (epos >= eEnd) continue;
+
+            uint8_t nameIdLen = itmData[epos++];
+            if (epos + nameIdLen > eEnd) continue;
+            std::string nameIdStr(reinterpret_cast<const char*>(itmData.data() + epos), nameIdLen);
+            epos += nameIdLen;
+
+            if (epos >= eEnd) continue;
+            uint8_t descIdLen = itmData[epos++];
+            if (epos + descIdLen > eEnd) continue;
+            std::string descIdStr(reinterpret_cast<const char*>(itmData.data() + epos), descIdLen);
+            epos += descIdLen;
+
+            int nameId = std::atoi(nameIdStr.c_str());
+            int descId = std::atoi(descIdStr.c_str());
+
+            std::string nameStr = getBabbleString(babbleBytes, nameId);
+            std::string descStr = getBabbleString(babbleBytes, descId);
+
+            std::u16string u16Name = fromUtf8(nameStr);
+            Array* arrName = vm.newArray('C', (int)u16Name.size());
+            for (size_t k = 0; k < u16Name.size(); ++k) arrName->as<uint16_t>()[k] = u16Name[k];
+
+            std::u16string u16Desc = fromUtf8(descStr);
+            Array* arrDesc = vm.newArray('C', (int)u16Desc.size());
+            for (size_t k = 0; k < u16Desc.size(); ++k) arrDesc->as<uint16_t>()[k] = u16Desc[k];
+
+            itemInst->f[fA->index].o = arrName;
+            itemInst->f[fB->index].o = arrDesc;
+          }
+        }
+      }
+
+      // 4. Atualiza diálogos do mapa ativo atual (n.var_ae_a.var_java_lang_Object_arr_c)
+      ClassInfo* nClass = vm.findClass("n");
+      if (nClass) {
+        FieldInfo* fMap = vm.findField(nClass, "a:Lae;");
+        FieldInfo* fWorld = vm.findField(nClass, "a:B");
+        FieldInfo* fMapId = vm.findField(nClass, "f:B");
+        if (fMap && fMap->isStatic && fMap->index >= 0 && fMap->index < (int)nClass->statics.size()) {
+          Object* mapObj = nClass->statics[fMap->index].o;
+          if (mapObj && mapObj->kind == K_INST) {
+            Instance* aeInst = static_cast<Instance*>(mapObj);
+            int worldId = (fWorld && fWorld->isStatic && fWorld->index >= 0 && fWorld->index < (int)nClass->statics.size()) ? nClass->statics[fWorld->index].i : 6;
+            if (worldId < 6 || worldId > 8) worldId = 6;
+
+            int mapId = -1;
+            FieldInfo* fMapByteA = vm.findField(aeInst->cls, "a:B");
+            if (fMapByteA && fMapByteA->index >= 0 && fMapByteA->index < (int)aeInst->f.size()) {
+              mapId = aeInst->f[fMapByteA->index].i;
+            }
+            if (mapId < 0 && fMapId && fMapId->isStatic && fMapId->index >= 0 && fMapId->index < (int)nClass->statics.size()) {
+              mapId = nClass->statics[fMapId->index].i;
+            }
+
+            if (mapId >= 0) {
+              FieldInfo* fW = vm.findField(aeInst->cls, "a:I");
+              FieldInfo* fH = vm.findField(aeInst->cls, "b:I");
+              if (fW && fH && fW->index >= 0 && fW->index < (int)aeInst->f.size() &&
+                  fH->index >= 0 && fH->index < (int)aeInst->f.size()) {
+                int w = aeInst->f[fW->index].i;
+                int h = aeInst->f[fH->index].i;
+
+                char evtPath[64];
+                snprintf(evtPath, sizeof(evtPath), "m/%d/%02d.evt", worldId, mapId);
+                std::vector<uint8_t> evtData = Platform::readAsset(evtPath);
+                if (evtData.empty()) {
+                  snprintf(evtPath, sizeof(evtPath), "reference/extracted/m/%d/%02d.evt", worldId, mapId);
+                  evtData = Platform::readAsset(evtPath);
+                }
+
+              size_t pos = (size_t)w * h;
+              if (pos < evtData.size()) {
+                int n4 = evtData[pos++];
+                pos += n4;
+                if (pos < evtData.size()) {
+                  int n5 = evtData[pos++];
+                  pos += n5 * 5;
+                  if (pos < evtData.size()) {
+                    int n6 = evtData[pos++];
+                    pos += n6;
+                    if (pos < evtData.size()) {
+                      int n7 = evtData[pos++];
+                      pos += n7 * 3;
+                      if (pos < evtData.size()) {
+                        int by3 = evtData[pos++];
+                        pos += by3;
+                        if (pos < evtData.size()) {
+                          int n5_c = evtData[pos++];
+                          pos += n5_c * 3;
+                          if (pos < evtData.size()) {
+                            int n3_d = evtData[pos++];
+                            pos += n3_d;
+                            if (pos < evtData.size()) {
+                              int n6_e = evtData[pos++];
+                              for (int i = 0; i < n6_e && pos < evtData.size(); ++i) {
+                                int n3_sub = evtData[pos++];
+                                if (n3_sub > 0) pos += n3_sub * 7;
+                              }
+                              if (pos < evtData.size()) {
+                                int n4_e = evtData[pos++];
+                                for (int i = 0; i < n4_e && pos < evtData.size(); ++i) {
+                                  int n7_sub = evtData[pos++];
+                                  if (n7_sub > 0) pos += n7_sub * 3;
+                                }
+                                if (pos < evtData.size()) {
+                                  int dialogCount = evtData[pos++];
+                                  FieldInfo* fDialogArr = vm.findField(aeInst->cls, "c:[Ljava/lang/Object;");
+                                  if (fDialogArr && fDialogArr->index >= 0 && fDialogArr->index < (int)aeInst->f.size()) {
+                                    Object* curArrObj = aeInst->f[fDialogArr->index].o;
+                                    Array* dialogArr = (curArrObj && curArrObj->kind == K_ARRAY) ? static_cast<Array*>(curArrObj) : nullptr;
+                                    if (!dialogArr || dialogArr->len != dialogCount) {
+                                      dialogArr = vm.newRefArray(dialogCount);
+                                      aeInst->f[fDialogArr->index].o = dialogArr;
+                                    }
+                                    for (int i = 0; i < dialogCount && pos < evtData.size(); ++i) {
+                                      int idLen = evtData[pos++];
+                                      if (pos + idLen > evtData.size()) break;
+                                      std::string idStr(reinterpret_cast<const char*>(evtData.data() + pos), idLen);
+                                      pos += idLen;
+                                      int strId = std::atoi(idStr.c_str());
+                                      std::string s = getBabbleString(babbleBytes, strId);
+                                      std::u16string u16 = fromUtf8(s);
+                                      Array* cArr = vm.newArray('C', (int)u16.size());
+                                      for (size_t k = 0; k < u16.size(); ++k) cArr->as<uint16_t>()[k] = u16[k];
+                                      dialogArr->as<Object*>()[i] = cArr;
+                                    }
+                                    ClassInfo* ahClass = vm.findClass("ah");
+                                    if (ahClass) {
+                                      FieldInfo* fAhA = vm.findField(ahClass, "a:[C");
+                                      FieldInfo* fAhStep = vm.findField(ahClass, "a:I");
+                                      FieldInfo* fAhMat = vm.findField(ahClass, "b:[[B");
+                                      if (fAhA && fAhA->isStatic && fAhA->index >= 0 && fAhA->index < (int)ahClass->statics.size() &&
+                                          fAhStep && fAhStep->isStatic && fAhStep->index >= 0 && fAhStep->index < (int)ahClass->statics.size() &&
+                                          fAhMat && fAhMat->isStatic && fAhMat->index >= 0 && fAhMat->index < (int)ahClass->statics.size()) {
+                                        Object* curTxt = ahClass->statics[fAhA->index].o;
+                                        if (curTxt) {
+                                          int step = ahClass->statics[fAhStep->index].i;
+                                          Object* matObj = ahClass->statics[fAhMat->index].o;
+                                          if (matObj && matObj->kind == K_ARRAY) {
+                                            Array* mat = static_cast<Array*>(matObj);
+                                            if (step >= 0 && step < mat->len) {
+                                              Object* rowObj = mat->as<Object*>()[step];
+                                              if (rowObj && rowObj->kind == K_ARRAY) {
+                                                Array* row = static_cast<Array*>(rowObj);
+                                                if (row->len >= 2) {
+                                                  int dlgIdx = row->as<int8_t>()[1];
+                                                  if (dlgIdx >= 0 && dlgIdx < dialogArr->len) {
+                                                    ahClass->statics[fAhA->index].o = dialogArr->as<Object*>()[dlgIdx];
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+            // Atualiza o nome do mapa ativo em ae.var_char_arr_a
+            FieldInfo* fMapName = vm.findField(aeInst->cls, "a:[C");
+            if (fMapName && fMapByteA && fMapName->index >= 0 && fMapName->index < (int)aeInst->f.size() &&
+                fMapByteA->index >= 0 && fMapByteA->index < (int)aeInst->f.size()) {
+              int mapByteA = aeInst->f[fMapByteA->index].i;
+              int strId = (worldId == 8 && mapByteA == 65) ? 890 : (805 + mapByteA);
+              std::string s = getBabbleString(babbleBytes, strId);
+              std::u16string u16 = fromUtf8(s);
+              Array* arr = vm.newArray('C', (int)u16.size());
+              for (size_t k = 0; k < u16.size(); ++k) arr->as<uint16_t>()[k] = u16[k];
+              aeInst->f[fMapName->index].o = arr;
+            }
+          }
+        }
+      }
+
+      // 5. Invalida flags de dirty repainting de menus abertos (cb) para forçar repintura imediata
+      ClassInfo* cbClass = vm.findClass("cb");
+      if (cbClass) {
+        FieldInfo* fBoolA = vm.findField(cbClass, "a:Z");
+        FieldInfo* fBoolB = vm.findField(cbClass, "b:Z");
+        ClassInfo* qClass = vm.findClass("q");
+        FieldInfo* fQA = qClass ? vm.findField(qClass, "a:[C") : nullptr;
+        FieldInfo* fQB = qClass ? vm.findField(qClass, "b:[C") : nullptr;
+        ClassInfo* btClass = vm.findClass("bt");
+        ClassInfo* sClass = vm.findClass("s");
+
+        for (Object* obj : vm.allObjs) {
+          if (!obj || obj->kind != K_INST || !vm.isSubclass(obj->cls, cbClass)) continue;
+          Instance* cbInst = static_cast<Instance*>(obj);
+          if (fBoolA && fBoolA->index >= 0 && fBoolA->index < (int)cbInst->f.size()) cbInst->f[fBoolA->index].i = 1;
+          if (fBoolB && fBoolB->index >= 0 && fBoolB->index < (int)cbInst->f.size()) cbInst->f[fBoolB->index].i = 1;
+
+          // Se for janela 'bt' (menu de opções/ajuda), atualiza array de textos das opções (a:[[C)
+          if (btClass && obj->cls == btClass) {
+            FieldInfo* fBtA = vm.findField(btClass, "a:[[C");
+            FieldInfo* fBtByteA = vm.findField(btClass, "a:B");
+            if (fBtA && fBtByteA && fBtA->index >= 0 && fBtA->index < (int)cbInst->f.size() &&
+                fBtByteA->index >= 0 && fBtByteA->index < (int)cbInst->f.size()) {
+              Object* aObj = cbInst->f[fBtA->index].o;
+              if (aObj && aObj->kind == K_ARRAY) {
+                Array* arr = static_cast<Array*>(aObj);
+                int count = cbInst->f[fBtByteA->index].i;
+                for (int i = 0; i < count && i < arr->len; ++i) {
+                  int strId = (i == 4) ? 3925 : (1228 + i);
+                  std::string s = getBabbleString(babbleBytes, strId);
+                  std::u16string u16 = fromUtf8(s);
+                  Array* cArr = vm.newArray('C', (int)u16.size());
+                  for (size_t k = 0; k < u16.size(); ++k) cArr->as<uint16_t>()[k] = u16[k];
+                  arr->as<Object*>()[i] = cArr;
+                }
+              }
+            }
+          }
+
+          // Se for janela 's' (tela de quests/missões), atualiza título (a:[C) e descrição (b:[C)
+          if (sClass && obj->cls == sClass) {
+            FieldInfo* fSA = vm.findField(sClass, "a:[C");
+            FieldInfo* fSB = vm.findField(sClass, "b:[C");
+            FieldInfo* fSC = vm.findField(sClass, "c:B");
+            FieldInfo* fSD = vm.findField(sClass, "d:B");
+            ClassInfo* ceClass = vm.findClass("ce");
+            if (fSA && fSB && fSC && fSD && ceClass) {
+              FieldInfo* fZf = vm.findField(ceClass, "f:Lz;");
+              if (fZf && fZf->isStatic && fZf->index >= 0 && fZf->index < (int)ceClass->statics.size()) {
+                Object* zObj = ceClass->statics[fZf->index].o;
+                if (zObj && zObj->kind == K_INST) {
+                  Instance* zInst = static_cast<Instance*>(zObj);
+                  FieldInfo* fZArr = vm.findField(zInst->cls, "a:[I");
+                  if (fZArr && fZArr->index >= 0 && fZArr->index < (int)zInst->f.size()) {
+                    Array* zArr = static_cast<Array*>(zInst->f[fZArr->index].o);
+                    if (zArr) {
+                      int cVal = cbInst->f[fSC->index].i;
+                      int dVal = cbInst->f[fSD->index].i;
+                      int n2 = (dVal == 2) ? (cVal * 7 + 2) : (cVal * 7);
+                      if (n2 >= 0 && n2 + 1 < zArr->len) {
+                        int idA = zArr->as<int32_t>()[n2];
+                        int idB = zArr->as<int32_t>()[n2 + 1];
+                        std::string sA = getBabbleString(babbleBytes, idA);
+                        std::string sB = getBabbleString(babbleBytes, idB);
+                        std::u16string u16A = fromUtf8(sA);
+                        std::u16string u16B = fromUtf8(sB);
+                        Array* arrA = vm.newArray('C', (int)u16A.size());
+                        for (size_t k = 0; k < u16A.size(); ++k) arrA->as<uint16_t>()[k] = u16A[k];
+                        Array* arrB = vm.newArray('C', (int)u16B.size());
+                        for (size_t k = 0; k < u16B.size(); ++k) arrB->as<uint16_t>()[k] = u16B[k];
+                        if (fSA->index >= 0 && fSA->index < (int)cbInst->f.size()) cbInst->f[fSA->index].o = arrA;
+                        if (fSB->index >= 0 && fSB->index < (int)cbInst->f.size()) cbInst->f[fSB->index].o = arrB;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // Se for janela 'q' (aba de status do herói), atualiza rótulos instanciados de herói e classe
+          if (qClass && obj->cls == qClass && fQA && fQB) {
+            ClassInfo* ceClass = vm.findClass("ce");
+            ClassInfo* nCls = vm.findClass("n");
+            if (ceClass && nCls) {
+              FieldInfo* fZeA = vm.findField(ceClass, "a:Lz;");
+              FieldInfo* fWorld = vm.findField(nCls, "a:B");
+              FieldInfo* fNpcG = vm.findField(nCls, "g:B");
+              if (fZeA && fZeA->isStatic && fZeA->index >= 0 && fZeA->index < (int)ceClass->statics.size() &&
+                  fWorld && fWorld->isStatic && fWorld->index >= 0 && fWorld->index < (int)nCls->statics.size()) {
+                Object* zObj = ceClass->statics[fZeA->index].o;
+                if (zObj && zObj->kind == K_INST) {
+                  Instance* zInst = static_cast<Instance*>(zObj);
+                  FieldInfo* fZArr = vm.findField(zInst->cls, "a:[I");
+                  if (fZArr && fZArr->index >= 0 && fZArr->index < (int)zInst->f.size()) {
+                    Array* zArr = static_cast<Array*>(zInst->f[fZArr->index].o);
+                    if (zArr && zArr->len > 0) {
+                      int worldVal = nCls->statics[fWorld->index].i;
+                      int heroNameIdx = worldVal - 6;
+                      if (heroNameIdx >= 0 && heroNameIdx < zArr->len) {
+                        int strId = zArr->as<int32_t>()[heroNameIdx];
+                        std::string s = getBabbleString(babbleBytes, strId);
+                        std::u16string u16 = fromUtf8(s);
+                        Array* a = vm.newArray('C', (int)u16.size());
+                        for (size_t k = 0; k < u16.size(); ++k) a->as<uint16_t>()[k] = u16[k];
+                        if (fQA->index >= 0 && fQA->index < (int)cbInst->f.size()) cbInst->f[fQA->index].o = a;
+                      }
+                      int titleIdx = 3 + worldVal - 6;
+                      int gVal = (fNpcG && fNpcG->isStatic && fNpcG->index >= 0 && fNpcG->index < (int)nCls->statics.size()) ? nCls->statics[fNpcG->index].i : 0;
+                      if (gVal == 1) titleIdx += 15;
+                      else if (gVal >= 2) titleIdx += 18;
+                      if (titleIdx >= 0 && titleIdx < zArr->len) {
+                        int strId = zArr->as<int32_t>()[titleIdx];
+                        std::string s = getBabbleString(babbleBytes, strId);
+                        std::u16string u16 = fromUtf8(s);
+                        Array* a = vm.newArray('C', (int)u16.size());
+                        for (size_t k = 0; k < u16.size(); ++k) a->as<uint16_t>()[k] = u16[k];
+                        if (fQB->index >= 0 && fQB->index < (int)cbInst->f.size()) cbInst->f[fQB->index].o = a;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (...) {}
+
+  if (needUnlock) {
+    vm.gilUnlock();
+  }
 }
 
 } // namespace hl

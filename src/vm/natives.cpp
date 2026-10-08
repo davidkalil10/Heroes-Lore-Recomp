@@ -994,6 +994,8 @@ static void bl_a_native(VM& vm, Value* args, Value* ret);
 static void bl_draw_native(VM& vm, Value* args, Value*);
 static void bf_draw_native(VM& vm, Value* args, Value*);
 static void bx_draw_native(VM& vm, Value* args, Value*);
+static void be_a_native(VM& vm, Value* args, Value* ret);
+static void be_draw_native(VM& vm, Value* args, Value*);
 
 // -------------------------------------------------------------
 // Registro de todos os métodos nativos
@@ -1176,6 +1178,10 @@ void VM::registerNatives() {
 
   // Submenus de INFO (Wind of Soltia) - renderização com título perfeitamente centrado em True Widescreen
   reg("bx.a:(Ljavax/microedition/lcdui/Graphics;II)V", bx_draw_native);
+
+  // Menu de Opções (Wind of Soltia) - Seletor de Idiomas (Título e Pause)
+  reg("be.a:(II)Z", be_a_native);
+  reg("be.a:(Ljavax/microedition/lcdui/Graphics;II)V", be_draw_native);
 }
 
 // -------------------------------------------------------------
@@ -1744,6 +1750,355 @@ static void bx_draw_native(VM& vm, Value* args, Value*) {
       aTextArgs[8].i = s2 - s3;
       Value aTextRet[2];
       vm.invoke(mBhTextA, aTextArgs, aTextRet);
+    }
+  }
+}
+
+// -------------------------------------------------------------
+// be: Menu de Opções (Wind of Soltia) — Suporte ao Seletor de Idiomas (Título e Pause)
+// -------------------------------------------------------------
+static void be_a_native(VM& vm, Value* args, Value* ret) {
+  Object* self = args[0].o;
+  if (!self || self->kind != K_INST) { ret[0].i = 0; return; }
+  Instance* inst = static_cast<Instance*>(self);
+  int n2 = args[1].i; // GameAction
+  int n3 = args[2].i; // KeyCode
+
+  // Garante que o menu possui 5 itens (0: Audio, 1: Jogo, 2: Textos, 3: Camera, 4: Idioma)
+  ClassInfo* cbClass = vm.findClass("cb");
+  FieldInfo* fByteA = cbClass ? vm.findField(cbClass, "a:B") : nullptr;
+  FieldInfo* fByteB = cbClass ? vm.findField(cbClass, "b:B") : nullptr;
+  if (fByteA && fByteA->index >= 0 && fByteA->index < (int)inst->f.size()) {
+    inst->f[fByteA->index].i = 5;
+  }
+
+  // 1. Invoca this.b(n2, n3) para submenus se houver
+  Value subArgs[2];
+  subArgs[0].i = n2;
+  subArgs[1].i = n3;
+  Value subRet[2];
+  vm.invokeVirtual(self, "b:(II)Z", subArgs, 2, subRet);
+  if (subRet[0].i != 0) {
+    ret[0].i = 1;
+    return;
+  }
+
+  // 2. Invoca this.a(n2, n3, false) para navegação Cima/Baixo
+  Value navArgs[3];
+  navArgs[0].i = n2;
+  navArgs[1].i = n3;
+  navArgs[2].i = 0; // false
+  vm.invokeVirtual(self, "a:(IIZ)Z", navArgs, 3, subRet);
+  if (subRet[0].i != 0) {
+    ret[0].i = 1;
+    return;
+  }
+
+  int curItem = (fByteB && fByteB->index >= 0 && fByteB->index < (int)inst->f.size()) ? inst->f[fByteB->index].i : 0;
+
+  // 3. Trata Esquerda (52 / 2), Direita (54 / 5) e Ação (53 / 8 / 13)
+  bool isLeft = (n3 == 52 || n2 == 2);
+  bool isRight = (n3 == 54 || n2 == 5);
+  bool isAction = (n3 == 53 || n2 == 8 || n3 == -5 || n3 == 13 || n2 == 1);
+
+  if (isLeft || isRight || isAction) {
+    FieldInfo* fBeA = vm.findField(inst->cls, "a:Lbs;");
+    Object* bsObj = (fBeA && fBeA->index >= 0 && fBeA->index < (int)inst->f.size()) ? inst->f[fBeA->index].o : nullptr;
+    Instance* bsInst = (bsObj && bsObj->kind == K_INST) ? static_cast<Instance*>(bsObj) : nullptr;
+
+    switch (curItem) {
+      case 0: { // Audio
+        if (bsInst) {
+          FieldInfo* fIntA = vm.findField(bsInst->cls, "a:I");
+          if (fIntA && fIntA->index >= 0 && fIntA->index < (int)bsInst->f.size()) {
+            int curVol = bsInst->f[fIntA->index].i;
+            int newVol = (curVol == 0) ? 100 : 0;
+            ClassInfo* bwClass = vm.findClass("bw");
+            if (bwClass) {
+              FieldInfo* fBwA = vm.findField(bwClass, "a:I");
+              if (fBwA && fBwA->isStatic && fBwA->index >= 0 && fBwA->index < (int)bwClass->statics.size()) {
+                newVol = (curVol == 0) ? bwClass->statics[fBwA->index].i : 0;
+              }
+              Method* mBwA = vm.findMethod(bwClass, "a:(I)V");
+              if (mBwA) { Value vArg[1]; vArg[0].i = newVol; Value vRet[2]; vm.invoke(mBwA, vArg, vRet); }
+              if (newVol == 0) {
+                Method* mBwD = vm.findMethod(bwClass, "d:()V");
+                if (mBwD) { Value dRet[2]; vm.invoke(mBwD, nullptr, dRet); }
+              }
+            }
+            bsInst->f[fIntA->index].i = newVol;
+          }
+        }
+        break;
+      }
+      case 1: { // Jogo (Velocidade)
+        if (bsInst) {
+          FieldInfo* fByteASpd = vm.findField(bsInst->cls, "a:B");
+          if (fByteASpd && fByteASpd->index >= 0 && fByteASpd->index < (int)bsInst->f.size()) {
+            int curSpd = bsInst->f[fByteASpd->index].i;
+            if (isLeft) {
+              curSpd--;
+              if (curSpd < 0) curSpd = 2;
+            } else {
+              curSpd++;
+              if (curSpd > 2) curSpd = 0;
+            }
+            bsInst->f[fByteASpd->index].i = curSpd;
+            Method* mBsA = vm.findMethod(bsInst->cls, "a:(B)V");
+            if (mBsA) { Value spdArg[1]; spdArg[0].i = curSpd; Value spdRet[2]; vm.invoke(mBsA, spdArg, spdRet); }
+          }
+        }
+        break;
+      }
+      case 2: { // Textos
+        if (bsInst) {
+          FieldInfo* fBoolC = vm.findField(bsInst->cls, "c:Z");
+          if (fBoolC && fBoolC->index >= 0 && fBoolC->index < (int)bsInst->f.size()) {
+            bsInst->f[fBoolC->index].i = !bsInst->f[fBoolC->index].i;
+          }
+        }
+        break;
+      }
+      case 3: { // Camera
+        if (bsInst) {
+          FieldInfo* fBoolD = vm.findField(bsInst->cls, "d:Z");
+          if (fBoolD && fBoolD->index >= 0 && fBoolD->index < (int)bsInst->f.size()) {
+            bsInst->f[fBoolD->index].i = !bsInst->f[fBoolD->index].i;
+          }
+        }
+        break;
+      }
+      case 4: { // IDIOMA!
+        if (isLeft) {
+          Platform::prevLanguage(&vm);
+        } else {
+          Platform::nextLanguage(&vm);
+        }
+        break;
+      }
+    }
+    ret[0].i = 1;
+    return;
+  }
+
+  // 4. Se tecla RSK (bh.var_int_a / Voltar), fecha a tela de Opções
+  ClassInfo* bhClass = vm.findClass("bh");
+  int rskKey = -7;
+  if (bhClass) {
+    FieldInfo* fRsk = vm.findField(bhClass, "a:I");
+    if (fRsk && fRsk->isStatic && fRsk->index >= 0 && fRsk->index < (int)bhClass->statics.size()) {
+      rskKey = bhClass->statics[fRsk->index].i;
+    }
+  }
+
+  if (n3 == rskKey) {
+    // Sincroniza câmera se necessário
+    FieldInfo* fBeA = vm.findField(inst->cls, "a:Lbs;");
+    Object* bsObj = (fBeA && fBeA->index >= 0 && fBeA->index < (int)inst->f.size()) ? inst->f[fBeA->index].o : nullptr;
+    if (bsObj && bsObj->kind == K_INST) {
+      Instance* bsInst = static_cast<Instance*>(bsObj);
+      FieldInfo* fBoolD = vm.findField(bsInst->cls, "d:Z");
+      if (fBoolD && fBoolD->index >= 0 && fBoolD->index < (int)bsInst->f.size() && bsInst->f[fBoolD->index].i) {
+        ClassInfo* nClass = vm.findClass("n");
+        if (nClass) {
+          FieldInfo* fnA = vm.findField(nClass, "a:I");
+          FieldInfo* fnB = vm.findField(nClass, "b:I");
+          FieldInfo* fnC = vm.findField(nClass, "c:I");
+          FieldInfo* fnD = vm.findField(nClass, "d:I");
+          if (fnA && fnC && fnA->isStatic && fnC->isStatic) nClass->statics[fnC->index].i = nClass->statics[fnA->index].i;
+          if (fnB && fnD && fnB->isStatic && fnD->isStatic) nClass->statics[fnD->index].i = nClass->statics[fnB->index].i;
+        }
+      }
+    }
+
+    // Salva configurações no RecordStore "/c"
+    ClassInfo* bsClass = vm.findClass("bs");
+    FieldInfo* fBsA = bsClass ? vm.findField(bsClass, "a:Lbs;") : nullptr;
+    if (fBsA && fBsA->isStatic && fBsA->index >= 0 && fBsA->index < (int)bsClass->statics.size()) {
+      Object* bsInst = bsClass->statics[fBsA->index].o;
+      if (bsInst) {
+        Method* mBsI = vm.findMethod(bsClass, "i:()V");
+        if (mBsI) { Value sRet[2]; vm.invokeVirtual(bsInst, "i:()V", nullptr, 0, sRet); }
+      }
+    }
+
+    // Fecha tela voltando para parentCb.void_a()
+    FieldInfo* fCbA = vm.findField(cbClass, "a:Lcb;");
+    if (fCbA && fCbA->index >= 0 && fCbA->index < (int)inst->f.size()) {
+      Object* parentCb = inst->f[fCbA->index].o;
+      if (parentCb && parentCb->cls) {
+        Value pRet[2];
+        vm.invokeVirtual(parentCb, "a:()V", nullptr, 0, pRet);
+      }
+    }
+    ret[0].i = 1;
+    return;
+  }
+
+  ret[0].i = 1;
+}
+
+// -------------------------------------------------------------
+// be: Renderização do Menu de Opções com 5 itens e Seletor de Idiomas
+// -------------------------------------------------------------
+static void be_draw_native(VM& vm, Value* args, Value*) {
+  Object* selfObj = args[0].o;
+  if (!selfObj || selfObj->kind != K_INST) return;
+  Instance* inst = static_cast<Instance*>(selfObj);
+
+  Object* gObj = args[1].o;
+  if (!gObj || gObj->kind != K_GRAPHICS) return;
+  GraphicsObj* g = static_cast<GraphicsObj*>(gObj);
+
+  int n2 = args[2].i;
+  int n3 = args[3].i;
+
+  ClassInfo* cbClass = vm.findClass("cb");
+  FieldInfo* fByteA = cbClass ? vm.findField(cbClass, "a:B") : nullptr;
+  FieldInfo* fByteB = cbClass ? vm.findField(cbClass, "b:B") : nullptr;
+  if (fByteA && fByteA->index >= 0 && fByteA->index < (int)inst->f.size()) {
+    inst->f[fByteA->index].i = 5;
+  }
+  int selectedRow = (fByteB && fByteB->index >= 0 && fByteB->index < (int)inst->f.size()) ? inst->f[fByteB->index].i : 0;
+
+  FieldInfo* fBoolC = vm.findField(inst->cls, "c:Z");
+  bool isPauseMenu = (fBoolC && fBoolC->index >= 0 && fBoolC->index < (int)inst->f.size()) ? (inst->f[fBoolC->index].i != 0) : false;
+
+  FieldInfo* fBeA = vm.findField(inst->cls, "a:Lbs;");
+  Object* bsObj = (fBeA && fBeA->index >= 0 && fBeA->index < (int)inst->f.size()) ? inst->f[fBeA->index].o : nullptr;
+  Instance* bsInst = (bsObj && bsObj->kind == K_INST) ? static_cast<Instance*>(bsObj) : nullptr;
+
+  ClassInfo* ceClass = vm.findClass("ce");
+  ClassInfo* bhClass = vm.findClass("bh");
+
+  int n4 = 0, n5 = 0;
+  if (isPauseMenu) {
+    // Popup in-game (189x213)
+    Method* mCbA = cbClass ? vm.findMethod(cbClass, "a:(Ljavax/microedition/lcdui/Graphics;IIII)V") : nullptr;
+    Method* mCbB = cbClass ? vm.findMethod(cbClass, "b:(Ljavax/microedition/lcdui/Graphics;IIII)V") : nullptr;
+    n2 += 6; n3 += 25;
+    if (mCbA) { Value aArgs[5]; aArgs[0].o = gObj; aArgs[1].i = n2; aArgs[2].i = n3; aArgs[3].i = 189; aArgs[4].i = 213; Value aRet[2]; vm.invoke(mCbA, aArgs, aRet); }
+    if (mCbB) { Value bArgs[5]; bArgs[0].o = gObj; bArgs[1].i = n2; bArgs[2].i = n3; bArgs[3].i = 189; bArgs[4].i = 213; Value bRet[2]; vm.invoke(mCbB, bArgs, bRet); }
+    n4 = 10452799;
+    n5 = 0xFFFFFF;
+    n2 += 5;
+    n3 += 15;
+    Method* mBhA = bhClass ? vm.findMethod(bhClass, "a:(Ljavax/microedition/lcdui/Graphics;[C[C)V") : nullptr;
+    if (mBhA) {
+      FieldInfo* fBhM = vm.findField(bhClass, "m:[C");
+      FieldInfo* fBhE = vm.findField(bhClass, "e:[C");
+      Object* mObj = (fBhM && fBhM->isStatic && fBhM->index >= 0 && fBhM->index < (int)bhClass->statics.size()) ? bhClass->statics[fBhM->index].o : nullptr;
+      Object* eObj = (fBhE && fBhE->isStatic && fBhE->index >= 0 && fBhE->index < (int)bhClass->statics.size()) ? bhClass->statics[fBhE->index].o : nullptr;
+      Value hArgs[3]; hArgs[0].o = gObj; hArgs[1].o = mObj; hArgs[2].o = eObj; Value hRet[2];
+      vm.invoke(mBhA, hArgs, hRet);
+    }
+    n2 += 40;
+    n3 += 35;
+  } else {
+    // Menu de Título (fullscreen 0x3F1F3F)
+    g->setColor(0x3F1F3F);
+    g->fillRect(0, 0, g_screenWidth, g_screenHeight);
+    ClassInfo* bfClass = vm.findClass("bf");
+    Method* mBfC = bfClass ? vm.findMethod(bfClass, "c:(Ljavax/microedition/lcdui/Graphics;II)V") : nullptr;
+    Method* mBfB = bfClass ? vm.findMethod(bfClass, "b:(Ljavax/microedition/lcdui/Graphics;III)V") : nullptr;
+    if (mBfC) { Value cArgs[3]; cArgs[0].o = gObj; cArgs[1].i = n2; cArgs[2].i = n3; Value cRet[2]; vm.invoke(mBfC, cArgs, cRet); }
+    Method* mBhA4 = bhClass ? vm.findMethod(bhClass, "a:(Ljavax/microedition/lcdui/Graphics;III)V") : nullptr;
+    if (mBhA4) { Value a4Args[4]; a4Args[0].o = gObj; a4Args[1].i = 5; a4Args[2].i = (n2 + 201) >> 1; a4Args[3].i = n3 + 5; Value a4Ret[2]; vm.invoke(mBhA4, a4Args, a4Ret); }
+    if (mBfB) { Value bArgs[4]; bArgs[0].o = gObj; bArgs[1].i = n2; bArgs[2].i = n3 + 24; bArgs[3].i = 3; Value bRet[2]; vm.invoke(mBfB, bArgs, bRet); }
+    n2 += 40;
+    n3 += 35;
+    n2 += 12; n3 += 46;
+
+    if (ceClass) {
+      FieldInfo* fImgK = vm.findField(ceClass, "k:[Ljavax/microedition/lcdui/Image;");
+      if (fImgK && fImgK->isStatic && fImgK->index >= 0 && fImgK->index < (int)ceClass->statics.size()) {
+        Array* arrK = static_cast<Array*>(ceClass->statics[fImgK->index].o);
+        if (arrK && arrK->len > 19) {
+          ImageObj* img19 = static_cast<ImageObj*>(arrK->as<Object*>()[19]);
+          if (img19) {
+            g->drawImage(img19, n2 + 1, n3 + 16, 20);
+            g->drawImage(img19, n2 + 1, n3 + 36, 20);
+            g->drawImage(img19, n2 + 1, n3 + 56, 20);
+            g->drawImage(img19, n2 + 1, n3 + 76, 20);
+          }
+        }
+      }
+    }
+
+    Method* mBhA = bhClass ? vm.findMethod(bhClass, "a:(Ljavax/microedition/lcdui/Graphics;[C[C)V") : nullptr;
+    if (mBhA) {
+      FieldInfo* fBhE = vm.findField(bhClass, "e:[C");
+      Object* eObj = (fBhE && fBhE->isStatic && fBhE->index >= 0 && fBhE->index < (int)bhClass->statics.size()) ? bhClass->statics[fBhE->index].o : nullptr;
+      Value hArgs[3]; hArgs[0].o = gObj; hArgs[1].o = nullptr; hArgs[2].o = eObj; Value hRet[2];
+      vm.invoke(mBhA, hArgs, hRet);
+    }
+  }
+
+  Method* mBhTextA = bhClass ? vm.findMethod(bhClass, "a:(Ljavax/microedition/lcdui/Graphics;II[CI)I") : nullptr;
+  Method* mBhTextVoid = bhClass ? vm.findMethod(bhClass, "a:(Ljavax/microedition/lcdui/Graphics;II[CI)V") : nullptr;
+
+  auto drawRow = [&](int rowIdx, int yPos, const std::string& label, const std::string& val) {
+    g->setColor(selectedRow == rowIdx ? 0xFFFFFF : n4);
+    Array* labelArr = vm.newArray('C', (int)label.size());
+    for (size_t i = 0; i < label.size(); ++i) labelArr->as<uint16_t>()[i] = (uint16_t)(uint8_t)label[i];
+    if (mBhTextA) {
+      Value lArgs[5]; lArgs[0].o = gObj; lArgs[1].i = n2; lArgs[2].i = yPos; lArgs[3].o = labelArr; lArgs[4].i = 1; Value lRet[2];
+      vm.invoke(mBhTextA, lArgs, lRet);
+    }
+
+    g->setColor(n5);
+    Array* valArr = vm.newArray('C', (int)val.size());
+    for (size_t i = 0; i < val.size(); ++i) valArr->as<uint16_t>()[i] = (uint16_t)(uint8_t)val[i];
+    if (mBhTextVoid) {
+      Value vArgs[5]; vArgs[0].o = gObj; vArgs[1].i = n2 + 70; vArgs[2].i = yPos; vArgs[3].o = valArr; vArgs[4].i = 0; Value vRet[2];
+      vm.invoke(mBhTextVoid, vArgs, vRet);
+    }
+  };
+
+  int curAudio = 1;
+  int curSpd = 1;
+  bool curText = false;
+  bool curCam = true;
+  if (bsInst) {
+    FieldInfo* fIntA = vm.findField(bsInst->cls, "a:I");
+    if (fIntA && fIntA->index >= 0 && fIntA->index < (int)bsInst->f.size()) curAudio = bsInst->f[fIntA->index].i;
+    FieldInfo* fByteASpd = vm.findField(bsInst->cls, "a:B");
+    if (fByteASpd && fByteASpd->index >= 0 && fByteASpd->index < (int)bsInst->f.size()) curSpd = bsInst->f[fByteASpd->index].i;
+    FieldInfo* fBoolCTxt = vm.findField(bsInst->cls, "c:Z");
+    if (fBoolCTxt && fBoolCTxt->index >= 0 && fBoolCTxt->index < (int)bsInst->f.size()) curText = (bsInst->f[fBoolCTxt->index].i != 0);
+    FieldInfo* fBoolDCam = vm.findField(bsInst->cls, "d:Z");
+    if (fBoolDCam && fBoolDCam->index >= 0 && fBoolDCam->index < (int)bsInst->f.size()) curCam = (bsInst->f[fBoolDCam->index].i != 0);
+  }
+
+  std::string curLang = Platform::getCurrentLanguage();
+  std::string txtAudio = (curAudio == 0) ? ((curLang == "en") ? "Off" : "Desligado") : ((curLang == "en") ? "On" : "Ligado");
+  std::string txtSpd = (curSpd == 0) ? ((curLang == "en") ? "Slow" : "Lento") : ((curSpd == 1) ? "Normal" : ((curLang == "en") ? "Fast" : "Rapido"));
+  std::string txtText = curText ? ((curLang == "en") ? "Fast" : "Rapido") : "Normal";
+  std::string txtCam = curCam ? ((curLang == "en") ? "On" : "Ligado") : ((curLang == "en") ? "Off" : "Desligado");
+
+  std::string lblAudio = (curLang == "en") ? "Sound" : "Audio";
+  std::string lblGame = (curLang == "en") ? "Game" : ((curLang == "es") ? "Juego" : "Jogo");
+  std::string lblText = (curLang == "en") ? "Speech" : "Textos";
+  std::string lblCam = (curLang == "en") ? "Camera" : ((curLang == "es") ? "Camara" : "Camera");
+  std::string lblLang = (curLang == "en") ? "Language" : ((curLang == "it") ? "Lingua" : "Idioma");
+  std::string valLang = (curLang == "pt") ? "PT-BR" : ((curLang == "en") ? "English" : ((curLang == "it") ? "Italiano" : "Espanol"));
+
+  int n6 = n3;
+  drawRow(0, n6, lblAudio, txtAudio);
+  drawRow(1, n6 += 20, lblGame, txtSpd);
+  drawRow(2, n6 += 20, lblText, txtText);
+  drawRow(3, n6 += 20, lblCam, txtCam);
+  drawRow(4, n6 += 20, lblLang, valLang);
+
+  // Desenha as setas < e > nas 5 linhas
+  if (ceClass) {
+    FieldInfo* fImgP = vm.findField(ceClass, "p:Ljavax/microedition/lcdui/Image;");
+    FieldInfo* fImgE = vm.findField(ceClass, "e:Ljavax/microedition/lcdui/Image;");
+    ImageObj* imgP = (fImgP && fImgP->isStatic && fImgP->index >= 0 && fImgP->index < (int)ceClass->statics.size()) ? static_cast<ImageObj*>(ceClass->statics[fImgP->index].o) : nullptr;
+    ImageObj* imgE = (fImgE && fImgE->isStatic && fImgE->index >= 0 && fImgE->index < (int)ceClass->statics.size()) ? static_cast<ImageObj*>(ceClass->statics[fImgE->index].o) : nullptr;
+    for (int row = 0; row < 5; ++row) {
+      if (imgP) g->drawImage(imgP, n2 + 42, n3 + row * 20, 20);
+      if (imgE) g->drawImage(imgE, n2 + 92, n3 + row * 20, 20);
     }
   }
 }

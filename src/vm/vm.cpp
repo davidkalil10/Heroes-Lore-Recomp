@@ -438,8 +438,19 @@ void VM::throwNew(const char* cls, const std::string& msg) {
 
 // ---------- threads / monitores ----------
 void VM::gilLock() {
+  unsigned long tid = (unsigned long)SDL_ThreadID();
   gil.lock();
-  if (mainCtx && (unsigned long)SDL_ThreadID() == mainTid) tctx = mainCtx;
+  gilOwner.store(tid, std::memory_order_relaxed);
+  if (mainCtx && tid == mainTid) tctx = mainCtx;
+}
+
+void VM::gilUnlock() {
+  gilOwner.store(0, std::memory_order_relaxed);
+  gil.unlock();
+}
+
+bool VM::isGilOwner() const {
+  return gilOwner.load(std::memory_order_relaxed) == (unsigned long)SDL_ThreadID();
 }
 
 void VM::sleepMs(int64_t ms) {

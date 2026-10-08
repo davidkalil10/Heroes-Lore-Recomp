@@ -528,5 +528,43 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
     - *Causa:* Em `applyUpdate()`, chamávamos `romfsExit()` para liberar o NRO no SD. Quando o jogador confirmava o diálogo, `Platform::cleanup()` chamava `romfsExit()` uma segunda vez. Na `libnx`, a desinicialização dupla do RomFS causa erro de asserção interna do sistema operacional na saída do aplicativo (gerando o apito de erro do console, apesar de a substituição já ter sido concluída com 100% de integridade).
     - *Solução Definitiva:* Implementado `Platform::cleanupRomfs()` idempotente com flag de estado `s_romfsInitialized`. O fechamento é invocado com segurança em `applyUpdate()` e a chamada no `cleanup()` normal é neutralizada sem disparar nenhum erro de sistema.
 
+## Sessão 17 (Passo 10 — Seletor de Idiomas / Localização: PT-BR, EN, IT, ES)
+- **Estrutura dos Arquivos Binários Babble (`lang.*`):**
+  - Cada arquivo de localização consiste em:
+    1. `uint32` de comprimento total do arquivo.
+    2. Tabela de offsets relativos com sinal de `N * 4` bytes ($N = 3951$ strings alinhadas por ID).
+    3. Blocos de strings: `[uint16 block_len][uint16 utf_len][UTF-8 bytes]`.
+  - A VM J2ME original em `cj.java` não valida checksum, CRC, nem hash de arquivo ou limitação de tamanho além do cabeçalho de offsets, permitindo substituição e alternância transparente em tempo real.
+- **Fontes Oficiais e Extração:**
+  - `lang_pt.bin` (174.588 bytes): Versão em português brasileiro da comunidade Open Mind Team (2008).
+  - `lang_en.bin` (174.477 bytes): Versão original em inglês extraída da retail Nokia 6280/N73.
+  - `lang_it.bin` (184.901 bytes): Versão oficial em italiano extraída do release BiNPDA S60v3.
+  - `lang_es.bin` (182.947 bytes): Versão completa em espanhol com todos os 3.951 textos e diálogos traduzidos.
+
+## Sessão 18 (Diagnóstico e Resolução de Deadlock ao Alternar Idioma)
+- *Sintoma:* Ao alternar o idioma no menu de opções com as setas ou via tecla F2, o jogo congelava/travava completamente. Ao reabrir o jogo, o idioma havia mudado com sucesso.
+- *Causa Raiz 1 (Deadlock de Thread nas Setas do Menu):*
+  - Quando o jogador navega no menu `be.class`, o hook nativo `be_a_native` é executado na thread de execução J2ME / renderização, que já detém o GIL (`vm.gil`). Tentar adquiri-lo com `vm.gilLock()` gerava deadlock imediato.
+- *Solução Definitiva (Atualização Direta dos Buffers em C++ & GIL Reentrante):*
+  1. **Prevenção de Deadlock:** Implementado `VM::isGilOwner()`. Se a thread atual já é proprietária do GIL (como ocorre dentro de `be_a_native`), não tenta readquirir o lock. Se for thread externa (F2 no loop SDL), adquire normalmente.
+  2. **Zero Invocação de Bytecode (C++ Puro):** O buffer binário de strings em `cj.var_cj_a` (`bais->data` e `byteArr->data`) e as variáveis de UI de `bh` são atualizadas diretamente em memória C++ em menos de 1 ms sem invocar bytecode.
+
+## Sessão 19 (Atualização a Quente de Menus Abertos e Equipamentos)
+- **Diagnóstico:**
+  1. **Menus Abertos:** Algumas telas de menu não atualizavam os textos no exato momento da troca com F2. Causa: `cb.java` utiliza flags de dirty repainting (`var_boolean_a` e `var_boolean_b`) e certas telas filhas (como `bt` e `s`) copiam textos para campos de instância próprios no construtor.
+  2. **Equipamentos e Itens:** Itens já instanciados mantinham o nome e descrição antigos. Causa: `ad.java` (e subclasses `l`, `t`, `e`) carrega `var_char_arr_a` (nome) e `var_char_arr_b` (descrição) apenas na criação lendo `/itm/<f>`.
+- **Solução:**
+  1. `Platform::reloadLanguage()` varre instâncias ativas de `ad` em `vm.allObjs`, relê as tabelas em `/itm/<f>` e atualiza os arrays UTF-16 em memória instantaneamente.
+  2. Invalida as flags `var_boolean_a = 1` e `var_boolean_b = 1` de todas as instâncias de `cb` para forçar repintura no frame seguinte, além de atualizar rótulos de herói/classe em `q` (`a:[C`, `b:[C`), submenus de opções/ajuda em `bt` (`a:[[C`) e títulos/descrições de missões em `s` (`a:[C`, `b:[C`).
+
+## Sessão 20 (Correção dos Diálogos do Mapa Ativo e Tradução Completa em Espanhol)
+- **Atualização Imediata de Diálogos no Mapa Ativo e Balões de Fala:**
+  - *Diagnóstico:* No código Java (`n.java` e `ae.java`), o campo estático `n.f:B` (`mapId`) é apenas temporário: assim que a rotina `n.f()` termina de construir o mapa, ela executa `f = (byte)-1;`. Ao tentar recarregar os diálogos do mapa em `Platform::reloadLanguage()`, ler `n.f` retornava `-1`, tentando abrir `m/6/-1.evt` (inexistente), o que falhava silenciosamente e mantinha o array antigo `ae.c:[Ljava/lang/Object;` intocado!
+  - *Solução:* `Platform::reloadLanguage()` agora extrai `mapId` diretamente de `aeInst->f[fMapByteA->index].i` (campo `a:B` de `ae`), com fallback defensivo para `n.f`. Além disso, verifica se `ah.java` possui um balão de fala ativo na tela: se tiver, localiza a linha atual via `ah.var_byte_arr_arr_b[var_int_a][1]` e atualiza `ah.var_char_arr_a` (`a:[C`) instantaneamente.
+- **Tradução Completa e Autêntica do Pacote em Espanhol:**
+  - *Diagnóstico:* A ferramenta inicial `tools/create_spanish_lang.py` continha apenas um dicionário manual de 49 strings de menus e termos essenciais (`es_map`). Todas as 3.708 strings restantes (incluindo todos os 1.761 diálogos de NPCs e missões) foram clonadas do pacote em inglês (`lang_en.bin`).
+  - *Solução:* Desenvolvido `tools/translate_spanish_dialogues.py`, traduzindo em lote todas as 3.951 strings com sanitização para o conjunto de caracteres da fonte bitmap J2ME (`az.java` / `small.mf`, restrito a ASCII 32..126: conversão sistemática de acentos `á/é/í/ó/ú -> a/e/i/o/u`, `ñ -> n`, remoção de `¿`, `¡` e preservação de tags `|`, `$`, `[Personagem]` e `;`). Binário oficial Babble `lang_es.bin` (182.947 bytes) gerado e sincronizado em todos os diretórios do projeto.
+
+
 
 

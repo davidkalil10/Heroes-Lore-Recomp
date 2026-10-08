@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <mutex>
+#include <atomic>
 #include <memory>
 
 namespace hl {
@@ -164,8 +165,10 @@ struct VM {
   void invoke(Method* m, Value* args, Value* ret);
   void invokeVirtual(Object* self, const std::string& key, Value* extraArgs, int nextra, Value* ret);
   void monitorEnter(Object* o); void monitorExit(Object* o);
-  void gilUnlock() { gil.unlock(); }
+  void gilUnlock();
   void gilLock();
+  bool isGilOwner() const;
+  std::atomic<unsigned long> gilOwner{0};
   ThreadCtx* mainCtx = nullptr; unsigned long mainTid = 0;
   void sleepMs(int64_t ms);
   void startThread(ThreadObj* t);

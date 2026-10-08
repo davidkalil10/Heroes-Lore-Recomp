@@ -38,6 +38,14 @@ public:
   static void drawText(void* renderer, const std::string& text, int x, int y, int charW, int charH, uint8_t alpha = 255, int stepX = 0);
   static int getTextWidth(const std::string& text, int charW, int stepX = 0);
 
+  // Passo 10: Localização e Idiomas (PT, EN, IT, ES)
+  static std::string getCurrentLanguage();
+  static void setLanguage(const std::string& langCode);
+  static void nextLanguage(VM* vm = nullptr);
+  static void prevLanguage(VM* vm = nullptr);
+  static std::string getLanguageDisplayName(const std::string& langCode);
+  static void reloadLanguage(VM& vm);
+
   // Sistema de Arquivos / Assets Portável (PC, Android APK, Switch RomFS)
   static std::vector<uint8_t> readAsset(const std::string& path);
   static std::string getStorageDir();

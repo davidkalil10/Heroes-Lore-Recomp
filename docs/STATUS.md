@@ -187,8 +187,20 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
 
 ## Próximos passos (Roadmap)
 - [x] Passo 8: Possibilidade de detecção de update disponível no github releases para atualizar o app diretamente via rede (concluído para todas as plataformas)
+- [x] Passo 10: Seletor de Idiomas / Localização (PT-BR, EN, IT, ES):
+  - 4 idiomas suportados com 3951 strings alinhadas por ID (`assets/lang/`):
+    - `PT-BR`: Tradução oficial da comunidade brasileira Open Mind Team (2008).
+    - `EN`: Inglês oficial da versão Nokia 6280/N73.
+    - `IT`: Italiano oficial da versão S60v3 BiNPDA.
+    - `ES`: Espanhol 100% completo com todos os diálogos, missões, itens e menus traduzidos e adaptados ao charset J2ME (sem acentos incompatíveis).
+  - Opção "Idioma" integrada perfeitamente no menu de **Opções da Tela de Título** e no menu de **Opções do Pause In-Game** (`be.class`).
+  - Navegação fluida com setas `<` e `>` usando Direcional Esquerda / Direita ou Botão de Ação ('5' / Enter).
+  - Recarregamento a quente do buffer de strings em `cj` e fontes em `bh` diretamente em memória C++ em tempo real sem crashar, sem deadlocks e sem reiniciar o jogo.
+  - Atualização instantânea em memória de todos os itens e equipamentos instanciados (`ad`, `l`, `t`, `e`), diálogos do mapa ativo lidos do `.evt` correspondente (`aeInst.a:B`) e balão de fala ativo (`ah.a:[C`), nome da zona (`ae.a:[C`) e invalidação de repintura/atualização de rótulos de menus abertos (`cb`, `bt`, `s`, `q`).
+  - Prevenção total de deadlocks via detecção de posse do GIL (`VM::isGilOwner()`).
+  - Persistência em `hl_settings.ini` sob `[Localization]\nlanguage=...`.
+  - Atalho de teclado rápido via <kbd>F2</kbd> com banner OSD instantâneo.
 - [ ] Passo 9: Cloud Save & Sincronização Cruzada (PC/Linux <-> Celular <-> Switch).
-- [ ] Passo 10: Seletor de Idiomas / Localização (PT-BR, EN, ES).
 - [ ] Passo 11: Port Imersivo VR / Realidade Mista para Meta Quest (OpenXR, Voxel/Diorama 3D Tabletop & Primeira Pessoa 360°). Detalhado em [`docs/VR_QUEST_CONCEPT.md`](VR_QUEST_CONCEPT.md).
 
 

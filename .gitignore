@@ -43,3 +43,5 @@ romfs/
 "dados de consulta/heroes_lore_modern"
 __pycache__/
 *.pyc
+hl_settings.ini
+
