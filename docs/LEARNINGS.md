@@ -657,3 +657,18 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
     3. **Escala e Tipografia High-DPI:** `uiScale` foi ajustado para escalar até `3.4f` em telas verticais de alta densidade (1080p+), com fontes de cabeçalho de até 56px, fontes informativas de até 42px e cartões de 160px de altura com 2 linhas nítidas de dados (Herói e Data formatada `YYYY-MM-DD HH:MM`).
     4. **Harmonização e Uniformidade Tipográfica dos Botões:** Substituído o cálculo isolado por botão pelo analisador global `calcBtnFont(texts, btnW, btnH, tw, th, tstep)`. O algoritmo avalia a maior string do grupo de botões (`maxLen`) e aplica o mesmo tamanho e espaçamento (`tstep`) a todos os botões do grupo, eliminando a inconsistência onde botões com rótulos longos ficavam comprimidos e curtos ficavam espaçados.
     5. **Paridade High-DPI no Auto-Updater OTA (`src/platform/updater.cpp`):** Aplicada a mesma formulação dinâmica de `uiScale`, altura proporcional ao conteúdo (`neededH`), fontes ampliadas para até 56px e botões de até 96px táteis no modal do atualizador do GitHub, garantindo legibilidade nítida e proporções perfeitas no mobile.
+- **Arquitetura de Campanhas Múltiplas e Sincronização Total de Heróis (`_k.rms`, `_s.rms`, `_w.rms`, `_c.rms`):**
+  - *Comportamento do Jogo Original:*
+    - Cada personagem da campanha possui seu próprio slot RMS independente: Ronin grava em `_k.rms`, Reah grava em `_s.rms` e Aramor em `_w.rms`.
+    - Ao zerar a campanha com um herói, o jogo grava em `_c.rms` (Clear save), persistindo flags que desbloqueiam os próximos personagens e modos de jogo. O save da campanha anterior permanece 100% preservado em seu respectivo `.rms`.
+    - Os saves de heróis coexistem simultaneamente no sistema de arquivos.
+  - *Integração com Cloud Save:*
+    - O empacotador atômico JSON (`heroes_lore_save.json`) lê e envia para a nuvem **todos os 5 arquivos de uma vez só** (`_k.rms`, `_s.rms`, `_w.rms`, `_o.rms`, `_c.rms`).
+    - O resumo analisa dinamicamente todos os slots existentes (ex: `Ronin Nv 48, Reah Nv 1`).
+    - Ao restaurar em outro dispositivo (PC, Switch, Android), todos os heróis existentes e os desbloqueios do `_c.rms` são restaurados conjuntamente, sem que um herói sobrescreva ou apague outro.
+- **Redesenho Nobre de Botões em 2 Linhas com Preservação Estrita do Aspect Ratio das Fontes:**
+  - *Diagnóstico do Problema:* Quando o texto do botão concatenava atalho e ação em linha única (ex: `[ 1 / A ]: ENVIAR BACKUP`), o comprimento de 24 caracteres forçava a compressão horizontal extrema (`tstep`), enquanto a altura `th` permanecia em 20-24px. Isso produzia caracteres visualmente esticados na vertical ("letras alongadas").
+  - *Solução Arquitetural:*
+    1. **Separação em 2 Linhas:** Linha 1 exibe o Título da Ação em destaque (`ENVIAR BACKUP`, `RESTAURAR`, `DESCONECTAR`, `FECHAR`) e Linha 2 exibe o atalho físico de console/PC (`[ 1 / A ]`, `[ 2 / X ]`, `[ 3 / Y ]`, `[ B / ESC ]`, ou no Switch `[ A ]`, `[ X ]`, `[ Y ]`, `[ B ]`).
+    2. **Preservação de Aspect Ratio 0.60:** `charW` e `charH` agora escalam juntos proporcionalmente caso necessário. A largura do caractere nunca é espremida isoladamente, preservando a proporção geométrica nativa 22x36 da textura de fonte OSD.
+    3. **Acabamento Chanfrado Duplo:** Adicionada moldura interna suave nos botões para conferir relevo e profundidade visual refinada.

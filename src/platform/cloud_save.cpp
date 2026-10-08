@@ -280,46 +280,46 @@ static const char* s_translations[(size_t)CloudStr::STR_COUNT][4] = {
     "Si estas en partida, el juego se reiniciara."
   },
   /* BTN_CONNECT */ {
-    "[ 1 / A ]: CONECTAR",
-    "[ 1 / A ]: CONNECT",
-    "[ 1 / A ]: CONNETTI",
-    "[ 1 / A ]: CONECTAR"
+    "CONECTAR",
+    "CONNECT",
+    "CONNETTI",
+    "CONECTAR"
   },
   /* BTN_CLOSE */ {
-    "[ B / ESC ]: FECHAR",
-    "[ B / ESC ]: CLOSE",
-    "[ B / ESC ]: CHIUDI",
-    "[ B / ESC ]: CERRAR"
+    "FECHAR",
+    "CLOSE",
+    "CHIUDI",
+    "CERRAR"
   },
   /* BTN_CANCEL */ {
-    "[ B / ESC ]: CANCELAR",
-    "[ B / ESC ]: CANCEL",
-    "[ B / ESC ]: ANNULLA",
-    "[ B / ESC ]: CANCELAR"
+    "CANCELAR",
+    "CANCEL",
+    "ANNULLA",
+    "CANCELAR"
   },
   /* BTN_UPLOAD */ {
-    "[ 1 / A ]: ENVIAR BACKUP",
-    "[ 1 / A ]: UPLOAD BACKUP",
-    "[ 1 / A ]: CARICA BACKUP",
-    "[ 1 / A ]: SUBIR COPIA"
+    "ENVIAR BACKUP",
+    "UPLOAD BACKUP",
+    "CARICA BACKUP",
+    "SUBIR COPIA"
   },
   /* BTN_RESTORE */ {
-    "[ 2 / X ]: RESTAURAR",
-    "[ 2 / X ]: RESTORE",
-    "[ 2 / X ]: RIPRISTINA",
-    "[ 2 / X ]: RESTAURAR"
+    "RESTAURAR",
+    "RESTORE",
+    "RIPRISTINA",
+    "RESTAURAR"
   },
   /* BTN_CONFIRM */ {
-    "[ 1 / A ]: CONFIRMAR",
-    "[ 1 / A ]: CONFIRM",
-    "[ 1 / A ]: CONFERMA",
-    "[ 1 / A ]: CONFIRMAR"
+    "CONFIRMAR",
+    "CONFIRM",
+    "CONFERMA",
+    "CONFIRMAR"
   },
   /* BTN_DISCONNECT */ {
-    "[ 3 / Y ]: DESCONECTAR",
-    "[ 3 / Y ]: DISCONNECT",
-    "[ 3 / Y ]: DISCONNETTI",
-    "[ 3 / Y ]: DESCONECTAR"
+    "DESCONECTAR",
+    "DISCONNECT",
+    "DISCONNETTI",
+    "DESCONECTAR"
   },
   /* LEVEL_PREFIX */ {
     " Nv.",
@@ -1548,18 +1548,31 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
 
   // Tipografia e Botões Proporcionais e Confortáveis para Touch e Display
   int charH = std::clamp((int)(22.0f * uiScale), 18, 56);
-  int charW = (int)(charH * 0.64f);
-  int stepX = (int)(charW * 0.68f);
+  int charW = (int)(charH * 0.60f);
+  int stepX = charW;
 
   int smallH = std::clamp((int)(16.0f * uiScale), 14, 42);
-  int smallW = (int)(smallH * 0.64f);
-  int smallStep = (int)(smallW * 0.68f);
+  int smallW = (int)(smallH * 0.60f);
+  int smallStep = smallW;
 
   int headerH = std::clamp((int)(48.0f * uiScale), 40, 96);
-  int btnH    = std::clamp((int)(46.0f * uiScale), 38, 96);
+  int btnH    = isPortrait ? std::clamp((int)(56.0f * uiScale), 48, 96) : std::clamp((int)(52.0f * uiScale), 44, 78);
   int btnMargin = std::clamp((int)(12.0f * uiScale), 10, 24);
   int cardMargin = (int)(16.0f * uiScale);
   int cardH = std::clamp((int)(smallH * 3.6f + 20.0f * uiScale), 82, (int)(160.0f * uiScale));
+
+  // Rótulos de atalho por plataforma (Console Nintendo Switch vs Teclado/Gamepad PC/Mobile)
+#if defined(__SWITCH__)
+  const char* sc1 = "[ A ]";
+  const char* sc2 = "[ X ]";
+  const char* sc3 = "[ Y ]";
+  const char* scCancel = "[ B ]";
+#else
+  const char* sc1 = "[ 1 / A ]";
+  const char* sc2 = "[ 2 / X ]";
+  const char* sc3 = "[ 3 / Y ]";
+  const char* scCancel = "[ B / ESC ]";
+#endif
 
   // Cálculo Dinâmico de Altura (Content-Fitted) para eliminar espaços vazios em Portrait e overflow em Landscape
   int neededH = headerH + (int)(16.0f * uiScale);
@@ -1627,34 +1640,65 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   SDL_RenderFillRect(renderer, &r3);
   SDL_RenderFillRect(renderer, &r4);
 
-  // Helper lambdas para botões com renderização de texto perfeitamente uniforme e harmoniosa
-  auto drawBtn = [&](const std::string& txt, const SDL_Rect& bRect, SDL_Color bg, SDL_Color border, int tw, int th, int tstep) {
+  // Helper lambdas para botões com renderização nobre de 2 linhas (Ação + Atalho), chanfro duplo e proporção natural
+  auto drawBtn = [&](const std::string& title, const std::string& shortcut, const SDL_Rect& bRect,
+                     SDL_Color bg, SDL_Color border, int bTw, int bTh, int bTstep,
+                     int sTw, int sTh, int sTstep) {
+    // 1. Fundo
     SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, 255);
     SDL_RenderFillRect(renderer, &bRect);
+    // 2. Borda externa
     SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, 255);
     SDL_RenderDrawRect(renderer, &bRect);
+    // 3. Borda interna com chanfro suave iluminado
+    SDL_Rect innerBorder = { bRect.x + 2, bRect.y + 2, bRect.w - 4, bRect.h - 4 };
+    SDL_SetRenderDrawColor(renderer, border.r / 2, border.g / 2, border.b / 2, 180);
+    SDL_RenderDrawRect(renderer, &innerBorder);
 
-    int txtW = Platform::getTextWidth(txt, tw, tstep);
-    int tx = bRect.x + (bRect.w - txtW) / 2;
-    int ty = bRect.y + (bRect.h - th) / 2;
-    Platform::drawText(renderer, txt, tx, ty, tw, th, 255, tstep);
+    if (shortcut.empty()) {
+      int tw = Platform::getTextWidth(title, bTw, bTstep);
+      int tx = bRect.x + (bRect.w - tw) / 2;
+      int ty = bRect.y + (bRect.h - bTh) / 2;
+      Platform::drawText(renderer, title, tx, ty, bTw, bTh, 255, bTstep);
+    } else {
+      int totalH = bTh + sTh + (int)(3.0f * uiScale);
+      int ty1 = bRect.y + (bRect.h - totalH) / 2;
+      int ty2 = ty1 + bTh + (int)(3.0f * uiScale);
+
+      int tw1 = Platform::getTextWidth(title, bTw, bTstep);
+      int tx1 = bRect.x + (bRect.w - tw1) / 2;
+      Platform::drawText(renderer, title, tx1, ty1, bTw, bTh, 255, bTstep);
+
+      int tw2 = Platform::getTextWidth(shortcut, sTw, sTstep);
+      int tx2 = bRect.x + (bRect.w - tw2) / 2;
+      Platform::drawText(renderer, shortcut, tx2, ty2, sTw, sTh, 200, sTstep);
+    }
   };
 
-  auto calcBtnFont = [&](const std::vector<std::string>& texts, int bW, int bH, int& outTw, int& outTh, int& outTstep) {
-    outTh = std::clamp((int)(bH * 0.40f), 13, smallH);
-    outTw = (int)(outTh * 0.64f);
-    outTstep = (int)(outTw * 0.68f);
+  auto calcBtnFont = [&](const std::vector<std::string>& titles, int bW, int bH,
+                         int& outTw, int& outTh, int& outTstep,
+                         int& outSw, int& outSh, int& outSstep) {
+    // Proporção geométrica fiel da fonte OSD (célula 22x36 -> charW = charH * 0.60f)
+    outTh = std::clamp((int)(bH * 0.35f), 15, 28);
+    outTw = std::max(8, (int)(outTh * 0.60f));
+    outTstep = outTw;
+
+    outSh = std::clamp((int)(bH * 0.25f), 11, 20);
+    outSw = std::max(6, (int)(outSh * 0.60f));
+    outSstep = outSw;
 
     size_t maxLen = 0;
-    for (const auto& t : texts) {
+    for (const auto& t : titles) {
       if (t.length() > maxLen) maxLen = t.length();
     }
-    if (maxLen > 1) {
+    if (maxLen > 0) {
       int maxAvailW = bW - 16;
       int curW = (int)(maxLen - 1) * outTstep + outTw;
       if (curW > maxAvailW) {
-        outTstep = std::max(6, (maxAvailW - outTw) / (int)(maxLen - 1));
-        outTw = std::min(outTw, outTstep + 4);
+        float scale = (float)maxAvailW / (float)curW;
+        outTh = std::max(12, (int)(outTh * scale));
+        outTw = std::max(7, (int)(outTh * 0.60f));
+        outTstep = outTw;
       }
     }
   };
@@ -1724,10 +1768,10 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
 
     std::string b1Text = tr(CloudStr::BTN_CONNECT);
     std::string bcText = tr(CloudStr::BTN_CLOSE);
-    int bTw = 0, bTh = 0, bTstep = 0;
-    calcBtnFont({ b1Text, bcText }, s_btnAction1.w, s_btnAction1.h, bTw, bTh, bTstep);
-    drawBtn(b1Text, s_btnAction1, {35, 95, 45}, {80, 200, 100}, bTw, bTh, bTstep);
-    drawBtn(bcText, s_btnCancel, {45, 45, 55}, {100, 100, 120}, bTw, bTh, bTstep);
+    int bCw = 0, bCh = 0, bCstep = 0, bSw = 0, bSh = 0, bSstep = 0;
+    calcBtnFont({ b1Text, bcText }, s_btnAction1.w, s_btnAction1.h, bCw, bCh, bCstep, bSw, bSh, bSstep);
+    drawBtn(b1Text, sc1, s_btnAction1, {35, 95, 45}, {80, 200, 100}, bCw, bCh, bCstep, bSw, bSh, bSstep);
+    drawBtn(bcText, scCancel, s_btnCancel, {45, 45, 55}, {100, 100, 120}, bCw, bCh, bCstep, bSw, bSh, bSstep);
   }
 
   // ---------------------------------------------------------------------------
@@ -1759,8 +1803,8 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderDrawRect(renderer, &codeBox);
 
     int codeH = std::clamp((int)(codeBoxH * 0.58f), 20, 50);
-    int codeW = (int)(codeH * 0.64f);
-    int codeStep = (int)(codeW * 0.68f);
+    int codeW = (int)(codeH * 0.60f);
+    int codeStep = codeW;
     int cw = Platform::getTextWidth(s_deviceCode.userCode, codeW, codeStep);
     Platform::drawText(renderer, s_deviceCode.userCode, codeBox.x + (codeBoxW - cw) / 2,
                        codeBox.y + (codeBoxH - codeH) / 2, codeW, codeH, 255, codeStep);
@@ -1777,9 +1821,9 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     if (by < curY) by = curY;
     s_btnCancel = { modalX + (modalW - btnW) / 2, by, btnW, btnH };
     std::string cancelText = tr(CloudStr::BTN_CANCEL);
-    int bTw = 0, bTh = 0, bTstep = 0;
-    calcBtnFont({ cancelText }, s_btnCancel.w, s_btnCancel.h, bTw, bTh, bTstep);
-    drawBtn(cancelText, s_btnCancel, {50, 40, 40}, {140, 70, 70}, bTw, bTh, bTstep);
+    int bCw = 0, bCh = 0, bCstep = 0, bSw = 0, bSh = 0, bSstep = 0;
+    calcBtnFont({ cancelText }, s_btnCancel.w, s_btnCancel.h, bCw, bCh, bCstep, bSw, bSh, bSstep);
+    drawBtn(cancelText, scCancel, s_btnCancel, {50, 40, 40}, {140, 70, 70}, bCw, bCh, bCstep, bSw, bSh, bSstep);
   }
 
   // ---------------------------------------------------------------------------
@@ -1815,10 +1859,10 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
 
     std::string b1Text = tr(CloudStr::BTN_CONFIRM);
     std::string bcText = tr(CloudStr::BTN_CANCEL);
-    int bTw = 0, bTh = 0, bTstep = 0;
-    calcBtnFont({ b1Text, bcText }, s_btnAction1.w, s_btnAction1.h, bTw, bTh, bTstep);
-    drawBtn(b1Text, s_btnAction1, {140, 50, 40}, {230, 80, 70}, bTw, bTh, bTstep);
-    drawBtn(bcText, s_btnCancel, {45, 45, 55}, {100, 100, 120}, bTw, bTh, bTstep);
+    int bCw = 0, bCh = 0, bCstep = 0, bSw = 0, bSh = 0, bSstep = 0;
+    calcBtnFont({ b1Text, bcText }, s_btnAction1.w, s_btnAction1.h, bCw, bCh, bCstep, bSw, bSh, bSstep);
+    drawBtn(b1Text, sc1, s_btnAction1, {140, 50, 40}, {230, 80, 70}, bCw, bCh, bCstep, bSw, bSh, bSstep);
+    drawBtn(bcText, scCancel, s_btnCancel, {45, 45, 55}, {100, 100, 120}, bCw, bCh, bCstep, bSw, bSh, bSstep);
   }
 
   // ---------------------------------------------------------------------------
@@ -1923,19 +1967,19 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
       s_btnCancel  = { modalX + 24 + btnW + btnMargin, by + btnH + (int)(12.0f * uiScale), btnW, btnH };
     }
 
-    // Renderização dos 4 botões com as cores, rótulos e tipografia uniforme
+    // Renderização dos 4 botões com as cores, rótulos e tipografia uniforme de 2 linhas
     std::string b1 = tr(CloudStr::BTN_UPLOAD);
     std::string b2 = tr(CloudStr::BTN_RESTORE);
     std::string b3 = tr(CloudStr::BTN_DISCONNECT);
     std::string bc = tr(CloudStr::BTN_CLOSE);
 
-    int bTw = 0, bTh = 0, bTstep = 0;
-    calcBtnFont({ b1, b2, b3, bc }, s_btnAction1.w, s_btnAction1.h, bTw, bTh, bTstep);
+    int bCw = 0, bCh = 0, bCstep = 0, bSw = 0, bSh = 0, bSstep = 0;
+    calcBtnFont({ b1, b2, b3, bc }, s_btnAction1.w, s_btnAction1.h, bCw, bCh, bCstep, bSw, bSh, bSstep);
 
-    drawBtn(b1, s_btnAction1, {28, 75, 40}, {65, 175, 95}, bTw, bTh, bTstep);
-    drawBtn(b2, s_btnAction2, {24, 55, 90}, {65, 130, 210}, bTw, bTh, bTstep);
-    drawBtn(b3, s_btnAction3, {55, 30, 30}, {130, 60, 60}, bTw, bTh, bTstep);
-    drawBtn(bc, s_btnCancel, {40, 45, 55}, {90, 100, 120}, bTw, bTh, bTstep);
+    drawBtn(b1, sc1, s_btnAction1, {28, 75, 40}, {65, 175, 95}, bCw, bCh, bCstep, bSw, bSh, bSstep);
+    drawBtn(b2, sc2, s_btnAction2, {24, 55, 90}, {65, 130, 210}, bCw, bCh, bCstep, bSw, bSh, bSstep);
+    drawBtn(b3, sc3, s_btnAction3, {55, 30, 30}, {130, 60, 60}, bCw, bCh, bCstep, bSw, bSh, bSstep);
+    drawBtn(bc, scCancel, s_btnCancel, {40, 45, 55}, {90, 100, 120}, bCw, bCh, bCstep, bSw, bSh, bSstep);
   }
 }
 
