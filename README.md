@@ -213,6 +213,7 @@ cd android
 Para detalhes sobre a engenharia reversa das 90 classes ofuscadas, resolução de colisões de identificadores no carregador de classes e detalhes de implementação do RMS, consulte:
 - [`docs/STATUS.md`](docs/STATUS.md) — Marco atual e checklist de desenvolvimento.
 - [`docs/LEARNINGS.md`](docs/LEARNINGS.md) — Aprendizados técnicos, armadilhas superadas e decisões de arquitetura.
+- [`docs/VERSIONING.md`](docs/VERSIONING.md) — Guia de versionamento multi-plataforma e lançamento de releases.
 - [`docs/CLASS_MAP.md`](docs/CLASS_MAP.md) — Mapeamento detalhado das classes do jogo.
 
 ---

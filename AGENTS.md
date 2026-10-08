@@ -11,7 +11,7 @@ com camada de plataforma fina para futuros ports (web/Emscripten, mobile, Switch
 1. Nunca adivinhar o que uma classe faz: decompilar (CFR/javap), ler, documentar em `docs/CLASS_MAP.md`.
 2. Portar método a método mantendo a estrutura original; nome ofuscado fica em comentário.
 3. APIs J2ME ficam atrás de uma interface em `src/platform/` (Graphics, Canvas, RecordStore, Audio, Input).
-4. Toda descoberta/erro/acerto vai para `docs/LEARNINGS.md`. Todo avanço atualiza `docs/STATUS.md`.
+4. Toda descoberta/erro/acerto vai para `docs/LEARNINGS.md`. Todo avanço atualiza `docs/STATUS.md`. Versionamento e releases em `docs/VERSIONING.md`.
 5. Validar contra o original rodando em emulador J2ME (FreeJ2ME) quando possível.
 
 ## Fontes

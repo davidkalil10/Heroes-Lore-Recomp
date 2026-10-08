@@ -83,7 +83,14 @@ def patch_bl_class():
 
     # 1. Substitui a constante UTF-8 '\nv.' por versão, créditos, versão atual instalada e atalho de atualização:
     old_str_entry = b'\x01\x00\x03\nv.'
-    new_str = "\nv.0.0.2\n\nPort Nativo (PC, Android, Switch):\nDavid Kalil Braga (2026)\n\nVersao Atual: v1.1.1\n[5 / A]: VERIFICAR UPDATE".encode("utf-8")
+    version_tag = "v1.2.0"
+    if os.path.exists("src/platform/updater.h"):
+        with open("src/platform/updater.h", "r", encoding="utf-8") as vf:
+            for line in vf:
+                if "#define HL_VERSION_TAG" in line:
+                    version_tag = line.split('"')[1]
+                    break
+    new_str = f"\nv.0.0.2\n\nPort Nativo (PC, Android, Switch):\nDavid Kalil Braga (2026)\n\nVersao Atual: {version_tag}\n[5 / A]: VERIFICAR UPDATE".encode("utf-8")
     new_str_entry = b'\x01' + len(new_str).to_bytes(2, "big") + new_str
 
     if old_str_entry not in d:
