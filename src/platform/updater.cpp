@@ -1073,28 +1073,53 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
 
   // 2. Caixa Modal Proporcional e Responsiva por Resolução / Orientação
   bool isPortrait = (winH > winW);
-  int modalW = 0;
-  int modalH = 0;
 
-  if (isPortrait) {
-    // Modo Retrato (Celular em pé): ocupa ~92% da largura da tela com boa altura
-    modalW = std::clamp((int)(winW * 0.92f), 280, 1100);
-    modalH = std::clamp((int)(modalW * 0.92f), 320, (int)(winH * 0.70f));
+  // Escala responsiva aprimorada para Mobile (High-DPI portrait/landscape), Switch e PC
+  float uiScale = isPortrait ? std::clamp((float)winW / 300.0f, 1.3f, 3.4f)
+                             : std::clamp((float)winH / 360.0f, 1.1f, 2.3f);
+
+  int modalW = isPortrait ? std::clamp((int)(winW * 0.94f), 280, 1100)
+                          : std::clamp((int)(winW * 0.85f), 480, 1300);
+
+  // Tipografia e Botões Proporcionais e Confortáveis para Touch e Display
+  int charH = std::clamp((int)(22.0f * uiScale), 18, 56);
+  int charW = (int)(charH * 0.64f);
+  int stepX = (int)(charW * 0.68f);
+
+  int smallCharH = std::clamp((int)(16.0f * uiScale), 14, 42);
+  int smallCharW = (int)(smallCharH * 0.64f);
+  int smallStepX = (int)(smallCharW * 0.68f);
+
+  int headerH = std::clamp((int)(48.0f * uiScale), 40, 96);
+  int btnH    = std::clamp((int)(48.0f * uiScale), 42, 96);
+  int borderPad = 6;
+
+  // Cálculo Dinâmico de Altura (Content-Fitted)
+  int neededH = headerH + (int)(16.0f * uiScale);
+
+  if (s_state == UpdateState::UPDATE_AVAILABLE || s_state == UpdateState::CONFIRM_PROMPT) {
+    int badgeH = std::clamp((int)(charH + 14.0f * uiScale), 30, 60);
+    int noteH = std::clamp((int)(charH * 3 + 28.0f * uiScale), 85, 220);
+    neededH += badgeH + (int)(14.0f * uiScale) + noteH + (int)(18.0f * uiScale) + btnH + (int)(22.0f * uiScale);
+  } else if (s_state == UpdateState::DOWNLOADING) {
+    int barH = std::clamp((int)(26.0f * uiScale), 22, 48);
+    neededH += charH + (int)(14.0f * uiScale) + barH + (int)(12.0f * uiScale) + charH + (int)(14.0f * uiScale) + smallCharH + (int)(22.0f * uiScale);
+  } else if (s_state == UpdateState::RESTART_READY || s_state == UpdateState::DOWNLOAD_COMPLETE) {
+    neededH += charH + (int)(14.0f * uiScale) + charH + (int)(18.0f * uiScale) + btnH + (int)(22.0f * uiScale);
   } else {
-    // Modo Paisagem (Nintendo Switch 720p, PC, Steam Deck):
-    // Switch (1280x720): modalW = ~800px, modalH = ~520px
-    modalW = std::clamp((int)(winW * 0.65f), 380, 960);
-    modalH = std::clamp((int)(winH * 0.76f), 300, 680);
+    // CHECK_FAILED ou DOWNLOAD_FAILED
+    neededH += charH + (int)(20.0f * uiScale) + btnH + (int)(22.0f * uiScale);
   }
 
+  int maxH = (int)(winH * 0.94f);
+  int modalH = std::min(neededH, maxH);
   int modalX = (winW - modalW) / 2;
   int modalY = (winH - modalH) / 2;
   s_modalRect = { modalX, modalY, modalW, modalH };
 
   // Sombra suave da caixa
-  int shadowOff = std::clamp(modalH / 50, 4, 10);
-  SDL_Rect shadow = { modalX + shadowOff, modalY + shadowOff, modalW, modalH };
-  SDL_SetRenderDrawColor(renderer, 0, 0, 0, 170);
+  SDL_Rect shadow = { modalX + 6, modalY + 6, modalW, modalH };
+  SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
   SDL_RenderFillRect(renderer, &shadow);
 
   // Fundo ardósia nobre de Soltia
@@ -1107,40 +1132,30 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   SDL_RenderDrawRect(renderer, &box);
 
   // Filete interno em ouro nobre
-  int borderPad = std::clamp(modalH / 90, 4, 8);
   SDL_Rect goldBorder = { modalX + borderPad, modalY + borderPad, modalW - borderPad * 2, modalH - borderPad * 2 };
   SDL_SetRenderDrawColor(renderer, 195, 155, 60, 255);
   SDL_RenderDrawRect(renderer, &goldBorder);
 
   // Rebites de bronze nos 4 cantos
-  int rivetSize = std::clamp(modalH / 80, 4, 8);
-  int rivetOffset = borderPad + 3;
+  int rSize = 6;
   SDL_SetRenderDrawColor(renderer, 225, 185, 80, 255);
-  SDL_Rect r1 = { modalX + rivetOffset, modalY + rivetOffset, rivetSize, rivetSize };
-  SDL_Rect r2 = { modalX + modalW - rivetOffset - rivetSize, modalY + rivetOffset, rivetSize, rivetSize };
-  SDL_Rect r3 = { modalX + rivetOffset, modalY + modalH - rivetOffset - rivetSize, rivetSize, rivetSize };
-  SDL_Rect r4 = { modalX + modalW - rivetOffset - rivetSize, modalY + modalH - rivetOffset - rivetSize, rivetSize, rivetSize };
+  SDL_Rect r1 = { modalX + 10, modalY + 10, rSize, rSize };
+  SDL_Rect r2 = { modalX + modalW - 10 - rSize, modalY + 10, rSize, rSize };
+  SDL_Rect r3 = { modalX + 10, modalY + modalH - 10 - rSize, rSize, rSize };
+  SDL_Rect r4 = { modalX + modalW - 10 - rSize, modalY + modalH - 10 - rSize, rSize, rSize };
   SDL_RenderFillRect(renderer, &r1);
   SDL_RenderFillRect(renderer, &r2);
   SDL_RenderFillRect(renderer, &r3);
   SDL_RenderFillRect(renderer, &r4);
 
   // Faixa de cabeçalho proporcional
-  int headerH = std::clamp((int)(modalH * 0.12f), 34, 60);
-  SDL_Rect headerBox = { modalX + borderPad + 2, modalY + borderPad + 2, modalW - (borderPad + 2) * 2, headerH };
+  SDL_Rect headerBox = { modalX + 8, modalY + 8, modalW - 16, headerH };
   SDL_SetRenderDrawColor(renderer, 22, 28, 40, 255);
   SDL_RenderFillRect(renderer, &headerBox);
   SDL_SetRenderDrawColor(renderer, 195, 155, 60, 200);
   SDL_RenderDrawLine(renderer, headerBox.x, headerBox.y + headerH, headerBox.x + headerBox.w, headerBox.y + headerH);
 
-  // Escala tipográfica dinâmica harmoniosa
-  int charH = std::clamp((int)(modalH * 0.052f), 16, 32);
-  int charW = (int)(charH * 0.65f);
-  int stepX = (int)(charW * 0.68f);
-
-  int smallCharH = std::max(14, (int)(charH * 0.82f));
-  int smallCharW = (int)(smallCharH * 0.65f);
-  int smallStepX = (int)(smallCharW * 0.68f);
+  int curY = modalY + headerH + (int)(16.0f * uiScale);
 
   // Legendas de atalhos por plataforma
 #if defined(__SWITCH__)
@@ -1158,14 +1173,12 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     // Título do Cabeçalho
     std::string title = "ATUALIZACAO DISPONIVEL";
     int tw = Platform::getTextWidth(title, charW, stepX);
-    Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + (headerH - charH) / 2 + borderPad, charW, charH, 255, stepX);
+    Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + (headerH - charH) / 2 + 8, charW, charH, 255, stepX);
 
     // Faixa/Badge de Versão (Estilo Pill)
-    int badgeW = std::clamp((int)(modalW * 0.68f), 220, 480);
-    int badgeH = std::clamp((int)(modalH * 0.085f), 26, 44);
-    int badgeX = modalX + (modalW - badgeW) / 2;
-    int badgeY = modalY + headerH + std::clamp((int)(modalH * 0.04f), 10, 22);
-    SDL_Rect verBox = { badgeX, badgeY, badgeW, badgeH };
+    int badgeW = std::clamp((int)(modalW * 0.72f), 220, 540);
+    int badgeH = std::clamp((int)(charH + 14.0f * uiScale), 30, 60);
+    SDL_Rect verBox = { modalX + (modalW - badgeW) / 2, curY, badgeW, badgeH };
     SDL_SetRenderDrawColor(renderer, 18, 28, 42, 255);
     SDL_RenderFillRect(renderer, &verBox);
     SDL_SetRenderDrawColor(renderer, 70, 130, 190, 255);
@@ -1173,15 +1186,13 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
 
     std::string vLine = std::string(HL_VERSION_TAG) + " -> " + s_releaseInfo.tagName;
     int vw = Platform::getTextWidth(vLine, charW, stepX);
-    Platform::drawText(renderer, vLine, badgeX + (badgeW - vw) / 2, badgeY + (badgeH - charH) / 2, charW, charH, 255, stepX);
+    Platform::drawText(renderer, vLine, verBox.x + (badgeW - vw) / 2, verBox.y + (badgeH - charH) / 2, charW, charH, 255, stepX);
+    curY += badgeH + (int)(14.0f * uiScale);
 
     // Caixa de Alerta Âmbar de Salvamento
-    int noteMargin = (int)(modalW * 0.05f);
-    int noteW = modalW - noteMargin * 2;
-    int noteH = std::max(75, (int)(modalH * 0.28f));
-    int noteX = modalX + noteMargin;
-    int noteY = badgeY + badgeH + std::clamp((int)(modalH * 0.04f), 10, 22);
-    SDL_Rect noteBox = { noteX, noteY, noteW, noteH };
+    int noteW = modalW - 48;
+    int noteH = std::clamp((int)(charH * 3 + 28.0f * uiScale), 85, 220);
+    SDL_Rect noteBox = { modalX + 24, curY, noteW, noteH };
     SDL_SetRenderDrawColor(renderer, 28, 22, 12, 235);
     SDL_RenderFillRect(renderer, &noteBox);
     SDL_SetRenderDrawColor(renderer, 175, 125, 40, 255);
@@ -1190,22 +1201,23 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     std::string a1 = "AVISO IMPORTANTE:";
     std::string a2 = "Salve o jogo antes de prosseguir.";
     std::string a3 = "O aplicativo sera reiniciado.";
-    int lineSpacing = std::clamp((int)(noteH * 0.28f), charH + 4, charH + 18);
-    int lineStartY = noteY + (noteH - (lineSpacing * 2 + charH)) / 2;
+    int lineSpacing = charH + (int)(4.0f * uiScale);
+    int lineStartY = noteBox.y + (noteH - (lineSpacing * 2 + charH)) / 2;
 
-    Platform::drawText(renderer, a1, noteX + (noteW - Platform::getTextWidth(a1, charW, stepX)) / 2, lineStartY, charW, charH, 255, stepX);
-    Platform::drawText(renderer, a2, noteX + (noteW - Platform::getTextWidth(a2, charW, stepX)) / 2, lineStartY + lineSpacing, charW, charH, 240, stepX);
-    Platform::drawText(renderer, a3, noteX + (noteW - Platform::getTextWidth(a3, charW, stepX)) / 2, lineStartY + lineSpacing * 2, charW, charH, 240, stepX);
+    Platform::drawText(renderer, a1, noteBox.x + (noteW - Platform::getTextWidth(a1, charW, stepX)) / 2, lineStartY, charW, charH, 255, stepX);
+    Platform::drawText(renderer, a2, noteBox.x + (noteW - Platform::getTextWidth(a2, charW, stepX)) / 2, lineStartY + lineSpacing, charW, charH, 240, stepX);
+    Platform::drawText(renderer, a3, noteBox.x + (noteW - Platform::getTextWidth(a3, charW, stepX)) / 2, lineStartY + lineSpacing * 2, charW, charH, 240, stepX);
+    curY += noteH + (int)(18.0f * uiScale);
 
     // Botões Interativos (Lado a Lado)
-    int btnMargin = (int)(modalW * 0.05f);
-    int btnGap = (int)(modalW * 0.04f);
-    int btnH = std::clamp((int)(modalH * 0.16f), 46, 78);
+    int btnMargin = (int)(18.0f * uiScale);
+    int btnGap = (int)(14.0f * uiScale);
     int btnW = (modalW - (btnMargin * 2) - btnGap) / 2;
-    int btnY = modalY + modalH - btnH - std::clamp((int)(modalH * 0.05f), 14, 28);
+    int by = modalY + modalH - btnH - (int)(18.0f * uiScale);
+    if (by < curY) by = curY;
 
-    s_btnConfirmRect = { modalX + btnMargin, btnY, btnW, btnH };
-    s_btnCancelRect = { modalX + btnMargin + btnW + btnGap, btnY, btnW, btnH };
+    s_btnConfirmRect = { modalX + btnMargin, by, btnW, btnH };
+    s_btnCancelRect = { modalX + btnMargin + btnW + btnGap, by, btnW, btnH };
 
     // 1. Botão Confirmar (Ciano / Ouro Real)
     SDL_SetRenderDrawColor(renderer, 18, 55, 80, 255);
@@ -1217,8 +1229,8 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderDrawRect(renderer, &cBorder);
 
     std::string bt1 = "ATUALIZAR";
-    Platform::drawText(renderer, bt1, s_btnConfirmRect.x + (btnW - Platform::getTextWidth(bt1, charW, stepX)) / 2, btnY + (btnH / 2) - charH + 1, charW, charH, 255, stepX);
-    Platform::drawText(renderer, scConfirm, s_btnConfirmRect.x + (btnW - Platform::getTextWidth(scConfirm, smallCharW, smallStepX)) / 2, btnY + (btnH / 2) + 3, smallCharW, smallCharH, 210, smallStepX);
+    Platform::drawText(renderer, bt1, s_btnConfirmRect.x + (btnW - Platform::getTextWidth(bt1, charW, stepX)) / 2, by + (btnH / 2) - charH + 1, charW, charH, 255, stepX);
+    Platform::drawText(renderer, scConfirm, s_btnConfirmRect.x + (btnW - Platform::getTextWidth(scConfirm, smallCharW, smallStepX)) / 2, by + (btnH / 2) + 3, smallCharW, smallCharH, 210, smallStepX);
 
     // 2. Botão Cancelar (Ardósia Carmesim)
     SDL_SetRenderDrawColor(renderer, 48, 20, 26, 255);
@@ -1230,24 +1242,24 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderDrawRect(renderer, &rBorder);
 
     std::string bt2 = "CANCELAR";
-    Platform::drawText(renderer, bt2, s_btnCancelRect.x + (btnW - Platform::getTextWidth(bt2, charW, stepX)) / 2, btnY + (btnH / 2) - charH + 1, charW, charH, 255, stepX);
-    Platform::drawText(renderer, scCancel, s_btnCancelRect.x + (btnW - Platform::getTextWidth(scCancel, smallCharW, smallStepX)) / 2, btnY + (btnH / 2) + 3, smallCharW, smallCharH, 210, smallStepX);
+    Platform::drawText(renderer, bt2, s_btnCancelRect.x + (btnW - Platform::getTextWidth(bt2, charW, stepX)) / 2, by + (btnH / 2) - charH + 1, charW, charH, 255, stepX);
+    Platform::drawText(renderer, scCancel, s_btnCancelRect.x + (btnW - Platform::getTextWidth(scCancel, smallCharW, smallStepX)) / 2, by + (btnH / 2) + 3, smallCharW, smallCharH, 210, smallStepX);
 
   } else if (s_state == UpdateState::DOWNLOADING) {
     std::string title = "BAIXANDO ATUALIZACAO";
     int tw = Platform::getTextWidth(title, charW, stepX);
-    Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + (headerH - charH) / 2 + borderPad, charW, charH, 255, stepX);
+    Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + (headerH - charH) / 2 + 8, charW, charH, 255, stepX);
 
     std::string fLine = s_releaseInfo.assetName;
     int fw = Platform::getTextWidth(fLine, charW, stepX);
-    int fLineY = modalY + headerH + std::clamp((int)(modalH * 0.08f), 16, 36);
-    Platform::drawText(renderer, fLine, modalX + (modalW - fw) / 2, fLineY, charW, charH, 240, stepX);
+    Platform::drawText(renderer, fLine, modalX + (modalW - fw) / 2, curY, charW, charH, 240, stepX);
+    curY += charH + (int)(14.0f * uiScale);
 
     // Barra de progresso gráfica
-    int barW = modalW - (int)(modalW * 0.12f);
-    int barH = std::clamp((int)(modalH * 0.075f), 22, 38);
+    int barW = modalW - 48;
+    int barH = std::clamp((int)(26.0f * uiScale), 22, 48);
     int barX = modalX + (modalW - barW) / 2;
-    int barY = fLineY + charH + std::clamp((int)(modalH * 0.06f), 14, 28);
+    int barY = curY;
 
     SDL_Rect barBg = { barX, barY, barW, barH };
     SDL_SetRenderDrawColor(renderer, 10, 14, 20, 255);
@@ -1262,6 +1274,7 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
       SDL_SetRenderDrawColor(renderer, 0, 215, 255, 255);
       SDL_RenderFillRect(renderer, &barFill);
     }
+    curY += barH + (int)(12.0f * uiScale);
 
     char pBuf[64];
     float mbDown = (float)s_downloadedBytes.load() / (1024.0f * 1024.0f);
@@ -1269,12 +1282,12 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     snprintf(pBuf, sizeof(pBuf), "%.1f MB / %.1f MB (%d%%)", mbDown, mbTotal, (int)(prog * 100.0f));
     std::string pStr = pBuf;
     int pw = Platform::getTextWidth(pStr, charW, stepX);
-    int pStrY = barY + barH + std::clamp((int)(modalH * 0.05f), 12, 24);
-    Platform::drawText(renderer, pStr, modalX + (modalW - pw) / 2, pStrY, charW, charH, 255, stepX);
+    Platform::drawText(renderer, pStr, modalX + (modalW - pw) / 2, curY, charW, charH, 255, stepX);
+    curY += charH + (int)(14.0f * uiScale);
 
     std::string wLine = "Aguarde... Nao feche o jogo.";
     int ww = Platform::getTextWidth(wLine, smallCharW, smallStepX);
-    Platform::drawText(renderer, wLine, modalX + (modalW - ww) / 2, modalY + modalH - std::clamp((int)(modalH * 0.12f), 32, 54), smallCharW, smallCharH, 200, smallStepX);
+    Platform::drawText(renderer, wLine, modalX + (modalW - ww) / 2, curY, smallCharW, smallCharH, 200, smallStepX);
 
     s_btnConfirmRect = { 0, 0, 0, 0 };
     s_btnCancelRect = { 0, 0, 0, 0 };
@@ -1282,24 +1295,24 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   } else if (s_state == UpdateState::RESTART_READY || s_state == UpdateState::DOWNLOAD_COMPLETE) {
     std::string title = "ATUALIZACAO CONCLUIDA";
     int tw = Platform::getTextWidth(title, charW, stepX);
-    Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + (headerH - charH) / 2 + borderPad, charW, charH, 255, stepX);
+    Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + (headerH - charH) / 2 + 8, charW, charH, 255, stepX);
 
     std::string s1 = "Arquivo instalado com sucesso!";
     int sw1 = Platform::getTextWidth(s1, charW, stepX);
-    int s1Y = modalY + headerH + std::clamp((int)(modalH * 0.14f), 24, 52);
-    Platform::drawText(renderer, s1, modalX + (modalW - sw1) / 2, s1Y, charW, charH, 255, stepX);
+    Platform::drawText(renderer, s1, modalX + (modalW - sw1) / 2, curY, charW, charH, 255, stepX);
+    curY += charH + (int)(12.0f * uiScale);
 
     std::string s2 = "Reinicie para aplicar a nova versao.";
     int sw2 = Platform::getTextWidth(s2, charW, stepX);
-    int s2Y = s1Y + charH + std::clamp((int)(modalH * 0.05f), 12, 22);
-    Platform::drawText(renderer, s2, modalX + (modalW - sw2) / 2, s2Y, charW, charH, 220, stepX);
+    Platform::drawText(renderer, s2, modalX + (modalW - sw2) / 2, curY, charW, charH, 220, stepX);
+    curY += charH + (int)(18.0f * uiScale);
 
     // Botão de Reinício (Verde Esmeralda)
-    int btnW = std::clamp((int)(modalW * 0.58f), 180, 360);
-    int btnH = std::clamp((int)(modalH * 0.16f), 46, 78);
+    int btnW = std::clamp((int)(modalW * 0.58f), 180, 420);
+    int by = modalY + modalH - btnH - (int)(18.0f * uiScale);
+    if (by < curY) by = curY;
     int btnX = modalX + (modalW - btnW) / 2;
-    int btnY = modalY + modalH - btnH - std::clamp((int)(modalH * 0.07f), 16, 32);
-    s_btnConfirmRect = { btnX, btnY, btnW, btnH };
+    s_btnConfirmRect = { btnX, by, btnW, btnH };
     s_btnCancelRect = { 0, 0, 0, 0 };
 
     SDL_SetRenderDrawColor(renderer, 18, 68, 38, 255);
@@ -1308,24 +1321,24 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderDrawRect(renderer, &s_btnConfirmRect);
 
     std::string rText = "REINICIAR";
-    Platform::drawText(renderer, rText, btnX + (btnW - Platform::getTextWidth(rText, charW, stepX)) / 2, btnY + (btnH / 2) - charH + 1, charW, charH, 255, stepX);
-    Platform::drawText(renderer, scConfirm, btnX + (btnW - Platform::getTextWidth(scConfirm, smallCharW, smallStepX)) / 2, btnY + (btnH / 2) + 3, smallCharW, smallCharH, 210, smallStepX);
+    Platform::drawText(renderer, rText, btnX + (btnW - Platform::getTextWidth(rText, charW, stepX)) / 2, by + (btnH / 2) - charH + 1, charW, charH, 255, stepX);
+    Platform::drawText(renderer, scConfirm, btnX + (btnW - Platform::getTextWidth(scConfirm, smallCharW, smallStepX)) / 2, by + (btnH / 2) + 3, smallCharW, smallCharH, 210, smallStepX);
 
   } else if (s_state == UpdateState::CHECK_FAILED || s_state == UpdateState::DOWNLOAD_FAILED) {
     std::string title = "AVISO DE ATUALIZACAO";
     int tw = Platform::getTextWidth(title, charW, stepX);
-    Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + (headerH - charH) / 2 + borderPad, charW, charH, 255, stepX);
+    Platform::drawText(renderer, title, modalX + (modalW - tw) / 2, modalY + (headerH - charH) / 2 + 8, charW, charH, 255, stepX);
 
     std::string s1 = s_statusMessage.empty() ? "Nao foi possivel concluir a atualizacao." : s_statusMessage;
     int sw1 = Platform::getTextWidth(s1, charW, stepX);
-    int s1Y = modalY + headerH + std::clamp((int)(modalH * 0.16f), 26, 60);
-    Platform::drawText(renderer, s1, modalX + (modalW - sw1) / 2, s1Y, charW, charH, 255, stepX);
+    Platform::drawText(renderer, s1, modalX + (modalW - sw1) / 2, curY, charW, charH, 255, stepX);
+    curY += charH + (int)(18.0f * uiScale);
 
-    int btnW = std::clamp((int)(modalW * 0.45f), 160, 280);
-    int btnH = std::clamp((int)(modalH * 0.15f), 42, 68);
+    int btnW = std::clamp((int)(modalW * 0.45f), 160, 360);
+    int by = modalY + modalH - btnH - (int)(18.0f * uiScale);
+    if (by < curY) by = curY;
     int btnX = modalX + (modalW - btnW) / 2;
-    int btnY = modalY + modalH - btnH - std::clamp((int)(modalH * 0.07f), 16, 32);
-    s_btnCancelRect = { btnX, btnY, btnW, btnH };
+    s_btnCancelRect = { btnX, by, btnW, btnH };
     s_btnConfirmRect = { 0, 0, 0, 0 };
 
     SDL_SetRenderDrawColor(renderer, 48, 20, 26, 255);
@@ -1334,8 +1347,8 @@ void Updater::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     SDL_RenderDrawRect(renderer, &s_btnCancelRect);
 
     std::string cText = "FECHAR";
-    Platform::drawText(renderer, cText, btnX + (btnW - Platform::getTextWidth(cText, charW, stepX)) / 2, btnY + (btnH / 2) - charH + 1, charW, charH, 255, stepX);
-    Platform::drawText(renderer, scCancel, btnX + (btnW - Platform::getTextWidth(scCancel, smallCharW, smallStepX)) / 2, btnY + (btnH / 2) + 3, smallCharW, smallCharH, 210, smallStepX);
+    Platform::drawText(renderer, cText, btnX + (btnW - Platform::getTextWidth(cText, charW, stepX)) / 2, by + (btnH / 2) - charH + 1, charW, charH, 255, stepX);
+    Platform::drawText(renderer, scCancel, btnX + (btnW - Platform::getTextWidth(scCancel, smallCharW, smallStepX)) / 2, by + (btnH / 2) + 3, smallCharW, smallCharH, 210, smallStepX);
   }
 }
 

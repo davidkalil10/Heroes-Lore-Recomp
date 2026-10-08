@@ -218,6 +218,8 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
     - Layout responsivo de alta densidade (High-DPI / Mobile):
       - Em Landscape: cartões de save dispostos lado a lado e 4 botões de ação alinhados horizontalmente com auto-fitting de texto, sem corte e sem sobreposição.
       - Em Portrait: altura modal ajustada dinamicamente ao conteúdo (`neededH`), fontes ampliadas até 56px (cabeçalho) e 42px (detalhes), e botões táteis ampliados para 96px.
+      - Tipografia uniforme nos botões de ação: métrica global (`calcBtnFont`) calculada a partir do rótulo mais longo, garantindo tamanho de fonte e espaçamento idênticos em todos os botões do grupo.
+    - Paridade High-DPI no Auto-Updater OTA (`src/platform/updater.cpp`): modal de atualização do GitHub alinhado com a mesma arquitetura de escala responsiva móvel, proporcionando excelente legibilidade e botões amplos no Android.
     - Portabilidade Universal: conversão de data UTC via algoritmo autônomo `portableTimegm()`, eliminando dependências não-portáveis de libc e garantindo compilação no Nintendo Switch (devkitA64/newlib), Windows, Linux e Android.
     - Estabilidade JNI no Android: despachador `runAsync` com ciclo de vida gerenciado do SDL e referência global (`NewGlobalRef`) para `SDLActivity.httpExecute`, evitando crashes de runtime no ART ao conectar.
     - Integrado ao Menu de Opções (`be.class`) na Tela de Título e no Pause In-Game como 6º item.

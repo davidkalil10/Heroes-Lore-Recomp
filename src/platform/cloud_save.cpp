@@ -1627,28 +1627,36 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
   SDL_RenderFillRect(renderer, &r3);
   SDL_RenderFillRect(renderer, &r4);
 
-  // Helper lambda para botões com texto auto-ajustável e perfeitamente centralizado
-  auto drawBtn = [&](const std::string& txt, const SDL_Rect& bRect, SDL_Color bg, SDL_Color border) {
+  // Helper lambdas para botões com renderização de texto perfeitamente uniforme e harmoniosa
+  auto drawBtn = [&](const std::string& txt, const SDL_Rect& bRect, SDL_Color bg, SDL_Color border, int tw, int th, int tstep) {
     SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, 255);
     SDL_RenderFillRect(renderer, &bRect);
     SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, 255);
     SDL_RenderDrawRect(renderer, &bRect);
 
-    int th = std::clamp((int)(bRect.h * 0.42f), 13, smallH);
-    int tw = (int)(th * 0.64f);
-    int tstep = (int)(tw * 0.68f);
-    if ((int)txt.length() > 1) {
-      int maxW = bRect.w - 12;
-      int curW = (int)(txt.length() - 1) * tstep + tw;
-      if (curW > maxW) {
-        tstep = std::max(6, (maxW - tw) / (int)(txt.length() - 1));
-        tw = std::min(tw, tstep + 4);
-      }
-    }
     int txtW = Platform::getTextWidth(txt, tw, tstep);
     int tx = bRect.x + (bRect.w - txtW) / 2;
     int ty = bRect.y + (bRect.h - th) / 2;
     Platform::drawText(renderer, txt, tx, ty, tw, th, 255, tstep);
+  };
+
+  auto calcBtnFont = [&](const std::vector<std::string>& texts, int bW, int bH, int& outTw, int& outTh, int& outTstep) {
+    outTh = std::clamp((int)(bH * 0.40f), 13, smallH);
+    outTw = (int)(outTh * 0.64f);
+    outTstep = (int)(outTw * 0.68f);
+
+    size_t maxLen = 0;
+    for (const auto& t : texts) {
+      if (t.length() > maxLen) maxLen = t.length();
+    }
+    if (maxLen > 1) {
+      int maxAvailW = bW - 16;
+      int curW = (int)(maxLen - 1) * outTstep + outTw;
+      if (curW > maxAvailW) {
+        outTstep = std::max(6, (maxAvailW - outTw) / (int)(maxLen - 1));
+        outTw = std::min(outTw, outTstep + 4);
+      }
+    }
   };
 
   // Cabeçalho
@@ -1714,8 +1722,12 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     s_btnAction1 = { modalX + 24, by, btnW, btnH };
     s_btnCancel  = { modalX + 24 + btnW + btnMargin, by, btnW, btnH };
 
-    drawBtn(tr(CloudStr::BTN_CONNECT), s_btnAction1, {35, 95, 45}, {80, 200, 100});
-    drawBtn(tr(CloudStr::BTN_CLOSE), s_btnCancel, {45, 45, 55}, {100, 100, 120});
+    std::string b1Text = tr(CloudStr::BTN_CONNECT);
+    std::string bcText = tr(CloudStr::BTN_CLOSE);
+    int bTw = 0, bTh = 0, bTstep = 0;
+    calcBtnFont({ b1Text, bcText }, s_btnAction1.w, s_btnAction1.h, bTw, bTh, bTstep);
+    drawBtn(b1Text, s_btnAction1, {35, 95, 45}, {80, 200, 100}, bTw, bTh, bTstep);
+    drawBtn(bcText, s_btnCancel, {45, 45, 55}, {100, 100, 120}, bTw, bTh, bTstep);
   }
 
   // ---------------------------------------------------------------------------
@@ -1764,7 +1776,10 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     int by = modalY + modalH - btnH - (int)(18.0f * uiScale);
     if (by < curY) by = curY;
     s_btnCancel = { modalX + (modalW - btnW) / 2, by, btnW, btnH };
-    drawBtn(tr(CloudStr::BTN_CANCEL), s_btnCancel, {50, 40, 40}, {140, 70, 70});
+    std::string cancelText = tr(CloudStr::BTN_CANCEL);
+    int bTw = 0, bTh = 0, bTstep = 0;
+    calcBtnFont({ cancelText }, s_btnCancel.w, s_btnCancel.h, bTw, bTh, bTstep);
+    drawBtn(cancelText, s_btnCancel, {50, 40, 40}, {140, 70, 70}, bTw, bTh, bTstep);
   }
 
   // ---------------------------------------------------------------------------
@@ -1798,8 +1813,12 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
     s_btnAction1 = { modalX + 24, by, btnW, btnH };
     s_btnCancel  = { modalX + 24 + btnW + btnMargin, by, btnW, btnH };
 
-    drawBtn(tr(CloudStr::BTN_CONFIRM), s_btnAction1, {140, 50, 40}, {230, 80, 70});
-    drawBtn(tr(CloudStr::BTN_CANCEL), s_btnCancel, {45, 45, 55}, {100, 100, 120});
+    std::string b1Text = tr(CloudStr::BTN_CONFIRM);
+    std::string bcText = tr(CloudStr::BTN_CANCEL);
+    int bTw = 0, bTh = 0, bTstep = 0;
+    calcBtnFont({ b1Text, bcText }, s_btnAction1.w, s_btnAction1.h, bTw, bTh, bTstep);
+    drawBtn(b1Text, s_btnAction1, {140, 50, 40}, {230, 80, 70}, bTw, bTh, bTstep);
+    drawBtn(bcText, s_btnCancel, {45, 45, 55}, {100, 100, 120}, bTw, bTh, bTstep);
   }
 
   // ---------------------------------------------------------------------------
@@ -1904,11 +1923,19 @@ void CloudSave::drawModal(SDL_Renderer* renderer, int winW, int winH) {
       s_btnCancel  = { modalX + 24 + btnW + btnMargin, by + btnH + (int)(12.0f * uiScale), btnW, btnH };
     }
 
-    // Renderização dos 4 botões com as cores e rótulos
-    drawBtn(tr(CloudStr::BTN_UPLOAD), s_btnAction1, {28, 75, 40}, {65, 175, 95});
-    drawBtn(tr(CloudStr::BTN_RESTORE), s_btnAction2, {24, 55, 90}, {65, 130, 210});
-    drawBtn(tr(CloudStr::BTN_DISCONNECT), s_btnAction3, {55, 30, 30}, {130, 60, 60});
-    drawBtn(tr(CloudStr::BTN_CLOSE), s_btnCancel, {40, 45, 55}, {90, 100, 120});
+    // Renderização dos 4 botões com as cores, rótulos e tipografia uniforme
+    std::string b1 = tr(CloudStr::BTN_UPLOAD);
+    std::string b2 = tr(CloudStr::BTN_RESTORE);
+    std::string b3 = tr(CloudStr::BTN_DISCONNECT);
+    std::string bc = tr(CloudStr::BTN_CLOSE);
+
+    int bTw = 0, bTh = 0, bTstep = 0;
+    calcBtnFont({ b1, b2, b3, bc }, s_btnAction1.w, s_btnAction1.h, bTw, bTh, bTstep);
+
+    drawBtn(b1, s_btnAction1, {28, 75, 40}, {65, 175, 95}, bTw, bTh, bTstep);
+    drawBtn(b2, s_btnAction2, {24, 55, 90}, {65, 130, 210}, bTw, bTh, bTstep);
+    drawBtn(b3, s_btnAction3, {55, 30, 30}, {130, 60, 60}, bTw, bTh, bTstep);
+    drawBtn(bc, s_btnCancel, {40, 45, 55}, {90, 100, 120}, bTw, bTh, bTstep);
   }
 }
 
