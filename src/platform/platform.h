@@ -36,6 +36,7 @@ public:
   // Recursos Passo 8: Detecção e Atualização OTA via GitHub Releases
   static void checkForUpdates();
   static void drawText(void* renderer, const std::string& text, int x, int y, int charW, int charH, uint8_t alpha = 255, int stepX = 0);
+  static void drawTextColored(void* renderer, const std::string& text, int x, int y, int fontSize, uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255);
   static int getTextWidth(const std::string& text, int charW, int stepX = 0);
 
   // Recursos Passo 9: Cloud Save & Sincronização Cruzada (Google Drive)

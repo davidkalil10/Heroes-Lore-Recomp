@@ -434,6 +434,89 @@ static SDL_Texture* s_texBezelSoltia = nullptr;
 static SDL_Texture* s_texBezelSlate = nullptr;
 static SDL_Texture* s_texFontOsd = nullptr;
 
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "stb_truetype.h"
+
+struct TtfFontState {
+  bool initialized = false;
+  bool available = false;
+  SDL_Texture* texture = nullptr;
+  stbtt_bakedchar bakedChars[224]; // Codepoints 32 a 255 (ASCII + Latin-1 Supplement: á, é, í, ó, ú, ã, õ, ç, etc.)
+  float bakedSize = 48.0f;
+  int atlasW = 1024;
+  int atlasH = 1024;
+};
+static TtfFontState s_ttf;
+
+static uint32_t decodeNextUtf8(const std::string& str, size_t& i) {
+  if (i >= str.length()) return 0;
+  uint8_t c = (uint8_t)str[i++];
+  if (c < 0x80) return c;
+  if ((c & 0xE0) == 0xC0 && i < str.length()) {
+    uint8_t c2 = (uint8_t)str[i++];
+    return ((c & 0x1F) << 6) | (c2 & 0x3F);
+  }
+  if ((c & 0xF0) == 0xE0 && i + 1 < str.length()) {
+    uint8_t c2 = (uint8_t)str[i++];
+    uint8_t c3 = (uint8_t)str[i++];
+    return ((c & 0x0F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F);
+  }
+  return c;
+}
+
+static bool initTtfFont(SDL_Renderer* rend) {
+  if (s_ttf.initialized) return s_ttf.available;
+  s_ttf.initialized = true;
+
+  auto ttfBytes = Platform::readAsset("fonts/ui_font.ttf");
+  if (ttfBytes.empty()) {
+    ttfBytes = Platform::readAsset("assets/fonts/ui_font.ttf");
+  }
+  if (ttfBytes.empty()) {
+    boot_log("[Platform] ui_font.ttf nao encontrado, usando fonte bitmap OSD como fallback.\n");
+    s_ttf.available = false;
+    return false;
+  }
+
+  std::vector<uint8_t> monoBitmap(s_ttf.atlasW * s_ttf.atlasH);
+  int res = stbtt_BakeFontBitmap(ttfBytes.data(), 0, s_ttf.bakedSize,
+                                 monoBitmap.data(), s_ttf.atlasW, s_ttf.atlasH,
+                                 32, 224, s_ttf.bakedChars);
+  if (res <= 0) {
+    boot_log("[Platform] stbtt_BakeFontBitmap falhou (res=%d).\n", res);
+    s_ttf.available = false;
+    return false;
+  }
+
+  std::vector<uint8_t> rgba(s_ttf.atlasW * s_ttf.atlasH * 4);
+  for (size_t i = 0; i < monoBitmap.size(); i++) {
+    uint8_t a = monoBitmap[i];
+    rgba[i * 4 + 0] = 255;
+    rgba[i * 4 + 1] = 255;
+    rgba[i * 4 + 2] = 255;
+    rgba[i * 4 + 3] = a;
+  }
+
+  SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormatFrom(
+      rgba.data(), s_ttf.atlasW, s_ttf.atlasH, 32, s_ttf.atlasW * 4, SDL_PIXELFORMAT_RGBA32);
+  if (!surf) {
+    s_ttf.available = false;
+    return false;
+  }
+
+  s_ttf.texture = SDL_CreateTextureFromSurface(rend, surf);
+  SDL_FreeSurface(surf);
+  if (!s_ttf.texture) {
+    s_ttf.available = false;
+    return false;
+  }
+
+  SDL_SetTextureBlendMode(s_ttf.texture, SDL_BLENDMODE_BLEND);
+  s_ttf.available = true;
+  boot_log("[Platform] Fonte TrueType UI (Inter SemiBold) inicializada com sucesso!\n");
+  return true;
+}
+
 static std::string s_osdMessage = "";
 static uint32_t s_osdExpireTime = 0;
 
@@ -2088,6 +2171,12 @@ void Platform::shutdown() {
   if (s_texBezelSoltia) { SDL_DestroyTexture(s_texBezelSoltia); s_texBezelSoltia = nullptr; }
   if (s_texBezelSlate) { SDL_DestroyTexture(s_texBezelSlate); s_texBezelSlate = nullptr; }
   if (s_texFontOsd) { SDL_DestroyTexture(s_texFontOsd); s_texFontOsd = nullptr; }
+  if (s_ttf.texture) {
+    SDL_DestroyTexture(s_ttf.texture);
+    s_ttf.texture = nullptr;
+    s_ttf.initialized = false;
+    s_ttf.available = false;
+  }
   s_gamepadTexturesLoaded = false;
   if (s_screenTexture) { SDL_DestroyTexture(s_screenTexture); s_screenTexture = nullptr; }
   if (s_renderer) { SDL_DestroyRenderer(s_renderer); s_renderer = nullptr; }
@@ -2419,10 +2508,55 @@ void Platform::checkForUpdates() {
   Updater::checkAsync(true);
 }
 
+void Platform::drawTextColored(void* rendererPtr, const std::string& text, int x, int y, int fontSize, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+  SDL_Renderer* rend = (SDL_Renderer*)rendererPtr;
+  if (!rend) rend = s_renderer;
+  if (!rend || text.empty()) return;
+
+  if (initTtfFont(rend) && s_ttf.available) {
+    float scale = (float)fontSize / s_ttf.bakedSize;
+    float curX = (float)x;
+    float baselineY = (float)y + fontSize * 0.82f;
+
+    SDL_SetTextureColorMod(s_ttf.texture, r, g, b);
+    SDL_SetTextureAlphaMod(s_ttf.texture, a);
+
+    for (size_t i = 0; i < text.length(); ) {
+      uint32_t cp = decodeNextUtf8(text, i);
+      if (cp == ' ') {
+        curX += (14.0f * scale);
+        continue;
+      }
+      if (cp < 32 || cp > 255) continue;
+      const auto& b = s_ttf.bakedChars[cp - 32];
+
+      SDL_Rect src = { (int)b.x0, (int)b.y0, (int)(b.x1 - b.x0), (int)(b.y1 - b.y0) };
+      SDL_Rect dst = {
+        (int)std::round(curX + b.xoff * scale),
+        (int)std::round(baselineY + b.yoff * scale),
+        (int)std::round((b.x1 - b.x0) * scale),
+        (int)std::round((b.y1 - b.y0) * scale)
+      };
+      SDL_RenderCopy(rend, s_ttf.texture, &src, &dst);
+      curX += (b.xadvance * scale);
+    }
+    return;
+  }
+
+  Platform::drawText(rend, text, x, y, (int)(fontSize * 0.60f), fontSize, a);
+}
+
 void Platform::drawText(void* rendererPtr, const std::string& text, int x, int y, int charW, int charH, uint8_t alpha, int stepX) {
   SDL_Renderer* rend = (SDL_Renderer*)rendererPtr;
   if (!rend) rend = s_renderer;
-  if (!rend) return;
+  if (!rend || text.empty()) return;
+
+  if (initTtfFont(rend) && s_ttf.available) {
+    int fontSize = charH > 0 ? charH : charW;
+    drawTextColored(rend, text, x, y, fontSize, 255, 255, 255, alpha);
+    return;
+  }
+
   if (!s_texFontOsd) {
     s_texFontOsd = loadRgbaTexture("font_osd");
   }
@@ -2452,6 +2586,25 @@ void Platform::drawText(void* rendererPtr, const std::string& text, int x, int y
 
 int Platform::getTextWidth(const std::string& text, int charW, int stepX) {
   if (text.empty()) return 0;
+  if (!s_ttf.available && s_renderer) {
+    initTtfFont(s_renderer);
+  }
+  if (s_ttf.available) {
+    int fontSize = charW;
+    float scale = (float)fontSize / s_ttf.bakedSize;
+    float totalW = 0.0f;
+    for (size_t i = 0; i < text.length(); ) {
+      uint32_t cp = decodeNextUtf8(text, i);
+      if (cp == ' ') {
+        totalW += (14.0f * scale);
+        continue;
+      }
+      if (cp < 32 || cp > 255) continue;
+      const auto& b = s_ttf.bakedChars[cp - 32];
+      totalW += (b.xadvance * scale);
+    }
+    return (int)std::ceil(totalW);
+  }
   if (stepX <= 0) stepX = charW;
   return (int)(text.length() - 1) * stepX + charW;
 }

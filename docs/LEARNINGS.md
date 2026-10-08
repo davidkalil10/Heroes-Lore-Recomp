@@ -672,3 +672,29 @@ Fonte: `heroes_lore_modern/PROJECT_KNOWLEDGE_BACKUP.md`
     1. **Separação em 2 Linhas:** Linha 1 exibe o Título da Ação em destaque (`ENVIAR BACKUP`, `RESTAURAR`, `DESCONECTAR`, `FECHAR`) e Linha 2 exibe o atalho físico de console/PC (`[ 1 / A ]`, `[ 2 / X ]`, `[ 3 / Y ]`, `[ B / ESC ]`, ou no Switch `[ A ]`, `[ X ]`, `[ Y ]`, `[ B ]`).
     2. **Preservação de Aspect Ratio 0.60:** `charW` e `charH` agora escalam juntos proporcionalmente caso necessário. A largura do caractere nunca é espremida isoladamente, preservando a proporção geométrica nativa 22x36 da textura de fonte OSD.
     3. **Acabamento Chanfrado Duplo:** Adicionada moldura interna suave nos botões para conferir relevo e profundidade visual refinada.
+
+## Sessão 27 (Engine de Tipografia Vetorial TrueType com stb_truetype, Fonte Inter e Refatoração Moderna do Cloud Save)
+- **Causa Raiz da Fonte "Estranha" e Ilegível no Mobile/PC/Switch:**
+  - *Diagnóstico:* O usuário relatou que a fonte da janela de saves estava muito feia em todas as plataformas, sem escalar corretamente ("no Flutter nunca tive esse tipo de problema"), com letras em formatos de palito, espaçamentos bizarros e atalhos físicos `[ 1 / A ]` estranhos em telas touch.
+  - *Causa Raiz:* Todo o texto do modal dependia da textura bitmap `font_osd.rgba`, que era uma fonte de depuração mono-espaçada fixa de 22x36 por célula. Qualquer letra (mesmo 'i' ou '.') era forçada a ocupar a mesma largura que 'W', e não havia kerning nem suporte a acentos da língua portuguesa em UTF-8. Ao ser escalada ou reduzida, as letras ficavam distorcidas e pixeladas.
+  - *Solução com Engine TrueType Integrado (`stb_truetype.h` + Inter-SemiBold):*
+    1. **Integração de `third_party/stb_truetype.h`:** Adicionada a biblioteca de domínio público `stb_truetype` em `third_party/stb_truetype.h`, sem qualquer dependência externa ou DLL extra de terceiros.
+    2. **Fonte de Alta Definição `Inter-SemiBold.ttf`:** Empacotada a fonte Inter em `assets/fonts/ui_font.ttf`, `android/app/src/main/assets/fonts/ui_font.ttf`, `reference/extracted/fonts/ui_font.ttf` e integrada na cópia do RomFS do Nintendo Switch (`tools/prepare_switch_romfs.py`).
+    3. **Rasterização em Atlas de Textura 1024x1024:** Na inicialização, a fonte é assada em uma textura suave de 1024x1024 com antialiasing linear suave, cobrindo todos os caracteres ASCII (32 a 126) e os blocos estendidos Latin-1 (160 a 255).
+    4. **Decodificador UTF-8 para Latin-1 (`decodeNextUtf8`):** Adicionado suporte nativo e automático a caracteres acentuados de PT-BR, ES, IT (á, é, í, ó, ú, ç, ã, õ, ñ, etc.).
+    5. **Kerning e Largura Proporcional Real (`xadvance`):** Letras finas como 'i', 'l', '.' ocupam sua largura real estreita, e letras largas como 'm', 'w' ocupam seu espaço completo, produzindo uma tipografia com a mesma qualidade de texto do Flutter.
+    6. **Novas APIs de Plataforma:** `Platform::drawTextColored(renderer, text, x, y, fontSize, r, g, b, a)` e `Platform::getTextWidth(text, fontSize)`.
+
+- **Refatoração Completa do Modal de Cloud Save (Flutter/Console Grade UI):**
+  - *Diferenciação por Orientação (Portrait vs Landscape):*
+    - **Retrato (Mobile Vertical, ex: 1080x2400):** O modal agora preenche 94% da largura da tela (`modalW = winW * 0.94f`), dando amplitude e presença visual elegante. Os dois cards de saves ("Nuvem" e "Local") ficam **empilhados verticalmente** com margens generosas. Os botões inferiores são organizados em uma **grade 2x2 ampla e tátil** (`btnH = 54px a 70px`), perfeita para toque confortável com os dois polegares.
+    - **Paisagem (Horizontal / Switch / PC / Mobile Deitado):** O modal ocupa 82% da largura útil (`modalW = winW * 0.82f`), os cards ficam **lado a lado** (`w = (contentW - 14) / 2`), e os 4 botões ficam dispostos em uma **barra horizontal uniforme e alinhada** no rodapé.
+  - *Diferenciação por Plataforma:*
+    - **No Android / Mobile Touch:** Botões são 100% limpos e focados no toque (`ENVIAR BACKUP`, `RESTAURAR`, `DESCONECTAR`, `FECHAR`), eliminando qualquer atalho confuso de teclado físico (`[ 1 / A ]`, etc.).
+    - **No Nintendo Switch:** Exibe os botões físicos característicos do Joy-Con: `( A ) ENVIAR BACKUP`, `( X ) RESTAURAR`, `( Y ) DESCONECTAR`, `( B ) FECHAR`.
+    - **No Desktop / PC:** Atalhos discretos exibidos em segunda linha.
+  - *Novo Botão Fechar [X] no Cabeçalho:*
+    - Adicionado um botão tátil de fechar `[ X ]` no canto superior direito do cabeçalho do modal (`s_btnCloseX`), permitindo fechar o modal com um toque direto e intuitivo no celular a qualquer momento.
+  - *Acabamento Gráfico Nobre (Soltia Theme):*
+    - Fundo ardósia escuro com moldura interna dourada `(190, 150, 60)`, barra lateral azul celeste no card de Nuvem e verde esmeralda no card Local, badges de status estilizados e botões com relevo chanfrado iluminado.
+

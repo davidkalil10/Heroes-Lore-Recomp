@@ -215,16 +215,22 @@ _Ãšltima atualizaÃ§Ã£o: 2026-10-04_
     - Em partida ativa: exibe confirmação modal de segurança e invoca `bu.d()` para retornar limpo ao menu principal com reciclagem de memória da VM e recarregamento sem crashes.
   - Interface Nobre (Soltia Theme) com suporte a Touch, Teclado e Gamepad:
     - 100% Localizada nos 4 idiomas suportados (Português, Inglês, Italiano e Espanhol), adaptando títulos, cards, avisos e botões em tempo real.
-    - Layout responsivo de alta densidade (High-DPI / Mobile):
-      - Em Landscape: cartões de save dispostos lado a lado e 4 botões de ação alinhados horizontalmente com auto-fitting de texto, sem corte e sem sobreposição.
-      - Em Portrait: altura modal ajustada dinamicamente ao conteúdo (`neededH`), fontes ampliadas até 56px (cabeçalho) e 42px (detalhes), e botões táteis ampliados para 96px.
-      - Tipografia uniforme nos botões de ação: métrica global (`calcBtnFont`) calculada a partir do rótulo mais longo, garantindo tamanho de fonte e espaçamento idênticos em todos os botões do grupo.
-    - Paridade High-DPI no Auto-Updater OTA (`src/platform/updater.cpp`): modal de atualização do GitHub alinhado com a mesma arquitetura de escala responsiva móvel, proporcionando excelente legibilidade e botões amplos no Android.
+    - **Engine de Tipografia Vetorial TrueType (`stb_truetype.h` + Inter-SemiBold):**
+      - Substituição definitiva da antiga fonte monospace pixelada por renderização tipográfica vetorial em alta definição com antialiasing linear e kerning proporcional (`xadvance`).
+      - Suporte nativo completo a acentuação em Português, Espanhol e Italiano via decodificador UTF-8 para Latin-1.
+      - Larguras e espaçamentos naturais idênticos a interfaces modernas do Flutter.
+    - **Layout Responsivo Moderno por Orientação e Plataforma:**
+      - **Retrato (Mobile Vertical, 1080x2400+):** Modal amplo ocupando 94% da largura da tela, cartões de saves empilhados com respiro e informações claras (Herói, Nível, Modificado em), botões táteis dispostos em **grade 2x2 ampla** para fácil alcance dos polegares.
+      - **Paisagem (Horizontal / Switch / PC):** Modal com proporção áurea ocupando 82% da largura útil, cartões lado a lado e barra inferior de 4 botões horizontais uniformes.
+      - **Adaptação por Plataforma:** No Android/Mobile Touch, botões exibem rótulos limpos (`ENVIAR BACKUP`, `RESTAURAR`, `DESCONECTAR`, `FECHAR`), sem poluição de atalhos de teclado físico. No Nintendo Switch, botões exibem o mapeamento claro do Joy-Con: `( A )`, `( X )`, `( Y )`, `( B )`. No PC Desktop, atalhos discretos são exibidos abaixo do título.
+      - **Botão Fechar [X] no Cabeçalho:** Adicionado botão dedicado de fechar no canto superior direito para toque direto no celular.
+    - Paridade High-DPI no Auto-Updater OTA (`src/platform/updater.cpp`): modal de atualização do GitHub alinhado com a mesma arquitetura de escala responsiva móvel.
     - Portabilidade Universal: conversão de data UTC via algoritmo autônomo `portableTimegm()`, eliminando dependências não-portáveis de libc e garantindo compilação no Nintendo Switch (devkitA64/newlib), Windows, Linux e Android.
     - Estabilidade JNI no Android: despachador `runAsync` com ciclo de vida gerenciado do SDL e referência global (`NewGlobalRef`) para `SDLActivity.httpExecute`, evitando crashes de runtime no ART ao conectar.
     - Integrado ao Menu de Opções (`be.class`) na Tela de Título e no Pause In-Game como 6º item.
     - Atalho global de teclado via <kbd>F4</kbd>.
-- [ ] Passo 11: Port Imersivo VR / Realidade Mista para Meta Quest (OpenXR, Voxel/Diorama 3D Tabletop & Primeira Pessoa 360°). Detalhado em [`docs/VR_QUEST_CONCEPT.md`](VR_QUEST_CONCEPT.md).
+- [ ] Passo 11: Melhoria no sistema de backups em nuvem, permitindo autosync antes de iniciar o jogo (Tela de Título) e antes de salvar o jogo (Pause In-Game).
+- [ ] Passo 12: Port Imersivo VR / Realidade Mista para Meta Quest (OpenXR, Voxel/Diorama 3D Tabletop & Primeira Pessoa 360°). Detalhado em [`docs/VR_QUEST_CONCEPT.md`](VR_QUEST_CONCEPT.md).
 
 
 

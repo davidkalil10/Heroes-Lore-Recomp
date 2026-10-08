@@ -42,6 +42,9 @@ def prepare_romfs():
         if os.path.exists("assets/lang"):
             print("[RomFS] Copiando assets/lang para romfs/lang...")
             shutil.copytree("assets/lang", os.path.join(romfs_dir, "lang"), dirs_exist_ok=True)
+        if os.path.exists("assets/fonts"):
+            print("[RomFS] Copiando assets/fonts para romfs/fonts...")
+            shutil.copytree("assets/fonts", os.path.join(romfs_dir, "fonts"), dirs_exist_ok=True)
 
     print("[RomFS] Pasta romfs/ gerada com sucesso e pronta para o elf2nro!")
 
